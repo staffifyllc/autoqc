@@ -182,13 +182,13 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         }
       };
 
-      async function worker() {
+      const worker = async () => {
         while (queue.length > 0) {
           const job = queue.shift();
           if (!job) break;
           await uploadOne(job);
         }
-      }
+      };
 
       await Promise.all(
         Array.from({ length: Math.min(CONCURRENCY, files.length) }, () =>

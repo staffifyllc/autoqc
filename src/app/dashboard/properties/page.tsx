@@ -42,6 +42,7 @@ export default function PropertiesPage() {
   const [address, setAddress] = useState("");
   const [creating, setCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [properties, setProperties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -106,8 +107,8 @@ export default function PropertiesPage() {
         </button>
       </motion.div>
 
-      {/* Search */}
-      <motion.div variants={fadeUp} className="mb-6">
+      {/* Search + Filter Tabs */}
+      <motion.div variants={fadeUp} className="mb-6 space-y-4">
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
@@ -117,6 +118,46 @@ export default function PropertiesPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition"
           />
+        </div>
+
+        {/* Status tabs */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {(() => {
+            const counts = {
+              all: properties.length,
+              in_progress: properties.filter(
+                (p: any) =>
+                  p.status === "PENDING" || p.status === "PROCESSING"
+              ).length,
+              review: properties.filter((p: any) => p.status === "REVIEW")
+                .length,
+              approved: properties.filter(
+                (p: any) => p.status === "APPROVED"
+              ).length,
+              pushed: properties.filter((p: any) => p.status === "PUSHED")
+                .length,
+            };
+            const tabs = [
+              { key: "all", label: `All (${counts.all})` },
+              { key: "in_progress", label: `In Progress (${counts.in_progress})`, color: "text-blue-400" },
+              { key: "review", label: `Review (${counts.review})`, color: "text-amber-400" },
+              { key: "approved", label: `Approved (${counts.approved})`, color: "text-green-400" },
+              { key: "pushed", label: `Delivered (${counts.pushed})`, color: "text-purple-400" },
+            ];
+            return tabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setStatusFilter(tab.key)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
+                  statusFilter === tab.key
+                    ? "bg-white/10 text-foreground"
+                    : `${tab.color || "text-muted-foreground"} hover:text-foreground hover:bg-white/5`
+                }`}
+              >
+                {tab.label}
+              </button>
+            ));
+          })()}
         </div>
       </motion.div>
 
@@ -144,7 +185,24 @@ export default function PropertiesPage() {
         </motion.div>
       ) : (
         <motion.div variants={fadeUp} className="space-y-3">
-          {properties.map((property: any) => {
+          {properties
+            .filter((p: any) => {
+              if (statusFilter === "in_progress") {
+                return p.status === "PENDING" || p.status === "PROCESSING";
+              } else if (statusFilter === "review") {
+                return p.status === "REVIEW";
+              } else if (statusFilter === "approved") {
+                return p.status === "APPROVED";
+              } else if (statusFilter === "pushed") {
+                return p.status === "PUSHED";
+              }
+              return true;
+            })
+            .filter((p: any) =>
+              !searchQuery ||
+              p.address.toLowerCase().includes(searchQuery.toLowerCase())
+            )
+            .map((property: any) => {
             const status = statusConfig[property.status] || statusConfig.PENDING;
             const StatusIcon = status.icon;
 
