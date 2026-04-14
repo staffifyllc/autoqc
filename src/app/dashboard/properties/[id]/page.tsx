@@ -86,14 +86,27 @@ export default function PropertyDetailPage({
 
   useEffect(() => {
     fetchProperty();
-    // Auto-show uploader if URL has ?upload=true
     if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("upload") === "true") {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("upload") === "true") {
         setShowUploader(true);
       }
     }
   }, [params.id]);
+
+  // Auto-refresh every 3 seconds while anything is processing
+  useEffect(() => {
+    if (!property) return;
+    const anyProcessing =
+      property.status === "PROCESSING" ||
+      property.photos?.some((p: any) => p.status === "PROCESSING");
+    if (!anyProcessing) return;
+
+    const interval = setInterval(() => {
+      fetchProperty();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [property]);
 
   const fetchProperty = async () => {
     try {

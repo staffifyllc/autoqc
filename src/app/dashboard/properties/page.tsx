@@ -47,6 +47,9 @@ export default function PropertiesPage() {
 
   useEffect(() => {
     fetchProperties();
+    // Auto-refresh every 5 seconds to show processing status changes
+    const interval = setInterval(fetchProperties, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchProperties = async () => {

@@ -196,6 +196,21 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         )
       );
 
+      // Upload complete - auto-trigger QC so user doesn't have to click again
+      try {
+        const qcRes = await fetch(`/api/properties/${propertyId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "run_qc" }),
+        });
+        if (qcRes.status === 402) {
+          const data = await qcRes.json();
+          alert(data.message || "Payment required. Go to Credits page.");
+        }
+      } catch (qcErr) {
+        console.error("Failed to auto-trigger QC:", qcErr);
+      }
+
       updateJobStatus(jobId, "done");
     } catch (err) {
       console.error("Upload job failed:", err);
