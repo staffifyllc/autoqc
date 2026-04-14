@@ -361,18 +361,22 @@ def process_photo(
                 )
                 needs_fix = True
 
-        # Fix color temp ONLY if truly out of range (severity > 0.4)
-        # Don't touch intentional warm/cool editorial styling
+        # Fix color temp ONLY when:
+        # - Photo is interior (exteriors never get auto-WB)
+        # - Cast is reliably detected via neutral surface anchors
+        # - The check explicitly flagged it as should_autofix (green fluorescent only by default)
+        # - Severity is truly significant
+        # All of this is gated inside fix_color() - we just call it
         if (
             should_autofix
             and "color_temp" in issues
-            and color_result.get("severity", 0) > 0.4
+            and color_result.get("should_autofix", False)
         ):
             fixed_path = fix_color(local_path, color_result)
             if fixed_path:
                 local_path = fixed_path
                 fixes_applied.append(
-                    f"White balance corrected ({color_result['color_temp']:.0f}K)"
+                    f"Removed {color_result.get('color_cast', 'color')} cast"
                 )
                 needs_fix = True
 

@@ -1,15 +1,10 @@
 """
-Color / White Balance Auto-Fix
+Conservative White Balance Fix
 
-Corrects color temperature and removes color casts.
-Uses a gray-world assumption combined with detected issues
-to neutralize unwanted color shifts.
-
-Handles:
-- Green cast from fluorescent lighting
-- Orange cast from tungsten bulbs
-- Blue cast from shade/overcast
-- Mixed color temperatures from flash/ambient blend
+Only fixes clear pathologies (green fluorescent cast primarily).
+Outdoor exteriors and already-neutral photos are NEVER touched.
+Corrections are clamped to small magnitude - we'd rather under-correct
+than destroy a good photo.
 """
 
 import cv2
@@ -17,65 +12,79 @@ import numpy as np
 import tempfile
 
 
+# Maximum allowed channel scale - prevents destructive shifts
+MAX_SCALE = 1.10  # Never push a channel by more than 10%
+MIN_SCALE = 0.92  # Or pull it down more than 8%
+
+
 def fix_color(image_path: str, color_result: dict) -> str | None:
     """
-    Auto-correct white balance and color temperature issues.
-
-    Args:
-        image_path: Path to the image
-        color_result: Output from check_color()
-
-    Returns:
-        Path to the corrected image, or None if correction failed
+    Conservative WB correction. Only runs when:
+    1. should_autofix flag is True (severity > 0.4 AND cast is reliably detected)
+    2. Photo is interior (exteriors are skipped)
+    3. We have neutral anchor reference points
     """
+    # GATE 1: Only proceed if the check explicitly flagged for auto-fix
+    if not color_result.get("should_autofix", False):
+        return None
+
+    # GATE 2: Never fix exteriors
+    if color_result.get("is_exterior", False):
+        return None
+
+    # GATE 3: Don't touch already-neutral photos
+    if color_result.get("already_neutral", False):
+        return None
+
     img = cv2.imread(image_path)
     if img is None:
         return None
 
+    cast = color_result.get("color_cast")
+    cast_strength = color_result.get("cast_strength", 0)
+
+    # Only apply targeted corrections for known cast types
+    # The MAGNITUDE of correction is capped by cast_strength
+    # Even severe casts get only modest adjustments
     img_float = img.astype(np.float64)
     b, g, r = cv2.split(img_float)
 
-    color_cast = color_result.get("color_cast")
-    detected_temp = color_result.get("color_temp", 5500)
+    scale_b, scale_g, scale_r = 1.0, 1.0, 1.0
 
-    # Method 1: Gray-world white balance
-    # Assumes the average of all colors should be neutral gray
-    avg_b = np.mean(b)
-    avg_g = np.mean(g)
-    avg_r = np.mean(r)
-    avg_all = (avg_b + avg_g + avg_r) / 3
+    if cast == "green":
+        # Reduce green slightly, boost magenta minimally
+        # Scale down green by up to 8% based on severity
+        reduction = min(cast_strength * 0.5, 0.08)
+        scale_g = 1.0 - reduction
+        scale_r = 1.0 + reduction * 0.3
+        scale_b = 1.0 + reduction * 0.3
+    elif cast == "orange":
+        # Reduce red, boost blue minimally
+        reduction = min(cast_strength * 0.4, 0.06)
+        scale_r = 1.0 - reduction
+        scale_b = 1.0 + reduction * 0.5
+    elif cast == "blue":
+        # Reduce blue, boost red minimally
+        reduction = min(cast_strength * 0.4, 0.06)
+        scale_b = 1.0 - reduction
+        scale_r = 1.0 + reduction * 0.4
+    else:
+        # No clear cast - don't fix
+        return None
 
-    # Scale channels to balance
-    scale_b = avg_all / max(avg_b, 1)
-    scale_g = avg_all / max(avg_g, 1)
-    scale_r = avg_all / max(avg_r, 1)
+    # CLAMP scales to safe range - prevent destructive shifts
+    scale_b = max(MIN_SCALE, min(MAX_SCALE, scale_b))
+    scale_g = max(MIN_SCALE, min(MAX_SCALE, scale_g))
+    scale_r = max(MIN_SCALE, min(MAX_SCALE, scale_r))
 
-    # Don't over-correct - limit scaling to 30% adjustment
-    scale_b = np.clip(scale_b, 0.7, 1.3)
-    scale_g = np.clip(scale_g, 0.7, 1.3)
-    scale_r = np.clip(scale_r, 0.7, 1.3)
+    # If clamping reduced our shift to nothing meaningful, skip
+    if (
+        abs(scale_b - 1) < 0.015
+        and abs(scale_g - 1) < 0.015
+        and abs(scale_r - 1) < 0.015
+    ):
+        return None
 
-    # Apply targeted corrections based on detected cast
-    if color_cast == "green":
-        # Reduce green channel more aggressively
-        scale_g *= 0.92
-        # Boost magenta (red + blue) slightly
-        scale_r *= 1.03
-        scale_b *= 1.03
-    elif color_cast == "orange":
-        # Reduce red, boost blue
-        scale_r *= 0.93
-        scale_b *= 1.05
-    elif color_cast == "blue":
-        # Reduce blue, boost red slightly
-        scale_b *= 0.93
-        scale_r *= 1.04
-    elif color_cast == "warm":
-        # Cool it down slightly
-        scale_r *= 0.95
-        scale_b *= 1.03
-
-    # Apply corrections
     b_corrected = np.clip(b * scale_b, 0, 255)
     g_corrected = np.clip(g * scale_g, 0, 255)
     r_corrected = np.clip(r * scale_r, 0, 255)
@@ -86,7 +95,21 @@ def fix_color(image_path: str, color_result: dict) -> str | None:
         r_corrected.astype(np.uint8),
     ])
 
-    # Save
+    # Verify the correction actually moved chromaticity toward neutral
+    # If it made things worse, abandon the fix
+    lab_orig = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    lab_new = cv2.cvtColor(corrected, cv2.COLOR_BGR2LAB)
+
+    a_orig = abs(lab_orig[:, :, 1].astype(np.float64).mean() - 128)
+    b_orig = abs(lab_orig[:, :, 2].astype(np.float64).mean() - 128)
+    a_new = abs(lab_new[:, :, 1].astype(np.float64).mean() - 128)
+    b_new = abs(lab_new[:, :, 2].astype(np.float64).mean() - 128)
+
+    # Sum of chromaticity should decrease
+    if (a_new + b_new) >= (a_orig + b_orig):
+        # Fix didn't actually help - throw it out
+        return None
+
     suffix = "." + image_path.split(".")[-1]
     tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
     cv2.imwrite(tmp.name, corrected, [cv2.IMWRITE_JPEG_QUALITY, 95])

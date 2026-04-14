@@ -1,89 +1,123 @@
 """
-Color Temperature and White Balance Analysis
+White Balance & Color Detection (Real Estate Edition)
 
-Detects color temperature, color casts, and saturation levels.
-Identifies mixed lighting (fluorescent green cast, tungsten orange cast).
+Built on research findings: gray-world fails catastrophically on outdoor scenes
+because grass + sky + pool dominate average chromaticity, causing magenta/pink casts
+when "corrected." Industry best practice:
 
-Real estate style ranges:
-- Bright & Airy: 5000-6500K, lower saturation, lifted shadows
-- Warm & Cozy: 3200-4500K, richer saturation
-- Magazine Editorial: 5000-5500K neutral, high contrast
+1. SKIP outdoor exteriors entirely (sky-present scenes never need auto-WB)
+2. Pre-gate using Lab chromaticity - if already neutral, skip
+3. Use neutral-surface anchors (ceiling, trim) when present
+4. Default to FLAG, not FIX - only auto-fix clear pathologies (green fluorescent)
+5. Clamp any correction to small magnitude (no destructive shifts)
 
-Common defects:
-- Green cast from fluorescent lighting
-- Orange cast from tungsten bulbs
-- Mixed color temps from ambient/flash blend on walls
+Sources: Van de Weijer & Gevers 2007, Finlayson & Trezzi 2004 (Shades of Gray),
+Hsu et al. SIGGRAPH 2008 (mixed lighting), Imagen AI / professional QC practice.
 """
 
 import cv2
 import numpy as np
 
 
-def estimate_color_temperature(img_bgr: np.ndarray) -> float:
+def is_exterior_scene(img_bgr: np.ndarray) -> bool:
     """
-    Estimate correlated color temperature from the image.
-    Uses the ratio of blue to red channels as a proxy.
-    Higher B/R ratio = cooler (higher Kelvin), lower = warmer.
+    Detect if image is an outdoor/exterior shot.
+    These should NEVER receive auto-WB correction - too much chromatic
+    variation (grass, sky, water) breaks every classical WB algorithm.
     """
-    b, g, r = cv2.split(img_bgr.astype(np.float64))
+    h, w = img_bgr.shape[:2]
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
 
-    # Avoid division by zero
+    # Check top 25% of image for sky-like pixels
+    top = hsv[: h // 4, :]
+    # Blue sky: hue 90-130, saturation > 25, brightness > 100
+    blue_sky_mask = (
+        (top[:, :, 0] >= 90) & (top[:, :, 0] <= 135) &
+        (top[:, :, 1] > 25) & (top[:, :, 2] > 100)
+    )
+    # Bright overcast sky: very low saturation, high brightness
+    bright_sky_mask = (top[:, :, 1] < 30) & (top[:, :, 2] > 220)
+
+    sky_pixels = np.count_nonzero(blue_sky_mask | bright_sky_mask)
+    sky_ratio = sky_pixels / top.size * 3  # divide by channels
+
+    # Green grass detection (bottom half, hue 35-80, sat > 40)
+    bottom = hsv[h // 2:, :]
+    grass_mask = (
+        (bottom[:, :, 0] >= 35) & (bottom[:, :, 0] <= 80) &
+        (bottom[:, :, 1] > 40)
+    )
+    grass_ratio = np.count_nonzero(grass_mask) / bottom.size * 3
+
+    return sky_ratio > 0.15 or grass_ratio > 0.15
+
+
+def chromaticity_neutrality(img_bgr: np.ndarray) -> tuple[float, float]:
+    """
+    Measure how neutral the image already is using Lab a*, b* mean.
+    A well-edited photo should have mean |a*| < 4 and |b*| < 6.
+    Returns (a_deviation, b_deviation) - both should be near 0.
+    """
+    lab = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)
+    # OpenCV stores a* and b* offset by 128 (range 0-255)
+    a_centered = lab[:, :, 1].astype(np.float64) - 128
+    b_centered = lab[:, :, 2].astype(np.float64) - 128
+    return float(abs(a_centered.mean())), float(abs(b_centered.mean()))
+
+
+def detect_neutral_anchors(img_bgr: np.ndarray) -> dict:
+    """
+    Find pixels that SHOULD be neutral (ceiling, white trim, white walls).
+    Returns the average color of these "should be neutral" pixels.
+    If they deviate significantly from neutral, that's our true cast.
+    """
+    h, w = img_bgr.shape[:2]
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+
+    # Ceiling region: top 20% of image
+    ceiling_region = img_bgr[: h // 5, :]
+    ceiling_hsv = hsv[: h // 5, :]
+
+    # Look for low-saturation, high-brightness pixels (white-ish surfaces)
+    neutral_mask = (ceiling_hsv[:, :, 1] < 25) & (ceiling_hsv[:, :, 2] > 180)
+
+    if np.count_nonzero(neutral_mask) < 100:
+        return {"found": False}
+
+    neutral_pixels = ceiling_region[neutral_mask]
+    avg_b = neutral_pixels[:, 0].mean()
+    avg_g = neutral_pixels[:, 1].mean()
+    avg_r = neutral_pixels[:, 2].mean()
+    avg = (avg_b + avg_g + avg_r) / 3
+
+    return {
+        "found": True,
+        "pixel_count": int(np.count_nonzero(neutral_mask)),
+        "b_dev": float((avg_b - avg) / avg),
+        "g_dev": float((avg_g - avg) / avg),
+        "r_dev": float((avg_r - avg) / avg),
+    }
+
+
+def estimate_color_temperature(img_bgr: np.ndarray) -> float:
+    """Approximate CCT from B/R channel ratio."""
+    b, g, r = cv2.split(img_bgr.astype(np.float64))
     r_mean = max(np.mean(r), 1)
     b_mean = max(np.mean(b), 1)
-    g_mean = max(np.mean(g), 1)
-
-    # Simple CCT estimation based on B/R ratio
-    # This is an approximation - real CCT requires spectral data
     br_ratio = b_mean / r_mean
-
-    # Map ratio to approximate Kelvin
-    # BR ratio ~0.7 = ~3000K (warm tungsten)
-    # BR ratio ~1.0 = ~5500K (daylight)
-    # BR ratio ~1.3 = ~8000K (overcast/shade)
     cct = 2000 + (br_ratio * 4000)
-    cct = max(2000, min(12000, cct))
-
-    return cct
-
-
-def detect_color_cast(img_bgr: np.ndarray) -> dict:
-    """Detect dominant color cast in the image."""
-    b, g, r = cv2.split(img_bgr.astype(np.float64))
-
-    r_mean = np.mean(r)
-    g_mean = np.mean(g)
-    b_mean = np.mean(b)
-    avg = (r_mean + g_mean + b_mean) / 3
-
-    # Deviation from neutral gray
-    r_dev = (r_mean - avg) / avg
-    g_dev = (g_mean - avg) / avg
-    b_dev = (b_mean - avg) / avg
-
-    cast = None
-    strength = 0
-
-    if g_dev > 0.05:
-        cast = "green"  # Fluorescent lighting
-        strength = g_dev
-    elif r_dev > 0.08:
-        cast = "orange"  # Tungsten lighting
-        strength = r_dev
-    elif b_dev > 0.08:
-        cast = "blue"  # Shade/overcast
-        strength = b_dev
-    elif r_dev > 0.05 and b_dev < -0.03:
-        cast = "warm"
-        strength = r_dev
-
-    return {"cast": cast, "strength": round(strength, 3)}
+    return max(2000, min(12000, cct))
 
 
 def check_color(
     image_path: str,
-    temp_min: float = 3500,
-    temp_max: float = 6500,
+    temp_min: float = 2800,
+    temp_max: float = 7500,
 ) -> dict:
+    """
+    Conservative WB check. Only flags clear, severe issues.
+    Outdoor exteriors are skipped entirely (never auto-WB).
+    """
     img = cv2.imread(image_path)
     if img is None:
         return {
@@ -91,45 +125,95 @@ def check_color(
             "saturation": 50,
             "failed": False,
             "severity": 0,
+            "color_cast": None,
+            "is_exterior": False,
+            "should_autofix": False,
         }
 
-    # Estimate color temperature
-    color_temp = estimate_color_temperature(img)
+    # Scene classification - exterior shots are skipped
+    is_exterior = is_exterior_scene(img)
 
-    # Calculate saturation
+    color_temp = estimate_color_temperature(img)
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     saturation = float(np.mean(hsv[:, :, 1]) / 255 * 100)
 
-    # Detect color cast
-    cast_info = detect_color_cast(img)
+    # Pre-gate: if already neutral, no fix needed
+    a_dev, b_dev = chromaticity_neutrality(img)
+    already_neutral = a_dev < 5 and b_dev < 7
 
-    # Check if color temp is in acceptable range
-    # Be forgiving - warm/cool editorial styles are INTENTIONAL, not defects
-    # Only flag if WAY off (more than 500K from acceptable range)
-    failed = color_temp < (temp_min - 500) or color_temp > (temp_max + 500)
+    # If exterior or already neutral, only flag for severe issues, never auto-fix
+    if is_exterior or already_neutral:
+        # Only flag truly extreme cases
+        failed = color_temp < 2200 or color_temp > 9000
+        return {
+            "color_temp": round(color_temp, 0),
+            "saturation": round(saturation, 1),
+            "color_cast": None,
+            "cast_strength": 0,
+            "failed": failed,
+            "severity": 0.3 if failed else 0,
+            "is_exterior": is_exterior,
+            "already_neutral": already_neutral,
+            "should_autofix": False,  # Never auto-fix exteriors or already-neutral
+            "a_dev": a_dev,
+            "b_dev": b_dev,
+        }
+
+    # Interior, possibly off WB - check via neutral anchor detection
+    anchors = detect_neutral_anchors(img)
+
+    cast = None
+    cast_strength = 0
+    if anchors["found"]:
+        # Use ceiling/trim as ground truth for what should be neutral
+        if anchors["g_dev"] > 0.05:
+            cast = "green"  # Fluorescent lighting - PRIORITY FIX
+            cast_strength = anchors["g_dev"]
+        elif anchors["r_dev"] > 0.08:
+            cast = "orange"  # Tungsten / golden hour
+            cast_strength = anchors["r_dev"]
+        elif anchors["b_dev"] > 0.08:
+            cast = "blue"  # Shade or overcorrected daylight
+            cast_strength = anchors["b_dev"]
+
+    # Determine severity - only severe casts get auto-fixed
+    failed = False
     severity = 0
+    should_autofix = False
 
-    if failed:
-        if color_temp < (temp_min - 500):
-            severity = min((temp_min - 500 - color_temp) / 2000, 1.0)
-        else:
-            severity = min((color_temp - temp_max - 500) / 2000, 1.0)
+    if cast == "green" and cast_strength > 0.05:
+        # Green fluorescent cast is the only thing we reliably auto-fix
+        # because it's almost always a defect, never intentional
+        failed = True
+        severity = min(cast_strength * 4, 1.0)
+        should_autofix = severity > 0.4
 
-    # Only flag strong unintentional color casts (green from fluorescents is
-    # the main one to catch - other casts could be stylistic)
-    if cast_info["cast"] == "green" and cast_info["strength"] > 0.08:
+    elif cast and cast_strength > 0.15:
+        # Other strong casts: flag but don't auto-fix
+        # User may have intentional warm/cool styling
         failed = True
-        severity = max(severity, min(cast_info["strength"] * 5, 1.0))
-    elif cast_info["cast"] and cast_info["strength"] > 0.15:
-        # Other casts: only flag if very strong
-        failed = True
-        severity = max(severity, min(cast_info["strength"] * 3, 1.0))
+        severity = min(cast_strength * 2, 1.0)
+        should_autofix = False  # Don't touch - could be intentional
+
+    # Color temp out of acceptable range (very wide tolerance)
+    if color_temp < temp_min or color_temp > temp_max:
+        # Only flag if severely out of range (not for stylistic warmth/coolness)
+        deviation = max(temp_min - color_temp, color_temp - temp_max)
+        if deviation > 1500:
+            failed = True
+            severity = max(severity, min(deviation / 3000, 1.0))
 
     return {
         "color_temp": round(color_temp, 0),
         "saturation": round(saturation, 1),
-        "color_cast": cast_info["cast"],
-        "cast_strength": cast_info["strength"],
+        "color_cast": cast,
+        "cast_strength": round(cast_strength, 3),
         "failed": failed,
         "severity": round(severity, 2),
+        "is_exterior": is_exterior,
+        "already_neutral": already_neutral,
+        "should_autofix": should_autofix,
+        "anchors_found": anchors.get("found", False),
+        "a_dev": a_dev,
+        "b_dev": b_dev,
     }
