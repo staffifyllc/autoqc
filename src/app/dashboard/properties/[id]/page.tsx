@@ -581,25 +581,131 @@ export default function PropertyDetailPage({
                   </div>
                 </div>
 
+                {/* Room type + ethics flag if present */}
+                {selectedPhoto.issues?._room_type && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/3 text-xs">
+                    <span className="text-muted-foreground">Detected:</span>
+                    <span className="font-medium capitalize">
+                      {String(selectedPhoto.issues._room_type).replace("_", " ")}
+                    </span>
+                  </div>
+                )}
+
+                {selectedPhoto.issues?._full_analysis?.categories?.ethics
+                  ?.high_risk && (
+                  <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30">
+                    <div className="flex items-center gap-2 mb-1">
+                      <AlertTriangle className="w-4 h-4 text-red-400" />
+                      <span className="text-sm font-medium text-red-300">
+                        Ethics Risk
+                      </span>
+                    </div>
+                    <p className="text-xs text-red-400/80">
+                      {selectedPhoto.issues._full_analysis.categories.ethics
+                        .detail ||
+                        "Possible misrepresentation - review before listing."}
+                    </p>
+                  </div>
+                )}
+
+                {/* Category Breakdown (9 RE Photography Categories) */}
+                {selectedPhoto.issues?._full_analysis?.categories && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-3">
+                      Category Breakdown
+                    </h4>
+                    <div className="space-y-1.5">
+                      {Object.entries(
+                        selectedPhoto.issues._full_analysis.categories
+                      ).map(([catName, catData]: [string, any]) => {
+                        const score = catData.score || 0;
+                        const color =
+                          score >= 80
+                            ? "text-green-400"
+                            : score >= 60
+                            ? "text-amber-400"
+                            : "text-red-400";
+                        const bg =
+                          score >= 80
+                            ? "bg-green-500/5"
+                            : score >= 60
+                            ? "bg-amber-500/5"
+                            : "bg-red-500/5";
+                        return (
+                          <div
+                            key={catName}
+                            className={`flex items-center justify-between py-2 px-3 rounded-lg ${bg}`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium capitalize">
+                                {catName.replace(/_/g, " ")}
+                              </p>
+                              {catData.detail && score < 80 && (
+                                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                                  {catData.detail}
+                                </p>
+                              )}
+                            </div>
+                            <span className={`text-sm font-bold ${color}`}>
+                              {score}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recommended Fix Actions */}
+                {selectedPhoto.issues?._fix_actions &&
+                  Array.isArray(selectedPhoto.issues._fix_actions) &&
+                  selectedPhoto.issues._fix_actions.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-3">
+                        Recommended Fixes
+                      </h4>
+                      <div className="space-y-1.5">
+                        {selectedPhoto.issues._fix_actions.map(
+                          (action: string, i: number) => (
+                            <div
+                              key={i}
+                              className="flex gap-2 py-2 px-3 rounded-lg bg-blue-500/5 border border-blue-500/15"
+                            >
+                              <span className="text-blue-400 shrink-0">→</span>
+                              <span className="text-xs text-blue-300 leading-relaxed">
+                                {action}
+                              </span>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                 {/* Issues */}
                 {selectedPhoto.issues &&
-                  Object.keys(selectedPhoto.issues).length > 0 && (
+                  Object.keys(selectedPhoto.issues).filter(
+                    (k) => !k.startsWith("_")
+                  ).length > 0 && (
                     <div>
-                      <h4 className="text-sm font-medium mb-3">Issues Found</h4>
+                      <h4 className="text-sm font-medium mb-3">
+                        Specific Issues
+                      </h4>
                       <div className="space-y-1.5">
-                        {Object.entries(selectedPhoto.issues).map(
-                          ([key, detail]) => (
+                        {Object.entries(selectedPhoto.issues)
+                          .filter(([key]) => !key.startsWith("_"))
+                          .map(([key, detail]) => (
                             <div
                               key={key}
                               className="flex items-center gap-2 py-2 px-3 rounded-lg bg-red-500/10 border border-red-500/15"
                             >
                               <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
                               <span className="text-xs text-red-300">
-                                {issueLabels[key] || key}
+                                {issueLabels[key] ||
+                                  key.replace(/_/g, " ")}
                               </span>
                             </div>
-                          )
-                        )}
+                          ))}
                       </div>
                     </div>
                   )}

@@ -296,17 +296,28 @@ def process_photo(
                 "type": sky_result["issue_type"],
             }
 
-        # === AI COMPOSITION CHECK (Claude Vision) ===
-
-        # 11. Composition analysis via Claude Vision API
+        # === COMPREHENSIVE AI AUDIT (Claude Vision, Real Estate framework) ===
+        # This is the primary QC signal. OpenCV checks above provide algorithmic
+        # verification; Claude Vision provides the nuanced real-estate judgment.
         comp_result = check_composition(local_path)
         ai_notes = comp_result.get("analysis", "")
-        for issue_key in ["reflection", "toilet_visible", "clutter", "composition"]:
-            if comp_result.get(issue_key):
-                issues[issue_key] = {
-                    "severity": comp_result[issue_key]["severity"],
-                    "detail": comp_result[issue_key].get("detail", ""),
-                }
+        full_analysis = comp_result.get("full_analysis")
+        fix_actions = comp_result.get("fix_actions", [])
+        room_type = comp_result.get("room_type")
+
+        # Merge every category issue from the vision analysis into the flat
+        # issues dict. These come pre-tagged with severity and category.
+        for key, val in comp_result.items():
+            if key in (
+                "analysis",
+                "full_analysis",
+                "fix_actions",
+                "room_type",
+                "confidence",
+            ):
+                continue
+            if isinstance(val, dict) and "severity" in val:
+                issues[key] = val
 
         # === AUTO-FIX ===
         # Philosophy: be CONSERVATIVE. A well-edited photo should not be "fixed."
@@ -396,17 +407,46 @@ def process_photo(
         except:
             pass
 
-    # Calculate QC score
-    qc_score = calculate_qc_score(issues, checks_run=12)
-
-    # Determine status
-    FIXABLE_ISSUES = {"vertical_tilt", "horizon_tilt", "color_temp", "soft_focus"}
-    if len(issues) == 0:
-        status = "PASSED"
-    elif fixes_applied and all(k in FIXABLE_ISSUES for k in issues.keys()):
-        status = "FIXED"
+    # Calculate QC score - prefer Claude's holistic overall score if available
+    # (it evaluates all 9 RE categories). Fall back to algorithmic score.
+    if full_analysis and full_analysis.get("overall", {}).get("score") is not None:
+        qc_score = float(full_analysis["overall"]["score"])
     else:
+        qc_score = calculate_qc_score(issues, checks_run=12)
+
+    # Determine status from Claude's pass_fail if available
+    overall_pass_fail = (full_analysis or {}).get("overall", {}).get("pass_fail")
+    ethics_risk = (
+        (full_analysis or {})
+        .get("categories", {})
+        .get("ethics", {})
+        .get("high_risk", False)
+    )
+
+    if ethics_risk or overall_pass_fail == "reject":
+        status = "FLAGGED"  # Ethics or severe issues - human must review
+    elif overall_pass_fail == "pass" or (len(issues) == 0 and qc_score >= 85):
+        status = "PASSED"
+    elif fixes_applied:
+        status = "FIXED"
+    elif overall_pass_fail in ("minor", "major") or qc_score < 85:
         status = "FLAGGED"
+    else:
+        status = "PASSED"
+
+    # Build AI notes that are useful to the user (issue summary + fix actions)
+    if full_analysis and fix_actions:
+        fix_lines = "\n".join(f"- {a}" for a in fix_actions)
+        ai_notes = f"{ai_notes}\n\nRecommended fixes:\n{fix_lines}".strip()
+
+    # Store the full Claude analysis inside issues JSON so the UI can render
+    # category breakdown, fix actions, and room type without a schema change
+    if full_analysis:
+        issues["_full_analysis"] = full_analysis
+    if fix_actions:
+        issues["_fix_actions"] = fix_actions
+    if room_type:
+        issues["_room_type"] = room_type
 
     return {
         "photo_id": photo_id,
