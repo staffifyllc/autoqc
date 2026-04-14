@@ -1,0 +1,293 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String?
+  image           String?
+  emailVerified   DateTime?
+  stripeCustomerId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  agencies AgencyMember[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Agency {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Credits system - 1 credit = 1 property processed
+  creditBalance       Int      @default(0)  // Total unused credits
+  hasPaymentMethod    Boolean  @default(false)  // Has valid card on file for PAYG
+  billingMode         BillingMode @default(CREDITS)
+  totalCreditsPurchased Int    @default(0)
+
+  members       AgencyMember[]
+  styleProfiles StyleProfile[]
+  clients       ClientProfile[]
+  properties    Property[]
+  integrations  Integration[]
+  creditTransactions CreditTransaction[]
+}
+
+enum BillingMode {
+  CREDITS        // Pre-purchased credits ($10/property)
+  PAY_AS_YOU_GO  // Card charged per property ($12/property)
+}
+
+model AgencyMember {
+  id       String @id @default(cuid())
+  userId   String
+  agencyId String
+  role     String @default("member") // "owner", "admin", "member"
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agency Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, agencyId])
+}
+
+model StyleProfile {
+  id                 String  @id @default(cuid())
+  agencyId           String
+  name               String
+  isDefault          Boolean @default(false)
+
+  // Learned parameters from reference photos
+  colorTempMin       Float?  // Kelvin
+  colorTempMax       Float?
+  colorTempAvg       Float?
+  saturationMin      Float?
+  saturationMax      Float?
+  saturationAvg      Float?
+  contrastMin        Float?
+  contrastMax        Float?
+  contrastAvg        Float?
+  exposureMin        Float?
+  exposureMax        Float?
+  exposureAvg        Float?
+  verticalTolerance  Float   @default(1.0) // degrees
+  sharpnessThreshold Float   @default(100.0) // Laplacian variance
+
+  // Reference photo S3 keys
+  referencePhotos    String[] // S3 keys of approved reference photos
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agency  Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  clients ClientProfile[]
+}
+
+model ClientProfile {
+  id              String  @id @default(cuid())
+  agencyId        String
+  styleProfileId  String? // inherits from this style profile
+  clientName      String
+  clientEmail     String?
+  clientPhone     String?
+
+  // Overrides (null means inherit from style profile)
+  colorTempOverride    Float?
+  saturationOverride   Float?
+  contrastOverride     Float?
+  exposureOverride     Float?
+  verticalTolOverride  Float?
+  customNotes          String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agency       Agency        @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  styleProfile StyleProfile? @relation(fields: [styleProfileId], references: [id])
+  properties   Property[]
+}
+
+model Property {
+  id              String   @id @default(cuid())
+  agencyId        String
+  clientProfileId String?
+  address         String
+  status          PropertyStatus @default(PENDING)
+  photoCount      Int      @default(0)
+  qcPassCount     Int      @default(0)
+  qcFailCount     Int      @default(0)
+  totalQcScore    Float?
+  pushedAt        DateTime?
+  pushedTo        String?  // platform name
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agency  Agency         @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  client  ClientProfile? @relation(fields: [clientProfileId], references: [id])
+  photos  Photo[]
+}
+
+enum PropertyStatus {
+  PENDING      // uploaded, not yet processed
+  PROCESSING   // QC in progress
+  REVIEW       // needs human review
+  APPROVED     // all photos pass
+  PUSHED       // delivered to platform
+}
+
+model Photo {
+  id            String      @id @default(cuid())
+  propertyId    String
+  fileName      String
+  s3KeyOriginal String      // original upload
+  s3KeyFixed    String?     // auto-corrected version
+  status        PhotoStatus @default(PENDING)
+  qcScore       Float?      // 0-100
+  fileSize      Int?        // bytes
+
+  // QC results
+  verticalDev   Float?  // degrees off vertical
+  horizonDev    Float?  // degrees off horizontal
+  colorTemp     Float?  // detected color temperature
+  exposure      Float?  // exposure value
+  sharpness     Float?  // Laplacian variance
+  saturation    Float?  // average saturation
+
+  // Issue flags
+  issues        Json?   // detailed issue breakdown
+  aiNotes       String? @db.Text // Claude Vision analysis
+
+  // Fix tracking
+  fixesApplied  String[] // list of auto-fixes applied
+  fixedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+enum PhotoStatus {
+  PENDING     // not yet checked
+  PROCESSING  // QC running
+  PASSED      // all checks pass
+  FIXED       // auto-corrected, now passes
+  FLAGGED     // needs human review
+  APPROVED    // human approved
+  REJECTED    // human rejected
+}
+
+model Integration {
+  id          String @id @default(cuid())
+  agencyId    String
+  platform    IntegrationPlatform
+  isActive    Boolean @default(true)
+
+  // Encrypted credentials stored as JSON
+  credentials Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agency Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@unique([agencyId, platform])
+}
+
+enum IntegrationPlatform {
+  ARYEO
+  HDPHOTOHUB
+  SPIRO
+  TONOMO
+}
+
+model UsageRecord {
+  id          String   @id @default(cuid())
+  agencyId    String
+  propertyId  String
+  photoCount  Int
+  tierPrice   Int      // cents (the actual amount charged or credit value)
+  billingMode BillingMode
+  creditsUsed Int      @default(1)
+  stripeChargeId String?  // Stripe PaymentIntent ID if PAYG
+
+  createdAt DateTime @default(now())
+}
+
+model CreditTransaction {
+  id          String   @id @default(cuid())
+  agencyId    String
+  type        CreditTransactionType
+  amount      Int      // credits added (positive) or used (negative)
+  priceCents  Int?     // Cost in cents (only for purchases)
+  stripeChargeId String?
+  description String?
+
+  createdAt DateTime @default(now())
+
+  agency Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+}
+
+enum CreditTransactionType {
+  PURCHASE       // Bought credits via Stripe
+  USAGE          // Used credits to process a property
+  REFUND         // Refunded credits (property failed QC processing)
+  ADJUSTMENT     // Manual adjustment by admin
+  PROMO          // Promotional credits
+}
+
+model CreditPackage {
+  id          String @id @default(cuid())
+  name        String
+  credits     Int
+  priceCents  Int
+  savingsPct  Int    @default(0)
+  isActive    Boolean @default(true)
+  stripePriceId String?
+  displayOrder Int @default(0)
+}

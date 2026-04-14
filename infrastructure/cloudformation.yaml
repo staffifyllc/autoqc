@@ -1,0 +1,249 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'PhotoQC - Real Estate Photography QC Platform Infrastructure'
+
+Parameters:
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: Database master password (min 8 chars, letters + numbers)
+    MinLength: 8
+  DomainName:
+    Type: String
+    Default: photoqc.com
+    Description: Your domain name (you will buy this separately)
+
+Resources:
+
+  # ===== S3 BUCKET FOR PHOTOS =====
+  PhotosBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'photoqc-uploads-${AWS::AccountId}'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: ['*']
+            ExposedHeaders: [ETag]
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldOriginals
+            Status: Enabled
+            Prefix: '*/original/'
+            ExpirationInDays: 90
+      VersioningConfiguration:
+        Status: Suspended
+
+  # ===== SQS QUEUE FOR QC JOBS =====
+  QCJobsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: photoqc-jobs.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      VisibilityTimeout: 900 # 15 min
+      MessageRetentionPeriod: 86400 # 24 hours
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt QCJobsDLQ.Arn
+        maxReceiveCount: 3
+
+  QCJobsDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: photoqc-jobs-dlq.fifo
+      FifoQueue: true
+      MessageRetentionPeriod: 1209600 # 14 days
+
+  # ===== RDS POSTGRESQL =====
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: PhotoQC DB Subnet Group
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: PhotoQC Database Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 0.0.0.0/0 # In production, restrict this
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: photoqc-db
+      DBName: photoqc
+      Engine: postgres
+      EngineVersion: '16.3'
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      MasterUsername: photoqc_admin
+      MasterUserPassword: !Ref DBPassword
+      PubliclyAccessible: true
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt DBSecurityGroup.GroupId
+      BackupRetentionPeriod: 0
+      DeletionProtection: false
+      StorageEncrypted: false
+
+  # ===== VPC (minimal setup) =====
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: PhotoQC-VPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # ===== LAMBDA ROLE =====
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: PhotoQCLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PhotoQCLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub '${PhotosBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:SendMessage
+                Resource: !GetAtt QCJobsQueue.Arn
+
+  # ===== LAMBDA FUNCTIONS =====
+  QCEngineFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: photoqc-engine
+      Runtime: python3.12
+      Handler: handler.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 1024
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              # Placeholder - real code deployed via deploy script
+              return {'statusCode': 200}
+      Environment:
+        Variables:
+          AWS_S3_BUCKET: !Ref PhotosBucket
+          DATABASE_URL: !Sub 'postgresql://photoqc_admin:${DBPassword}@${Database.Endpoint.Address}:5432/photoqc'
+
+  ProfileLearnerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: photoqc-profile-learner
+      Runtime: python3.12
+      Handler: profile_learning.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              return {'statusCode': 200}
+      Environment:
+        Variables:
+          AWS_S3_BUCKET: !Ref PhotosBucket
+          DATABASE_URL: !Sub 'postgresql://photoqc_admin:${DBPassword}@${Database.Endpoint.Address}:5432/photoqc'
+
+  # SQS Event Source Mapping
+  QCEngineTrigger:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt QCJobsQueue.Arn
+      FunctionName: !Ref QCEngineFunction
+      BatchSize: 1
+
+Outputs:
+  BucketName:
+    Description: S3 bucket for photo uploads
+    Value: !Ref PhotosBucket
+  QueueUrl:
+    Description: SQS queue URL
+    Value: !Ref QCJobsQueue
+  DatabaseEndpoint:
+    Description: PostgreSQL endpoint
+    Value: !GetAtt Database.Endpoint.Address
+  DatabaseURL:
+    Description: Full database connection URL
+    Value: !Sub 'postgresql://photoqc_admin:${DBPassword}@${Database.Endpoint.Address}:5432/photoqc'
