@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import {
@@ -16,7 +16,6 @@ import {
   ChevronRight,
   X,
 } from "lucide-react";
-import { PhotoUploader } from "@/components/upload/PhotoUploader";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -41,12 +40,30 @@ const statusConfig: Record<
 export default function PropertiesPage() {
   const [showNewProperty, setShowNewProperty] = useState(false);
   const [address, setAddress] = useState("");
-  const [propertyId, setPropertyId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [properties] = useState<any[]>([]); // Will be fetched from API
+  const [properties, setProperties] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchProperties();
+  }, []);
+
+  const fetchProperties = async () => {
+    try {
+      const res = await fetch("/api/properties");
+      const data = await res.json();
+      setProperties(data.properties || []);
+    } catch (err) {
+      console.error("Failed to fetch properties:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCreateProperty = async () => {
     if (!address.trim()) return;
+    setCreating(true);
 
     try {
       const res = await fetch("/api/properties", {
@@ -55,9 +72,12 @@ export default function PropertiesPage() {
         body: JSON.stringify({ address }),
       });
       const data = await res.json();
-      setPropertyId(data.property.id);
+      // Navigate directly to the property detail page (persistent)
+      // Upload happens there, progress is saved even if user navigates away
+      window.location.href = `/dashboard/properties/${data.property.id}?upload=true`;
     } catch (err) {
       console.error("Failed to create property:", err);
+      setCreating(false);
     }
   };
 
@@ -174,77 +194,82 @@ export default function PropertiesPage() {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
           >
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
               onClick={() => {
-                setShowNewProperty(false);
-                setPropertyId(null);
-                setAddress("");
+                if (!creating) {
+                  setShowNewProperty(false);
+                  setAddress("");
+                }
               }}
             />
 
-            {/* Modal */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative glass-card p-8 w-full max-w-2xl max-h-[85vh] overflow-y-auto"
+              className="relative glass-card p-8 w-full max-w-md"
             >
               <button
                 onClick={() => {
-                  setShowNewProperty(false);
-                  setPropertyId(null);
-                  setAddress("");
+                  if (!creating) {
+                    setShowNewProperty(false);
+                    setAddress("");
+                  }
                 }}
                 className="absolute top-4 right-4 p-2 rounded-lg hover:bg-white/10 transition"
               >
                 <X className="w-4 h-4" />
               </button>
 
-              {!propertyId ? (
-                <>
-                  <h2 className="text-xl font-bold mb-1">New Property</h2>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    Enter the property address to get started.
-                  </p>
+              <h2 className="text-xl font-bold mb-1">New Property</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Enter the address. We&apos;ll save it immediately so you can
+                upload photos now or come back later.
+              </p>
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm font-medium mb-1.5 block">
-                        Property Address
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="123 Main St, City, State"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition"
-                        autoFocus
-                      />
-                    </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-1.5 block">
+                    Property Address
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="123 Main St, City, State"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && address.trim() && !creating) {
+                        handleCreateProperty();
+                      }
+                    }}
+                    className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition"
+                    autoFocus
+                    disabled={creating}
+                  />
+                </div>
 
-                    <button
-                      onClick={handleCreateProperty}
-                      disabled={!address.trim()}
-                      className="w-full py-3 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Continue to Upload
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <h2 className="text-xl font-bold mb-1">Upload Photos</h2>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    {address}
-                  </p>
-                  <PhotoUploader propertyId={propertyId} />
-                </>
-              )}
+                <button
+                  onClick={handleCreateProperty}
+                  disabled={!address.trim() || creating}
+                  className="w-full py-3 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {creating ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      Create Property
+                      <ChevronRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

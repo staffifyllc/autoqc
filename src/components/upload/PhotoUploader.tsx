@@ -24,7 +24,13 @@ interface UploadState {
   photoId?: string;
 }
 
-export function PhotoUploader({ propertyId }: { propertyId: string }) {
+export function PhotoUploader({
+  propertyId,
+  onComplete,
+}: {
+  propertyId: string;
+  onComplete?: () => void;
+}) {
   const [files, setFiles] = useState<UploadState[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadComplete, setUploadComplete] = useState(false);
@@ -212,7 +218,11 @@ export function PhotoUploader({ propertyId }: { propertyId: string }) {
         return;
       }
 
-      window.location.href = `/dashboard/properties/${propertyId}`;
+      if (onComplete) {
+        onComplete();
+      } else {
+        window.location.href = `/dashboard/properties/${propertyId}`;
+      }
     } catch (err) {
       console.error("Failed to start QC:", err);
     }

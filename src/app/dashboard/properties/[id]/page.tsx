@@ -16,8 +16,10 @@ import {
   X,
   Download,
   Maximize2,
+  Upload,
 } from "lucide-react";
 import { ReactCompareSlider, ReactCompareSliderImage } from "react-compare-slider";
+import { PhotoUploader } from "@/components/upload/PhotoUploader";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -80,9 +82,17 @@ export default function PropertyDetailPage({
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [filter, setFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
+  const [showUploader, setShowUploader] = useState(false);
 
   useEffect(() => {
     fetchProperty();
+    // Auto-show uploader if URL has ?upload=true
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("upload") === "true") {
+        setShowUploader(true);
+      }
+    }
   }, [params.id]);
 
   const fetchProperty = async () => {
@@ -185,6 +195,15 @@ export default function PropertyDetailPage({
           </div>
 
           <div className="flex items-center gap-3">
+            {!showUploader && (
+              <button
+                onClick={() => setShowUploader(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass hover:bg-white/10 text-sm font-medium transition"
+              >
+                <Upload className="w-4 h-4" />
+                {property.photos.length === 0 ? "Upload Photos" : "Add More Photos"}
+              </button>
+            )}
             {property.status === "APPROVED" && (
               <button
                 onClick={() => handlePush("ARYEO")}
@@ -194,22 +213,63 @@ export default function PropertyDetailPage({
                 Push to Platform
               </button>
             )}
-            <button
-              onClick={() => {
-                fetch(`/api/properties/${params.id}`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ action: "run_qc" }),
-                }).then(fetchProperty);
-              }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass hover:bg-white/10 text-sm font-medium transition"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Re-run QC
-            </button>
+            {property.photos.length > 0 && property.status !== "PENDING" && (
+              <button
+                onClick={() => {
+                  fetch(`/api/properties/${params.id}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "run_qc" }),
+                  }).then(fetchProperty);
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass hover:bg-white/10 text-sm font-medium transition"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Re-run QC
+              </button>
+            )}
           </div>
         </div>
       </motion.div>
+
+      {/* Upload section - shows when user clicks upload OR property has no photos yet */}
+      {showUploader && (
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          className="glass-card p-6 mb-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-semibold">
+                {property.photos.length === 0
+                  ? "Upload photos to get started"
+                  : "Add more photos"}
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Your progress is saved. You can leave this page and come back
+                anytime.
+              </p>
+            </div>
+            {property.photos.length > 0 && (
+              <button
+                onClick={() => setShowUploader(false)}
+                className="p-2 rounded-lg hover:bg-white/10 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <PhotoUploader
+            propertyId={params.id}
+            onComplete={() => {
+              setShowUploader(false);
+              fetchProperty();
+            }}
+          />
+        </motion.div>
+      )}
 
       {/* Summary Stats */}
       <motion.div variants={fadeUp} className="grid grid-cols-4 gap-4 mb-6">
