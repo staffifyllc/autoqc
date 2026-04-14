@@ -55,12 +55,94 @@ export function PhotoUploader({ propertyId }: { propertyId: string }) {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Compress image before upload: resize to max 3840px and reencode at 90% JPEG
+  const compressImage = async (file: File): Promise<Blob> => {
+    // Skip compression for small files (<2MB) or non-standard types
+    if (file.size < 2 * 1024 * 1024) return file;
+    if (!file.type.startsWith("image/")) return file;
+
+    try {
+      const img = await createImageBitmap(file);
+      const MAX_DIM = 3840;
+      let { width, height } = img;
+      if (width > MAX_DIM || height > MAX_DIM) {
+        const ratio = Math.min(MAX_DIM / width, MAX_DIM / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = new OffscreenCanvas(width, height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return file;
+      ctx.drawImage(img, 0, 0, width, height);
+      const blob = await canvas.convertToBlob({
+        type: "image/jpeg",
+        quality: 0.9,
+      });
+      // If compression actually made it larger (rare), use original
+      return blob.size < file.size ? blob : file;
+    } catch {
+      return file;
+    }
+  };
+
+  // Upload a single file to S3 with progress tracking
+  const uploadOne = async (
+    index: number,
+    file: File,
+    uploadUrl: string,
+    photoId: string
+  ) => {
+    setFiles((prev) =>
+      prev.map((f, i) =>
+        i === index ? { ...f, status: "uploading", progress: 0 } : f
+      )
+    );
+
+    try {
+      const blob = await compressImage(file);
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", uploadUrl);
+        xhr.setRequestHeader("Content-Type", blob.type || file.type);
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const progress = Math.round((e.loaded / e.total) * 100);
+            setFiles((prev) =>
+              prev.map((f, i) => (i === index ? { ...f, progress } : f))
+            );
+          }
+        };
+        xhr.onload = () =>
+          xhr.status >= 200 && xhr.status < 300
+            ? resolve()
+            : reject(new Error(`Upload failed: ${xhr.status}`));
+        xhr.onerror = () => reject(new Error("Upload error"));
+        xhr.send(blob);
+      });
+
+      setFiles((prev) =>
+        prev.map((f, i) =>
+          i === index
+            ? { ...f, status: "uploaded", progress: 100, photoId }
+            : f
+        )
+      );
+    } catch (err) {
+      setFiles((prev) =>
+        prev.map((f, i) =>
+          i === index ? { ...f, status: "error", progress: 0 } : f
+        )
+      );
+    }
+  };
+
   const handleUpload = async () => {
     if (files.length === 0) return;
     setIsUploading(true);
 
     try {
-      // Step 1: Get presigned URLs
+      // Step 1: Get presigned URLs (single API call)
       const res = await fetch("/api/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -76,43 +158,29 @@ export function PhotoUploader({ propertyId }: { propertyId: string }) {
 
       const { uploads } = await res.json();
 
-      // Step 2: Upload each file to S3 directly
-      for (let i = 0; i < files.length; i++) {
-        const upload = uploads[i];
+      // Step 2: Upload files in parallel with concurrency limit
+      // 4 concurrent uploads = fast but doesn't saturate the connection
+      const CONCURRENCY = 4;
+      const queue = files.map((f, i) => ({
+        index: i,
+        file: f.file,
+        uploadUrl: uploads[i].uploadUrl,
+        photoId: uploads[i].photoId,
+      }));
 
-        setFiles((prev) =>
-          prev.map((f, idx) =>
-            idx === i ? { ...f, status: "uploading", progress: 0 } : f
-          )
-        );
-
-        try {
-          await fetch(upload.uploadUrl, {
-            method: "PUT",
-            body: files[i].file,
-            headers: { "Content-Type": files[i].file.type },
-          });
-
-          setFiles((prev) =>
-            prev.map((f, idx) =>
-              idx === i
-                ? {
-                    ...f,
-                    status: "uploaded",
-                    progress: 100,
-                    photoId: upload.photoId,
-                  }
-                : f
-            )
-          );
-        } catch {
-          setFiles((prev) =>
-            prev.map((f, idx) =>
-              idx === i ? { ...f, status: "error", progress: 0 } : f
-            )
-          );
+      async function worker() {
+        while (queue.length > 0) {
+          const job = queue.shift();
+          if (!job) break;
+          await uploadOne(job.index, job.file, job.uploadUrl, job.photoId);
         }
       }
+
+      await Promise.all(
+        Array.from({ length: Math.min(CONCURRENCY, files.length) }, () =>
+          worker()
+        )
+      );
 
       setUploadComplete(true);
     } catch (err) {

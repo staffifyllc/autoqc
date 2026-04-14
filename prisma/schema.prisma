@@ -10,16 +10,30 @@ datasource db {
 model User {
   id              String    @id @default(cuid())
   email           String    @unique
-  name            String?
+  name            String?   // Full name, computed from first + last
+  firstName       String?
+  lastName        String?
+  phone           String?
+  role            UserRole  @default(OWNER)
   image           String?
   emailVerified   DateTime?
   stripeCustomerId String?
+  referralSource  String?   // How they heard about us
+  marketingOptIn  Boolean   @default(true)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   accounts Account[]
   sessions Session[]
   agencies AgencyMember[]
+}
+
+enum UserRole {
+  OWNER
+  PHOTOGRAPHER
+  EDITOR
+  MANAGER
+  OTHER
 }
 
 model Account {
@@ -61,14 +75,35 @@ model VerificationToken {
 model Agency {
   id        String   @id @default(cuid())
   name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+  // Business profile
+  website         String?
+  phone           String?
+  addressCity     String?
+  addressState    String?
+  addressZip      String?
+  teamSize        String?   // "1", "2-5", "6-10", "11-25", "26+"
+  propertiesMonth String?   // "<10", "10-25", "26-50", "51-100", "100+"
+  yearsInBusiness String?   // "<1", "1-3", "4-7", "8+"
+  serviceTypes    String[]  // ["residential", "commercial", "drone", "video", "3d"]
+
+  // Platforms they currently use (for migration guidance)
+  currentPlatforms String[] // ["aryeo", "hdphotohub", "spiro", "tonomo", "dropbox", "none"]
 
   // Credits system - 1 credit = 1 property processed
-  creditBalance       Int      @default(0)  // Total unused credits
-  hasPaymentMethod    Boolean  @default(false)  // Has valid card on file for PAYG
+  creditBalance       Int      @default(0)
+  hasPaymentMethod    Boolean  @default(false)
   billingMode         BillingMode @default(CREDITS)
   totalCreditsPurchased Int    @default(0)
+
+  // Onboarding progress
+  onboardingComplete Boolean @default(false)
+
+  // Admin / test mode - bypasses credit checks
+  isAdmin            Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   members       AgencyMember[]
   styleProfiles StyleProfile[]

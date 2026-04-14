@@ -8,17 +8,22 @@ import { signIn } from "next-auth/react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
+      // Check if this user already has an agency (returning user vs new)
+      const checkRes = await fetch(
+        `/api/auth/check-user?email=${encodeURIComponent(email)}`
+      );
+      const { hasAgency } = await checkRes.json();
+
       const res = await signIn("dev-login", {
         email,
-        name: name || email.split("@")[0],
-        callbackUrl: "/dashboard",
+        name: email.split("@")[0],
+        callbackUrl: hasAgency ? "/dashboard" : "/onboarding",
       });
       if (res?.error) {
         alert("Sign in failed: " + res.error);
@@ -61,19 +66,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">
-                Your Name (optional)
-              </label>
-              <input
-                type="text"
-                placeholder="Paul"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition"
+                autoFocus
               />
             </div>
 
@@ -94,8 +87,8 @@ export default function LoginPage() {
           </form>
 
           <p className="text-xs text-muted-foreground text-center mt-6">
-            New users are created automatically. An agency and default style
-            profile will be set up for you.
+            New to AutoQC? We&apos;ll walk you through a quick setup after you
+            continue.
           </p>
         </motion.div>
       </div>

@@ -48,11 +48,17 @@ export async function checkPaymentCapability(agencyId: string) {
       creditBalance: true,
       hasPaymentMethod: true,
       billingMode: true,
+      isAdmin: true,
     },
   });
 
   if (!agency) {
     return { canProcess: false, method: null, reason: "Agency not found" };
+  }
+
+  // Admin agencies bypass all payment checks
+  if (agency.isAdmin) {
+    return { canProcess: true, method: "admin" as const };
   }
 
   // Check credits first
@@ -90,6 +96,21 @@ export async function chargeForProperty(
       method: "none",
       error: capability.reason || "Payment required",
     };
+  }
+
+  // Admin accounts: track usage but don't charge
+  if (capability.method === "admin") {
+    await prisma.usageRecord.create({
+      data: {
+        agencyId,
+        propertyId,
+        photoCount,
+        tierPrice: 0,
+        billingMode: "CREDITS",
+        creditsUsed: 0,
+      },
+    });
+    return { success: true, method: "admin" };
   }
 
   if (capability.method === "credits") {
