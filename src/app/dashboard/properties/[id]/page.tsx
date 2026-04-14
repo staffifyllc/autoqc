@@ -399,6 +399,14 @@ export default function PropertyDetailPage({
                 {status.label}
               </div>
 
+              {/* Before/After badge - shows when this photo has an auto-fix */}
+              {(photo as any).fixedUrl && (
+                <div className="absolute top-2 left-2 px-2 py-1 rounded-lg bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold backdrop-blur-sm flex items-center gap-1">
+                  <Zap className="w-3 h-3" />
+                  Before/After
+                </div>
+              )}
+
               {/* QC score */}
               {photo.qcScore !== null && (
                 <div className="absolute bottom-2 left-2 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-sm text-xs font-bold">
@@ -446,43 +454,92 @@ export default function PropertyDetailPage({
               className="relative flex w-full max-w-6xl mx-auto my-8"
             >
               {/* Image area */}
-              <div className="flex-1 flex items-center justify-center p-8">
+              <div className="flex-1 flex flex-col items-center justify-center p-8 gap-3">
                 {selectedPhoto.fixedUrl && selectedPhoto.originalUrl ? (
                   // Has both original + fixed: show before/after slider
-                  <div className="w-full max-h-full rounded-xl overflow-hidden">
-                    <ReactCompareSlider
-                      itemOne={
-                        <ReactCompareSliderImage
-                          src={selectedPhoto.originalUrl}
-                          alt="Original"
-                        />
-                      }
-                      itemTwo={
-                        <ReactCompareSliderImage
-                          src={selectedPhoto.fixedUrl}
-                          alt="Fixed"
-                        />
-                      }
-                      className="rounded-xl"
-                    />
-                    <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-                      <span>Original</span>
-                      <span>Auto-Fixed</span>
+                  <>
+                    <div className="w-full max-h-[75vh] rounded-xl overflow-hidden border border-white/10 shadow-2xl shadow-black/50">
+                      <ReactCompareSlider
+                        itemOne={
+                          <ReactCompareSliderImage
+                            src={selectedPhoto.originalUrl}
+                            alt="Original"
+                          />
+                        }
+                        itemTwo={
+                          <ReactCompareSliderImage
+                            src={selectedPhoto.fixedUrl}
+                            alt="Fixed"
+                          />
+                        }
+                        className="rounded-xl"
+                      />
                     </div>
-                  </div>
+                    <div className="flex items-center justify-between w-full max-w-md text-xs">
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
+                        <span className="text-muted-foreground">←</span>
+                        <span className="font-medium">Original</span>
+                      </div>
+                      <span className="text-muted-foreground text-center">
+                        Drag the slider to compare
+                      </span>
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300">
+                        <span className="font-medium">Auto-Fixed</span>
+                        <span>→</span>
+                      </div>
+                    </div>
+                    {/* Download buttons */}
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={selectedPhoto.originalUrl}
+                        download={`original_${selectedPhoto.fileName}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs px-3 py-1.5 rounded-lg glass hover:bg-white/10 transition flex items-center gap-1.5"
+                      >
+                        <Download className="w-3 h-3" />
+                        Original
+                      </a>
+                      <a
+                        href={selectedPhoto.fixedUrl}
+                        download={`fixed_${selectedPhoto.fileName}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs px-3 py-1.5 rounded-lg gradient-bg text-white hover:opacity-90 transition flex items-center gap-1.5"
+                      >
+                        <Download className="w-3 h-3" />
+                        Fixed Version
+                      </a>
+                    </div>
+                  </>
                 ) : selectedPhoto.originalUrl ||
                   (selectedPhoto as any).thumbnailUrl ? (
                   // Only original: show it full-size
-                  <div className="w-full max-h-[80vh] rounded-xl overflow-hidden bg-black">
-                    <img
-                      src={
+                  <>
+                    <div className="w-full max-h-[80vh] rounded-xl overflow-hidden bg-black border border-white/10 shadow-2xl shadow-black/50">
+                      <img
+                        src={
+                          selectedPhoto.originalUrl ||
+                          (selectedPhoto as any).thumbnailUrl
+                        }
+                        alt={selectedPhoto.fileName}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <a
+                      href={
                         selectedPhoto.originalUrl ||
                         (selectedPhoto as any).thumbnailUrl
                       }
-                      alt={selectedPhoto.fileName}
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
+                      download={selectedPhoto.fileName}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs px-3 py-1.5 rounded-lg glass hover:bg-white/10 transition flex items-center gap-1.5"
+                    >
+                      <Download className="w-3 h-3" />
+                      Download
+                    </a>
+                  </>
                 ) : (
                   <div className="w-full aspect-[4/3] rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
                     <span className="text-muted-foreground">
