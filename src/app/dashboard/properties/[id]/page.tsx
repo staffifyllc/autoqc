@@ -241,6 +241,33 @@ export default function PropertyDetailPage({
                 Re-run QC
               </button>
             )}
+            {/* Apply All / Approve All - accepts auto-fixes + marks flagged as approved */}
+            {property.photos.length > 0 &&
+              (property.status === "REVIEW" ||
+                property.photos.some((p: Photo) =>
+                  ["FIXED", "FLAGGED"].includes(p.status)
+                )) && (
+                <button
+                  onClick={async () => {
+                    if (
+                      !confirm(
+                        "Accept all auto-fixes and approve all photos? You can also click individual photos to review first."
+                      )
+                    )
+                      return;
+                    await fetch(`/api/properties/${params.id}`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ action: "approve_all" }),
+                    });
+                    fetchProperty();
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition glow-sm"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Apply All Changes
+                </button>
+              )}
           </div>
         </div>
       </motion.div>
@@ -342,16 +369,28 @@ export default function PropertyDetailPage({
             <motion.button
               key={photo.id}
               onClick={() => setSelectedPhoto(photo)}
-              className="group relative rounded-xl overflow-hidden border border-white/10 hover:border-white/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/20 aspect-[4/3]"
+              className="group relative rounded-xl overflow-hidden border border-white/10 hover:border-white/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/20 aspect-[4/3] bg-gradient-to-br from-gray-800 to-gray-900"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              {/* Placeholder for actual image */}
-              <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
-                <span className="text-xs text-muted-foreground">
-                  {photo.fileName}
-                </span>
-              </div>
+              {/* Actual image thumbnail */}
+              {(photo as any).thumbnailUrl ? (
+                <img
+                  src={(photo as any).thumbnailUrl}
+                  alt={photo.fileName}
+                  loading="lazy"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-xs text-muted-foreground px-2 text-center">
+                    {photo.fileName}
+                  </span>
+                </div>
+              )}
+
+              {/* Subtle gradient overlay for badge readability */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
 
               {/* Status badge */}
               <div

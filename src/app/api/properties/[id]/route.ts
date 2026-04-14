@@ -3,6 +3,7 @@ import { requireAgency } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { enqueueQCJob } from "@/lib/sqs";
 import { chargeForProperty, checkPaymentCapability } from "@/lib/credits";
+import { getDownloadUrl } from "@/lib/s3";
 
 // GET /api/properties/[id] - get property with photos
 export async function GET(
@@ -27,7 +28,34 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ property });
+    // Generate signed URLs for all photos (both original and fixed)
+    // These are valid for 1 hour so the grid can display actual thumbnails
+    const photosWithUrls = await Promise.all(
+      property.photos.map(async (photo) => {
+        const [originalUrl, fixedUrl] = await Promise.all([
+          photo.s3KeyOriginal
+            ? getDownloadUrl(photo.s3KeyOriginal).catch(() => null)
+            : Promise.resolve(null),
+          photo.s3KeyFixed
+            ? getDownloadUrl(photo.s3KeyFixed).catch(() => null)
+            : Promise.resolve(null),
+        ]);
+        return {
+          ...photo,
+          originalUrl,
+          fixedUrl,
+          // thumbnailUrl picks fixed if available, else original
+          thumbnailUrl: fixedUrl || originalUrl,
+        };
+      })
+    );
+
+    return NextResponse.json({
+      property: {
+        ...property,
+        photos: photosWithUrls,
+      },
+    });
   } catch (error) {
     console.error("Property detail error:", error);
     return NextResponse.json(
@@ -102,8 +130,13 @@ export async function POST(
     }
 
     if (action === "approve_all") {
+      // Accept auto-fixes AND approve all flagged photos
+      // PASSED and FIXED photos already look good; FLAGGED ones get user-approved
       await prisma.photo.updateMany({
-        where: { propertyId: params.id, status: "FLAGGED" },
+        where: {
+          propertyId: params.id,
+          status: { in: ["FLAGGED", "FIXED", "PASSED"] },
+        },
         data: { status: "APPROVED" },
       });
 
