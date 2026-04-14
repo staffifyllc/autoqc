@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Palette,
@@ -40,7 +40,7 @@ interface StyleProfile {
 }
 
 export default function ProfilesPage() {
-  const [profiles] = useState<StyleProfile[]>([]);
+  const [profiles, setProfiles] = useState<StyleProfile[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [newProfile, setNewProfile] = useState({
     name: "",
@@ -48,6 +48,20 @@ export default function ProfilesPage() {
     sharpnessThreshold: 100,
     isDefault: false,
   });
+
+  useEffect(() => {
+    fetchProfiles();
+  }, []);
+
+  const fetchProfiles = async () => {
+    try {
+      const res = await fetch("/api/profiles");
+      const data = await res.json();
+      setProfiles(data.profiles || []);
+    } catch (err) {
+      console.error("Failed to fetch profiles:", err);
+    }
+  };
 
   const handleCreate = async () => {
     try {
@@ -63,7 +77,7 @@ export default function ProfilesPage() {
         sharpnessThreshold: 100,
         isDefault: false,
       });
-      // Refresh profiles
+      fetchProfiles();
     } catch (err) {
       console.error("Failed to create profile:", err);
     }
@@ -156,9 +170,10 @@ export default function ProfilesPage() {
       ) : (
         <motion.div variants={fadeUp} className="grid grid-cols-2 gap-4">
           {profiles.map((profile) => (
-            <div
+            <a
               key={profile.id}
-              className="glass-card-hover p-6 space-y-4 cursor-pointer"
+              href={`/dashboard/profiles/${profile.id}`}
+              className="glass-card-hover p-6 space-y-4 cursor-pointer block"
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -220,7 +235,7 @@ export default function ProfilesPage() {
                 <Upload className="w-3.5 h-3.5" />
                 {profile.referencePhotos.length} reference photos
               </div>
-            </div>
+            </a>
           ))}
         </motion.div>
       )}
