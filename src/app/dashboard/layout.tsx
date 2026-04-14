@@ -15,6 +15,7 @@ import {
   LogOut,
   ChevronRight,
 } from "lucide-react";
+import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
 import { motion } from "framer-motion";
 
 const navItems = [
@@ -97,6 +98,9 @@ export default function DashboardLayout({
       <main className="flex-1 ml-64">
         <div className="max-w-7xl mx-auto px-8 py-8">{children}</div>
       </main>
+
+      {/* Floating upload status - persists across all dashboard pages */}
+      <UploadStatusPanel />
     </div>
   );
 }

@@ -151,7 +151,7 @@ def handler(event, context):
 
         cursor = db.cursor()
         cursor.execute(
-            'SELECT reference_photos FROM "StyleProfile" WHERE id = %s',
+            'SELECT "referencePhotos" FROM "StyleProfile" WHERE id = %s',
             (profile_id,),
         )
         row = cursor.fetchone()
@@ -172,21 +172,21 @@ def handler(event, context):
         cursor.execute(
             """
             UPDATE "StyleProfile" SET
-                color_temp_avg = %s,
-                color_temp_min = %s,
-                color_temp_max = %s,
-                saturation_avg = %s,
-                saturation_min = %s,
-                saturation_max = %s,
-                contrast_avg = %s,
-                contrast_min = %s,
-                contrast_max = %s,
-                exposure_avg = %s,
-                exposure_min = %s,
-                exposure_max = %s,
-                sharpness_threshold = %s,
-                vertical_tolerance = %s,
-                updated_at = NOW()
+                "colorTempAvg" = %s,
+                "colorTempMin" = %s,
+                "colorTempMax" = %s,
+                "saturationAvg" = %s,
+                "saturationMin" = %s,
+                "saturationMax" = %s,
+                "contrastAvg" = %s,
+                "contrastMin" = %s,
+                "contrastMax" = %s,
+                "exposureAvg" = %s,
+                "exposureMin" = %s,
+                "exposureMax" = %s,
+                "sharpnessThreshold" = %s,
+                "verticalTolerance" = %s,
+                "updatedAt" = NOW()
             WHERE id = %s
             """,
             (

@@ -77,15 +77,15 @@ def get_profile_thresholds(db, agency_id: str, client_profile_id: str = None):
         "chromatic_aberration_threshold": 2.0,  # pixel fringe width
     }
 
-    # Try to get agency default profile
+    # Try to get agency default profile (Prisma uses camelCase column names)
     cursor.execute(
         """
-        SELECT vertical_tolerance, sharpness_threshold,
-               color_temp_min, color_temp_max, color_temp_avg,
-               saturation_min, saturation_max, saturation_avg,
-               exposure_min, exposure_max, exposure_avg
+        SELECT "verticalTolerance", "sharpnessThreshold",
+               "colorTempMin", "colorTempMax", "colorTempAvg",
+               "saturationMin", "saturationMax", "saturationAvg",
+               "exposureMin", "exposureMax", "exposureAvg"
         FROM "StyleProfile"
-        WHERE agency_id = %s AND is_default = true
+        WHERE "agencyId" = %s AND "isDefault" = true
         LIMIT 1
         """,
         (agency_id,),
@@ -113,8 +113,8 @@ def get_profile_thresholds(db, agency_id: str, client_profile_id: str = None):
     if client_profile_id:
         cursor.execute(
             """
-            SELECT color_temp_override, saturation_override,
-                   contrast_override, exposure_override, vertical_tol_override
+            SELECT "colorTempOverride", "saturationOverride",
+                   "contrastOverride", "exposureOverride", "verticalTolOverride"
             FROM "ClientProfile"
             WHERE id = %s
             """,
@@ -410,19 +410,19 @@ def update_photo_in_db(db, result: dict):
         """
         UPDATE "Photo" SET
             status = %s,
-            qc_score = %s,
-            vertical_dev = %s,
-            horizon_dev = %s,
-            color_temp = %s,
+            "qcScore" = %s,
+            "verticalDev" = %s,
+            "horizonDev" = %s,
+            "colorTemp" = %s,
             exposure = %s,
             sharpness = %s,
             saturation = %s,
             issues = %s,
-            ai_notes = %s,
-            fixes_applied = %s,
-            s3_key_fixed = %s,
-            fixed_at = CASE WHEN %s IS NOT NULL THEN NOW() ELSE NULL END,
-            updated_at = NOW()
+            "aiNotes" = %s,
+            "fixesApplied" = %s,
+            "s3KeyFixed" = %s,
+            "fixedAt" = CASE WHEN %s IS NOT NULL THEN NOW() ELSE NULL END,
+            "updatedAt" = NOW()
         WHERE id = %s
         """,
         (
@@ -451,7 +451,7 @@ def update_property_status(db, property_id: str):
 
     cursor.execute(
         """
-        SELECT status FROM "Photo" WHERE property_id = %s
+        SELECT status FROM "Photo" WHERE "propertyId" = %s
         """,
         (property_id,),
     )
@@ -473,8 +473,8 @@ def update_property_status(db, property_id: str):
     # Calculate average QC score
     cursor.execute(
         """
-        SELECT AVG(qc_score) FROM "Photo"
-        WHERE property_id = %s AND qc_score IS NOT NULL
+        SELECT AVG("qcScore") FROM "Photo"
+        WHERE "propertyId" = %s AND "qcScore" IS NOT NULL
         """,
         (property_id,),
     )
@@ -484,10 +484,10 @@ def update_property_status(db, property_id: str):
         """
         UPDATE "Property" SET
             status = %s,
-            qc_pass_count = %s,
-            qc_fail_count = %s,
-            total_qc_score = %s,
-            updated_at = NOW()
+            "qcPassCount" = %s,
+            "qcFailCount" = %s,
+            "totalQcScore" = %s,
+            "updatedAt" = NOW()
         WHERE id = %s
         """,
         (property_status, pass_count + fixed_count, flagged_count, avg_score, property_id),
@@ -514,7 +514,7 @@ def handler(event, context):
             cursor = db.cursor()
             cursor.execute(
                 """
-                SELECT id, s3_key_original FROM "Photo"
+                SELECT id, "s3KeyOriginal" FROM "Photo"
                 WHERE id = ANY(%s)
                 """,
                 (photo_ids,),

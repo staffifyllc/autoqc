@@ -263,6 +263,7 @@ export default function PropertyDetailPage({
           </div>
           <PhotoUploader
             propertyId={params.id}
+            propertyAddress={property.address}
             onComplete={() => {
               setShowUploader(false);
               fetchProperty();
