@@ -1,9 +1,8 @@
 import Stripe from "stripe";
 import { prisma } from "./db";
-import { getPropertyTier } from "./utils";
 
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-12-18.acacia",
+  apiVersion: "2025-02-24.acacia" as Stripe.LatestApiVersion,
 });
 
 export async function createCustomer(email: string, name?: string) {
@@ -25,61 +24,22 @@ export async function createCheckoutSession(
   return session;
 }
 
+// Legacy function - kept for API compatibility. New code uses credits.ts
 export async function recordPropertyUsage(
   agencyId: string,
   propertyId: string,
   photoCount: number
 ) {
-  const { priceCents } = getPropertyTier(photoCount);
-
-  // Get the agency owner's Stripe customer ID
-  const owner = await prisma.agencyMember.findFirst({
-    where: { agencyId, role: "owner" },
-    include: { user: true },
-  });
-
-  if (!owner?.user.stripeCustomerId) {
-    // Free tier - check if under 3 properties this month
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
-
-    const monthlyCount = await prisma.usageRecord.count({
-      where: {
-        agencyId,
-        createdAt: { gte: startOfMonth },
-      },
-    });
-
-    if (monthlyCount >= 3) {
-      throw new Error("Free tier limit reached. Add a payment method to continue.");
-    }
-  }
-
-  // Record usage
+  // This function is deprecated. Use chargeForProperty from credits.ts instead.
   const record = await prisma.usageRecord.create({
     data: {
       agencyId,
       propertyId,
       photoCount,
-      tierPrice: priceCents,
+      tierPrice: 1000,
+      billingMode: "CREDITS",
+      creditsUsed: 1,
     },
   });
-
-  // If customer has Stripe, report usage
-  if (owner?.user.stripeCustomerId) {
-    try {
-      await stripe.billing.meterEvents.create({
-        event_name: "property_processed",
-        payload: {
-          stripe_customer_id: owner.user.stripeCustomerId,
-          value: String(priceCents),
-        },
-      });
-    } catch (err) {
-      console.error("Failed to report Stripe usage:", err);
-    }
-  }
-
   return record;
 }
