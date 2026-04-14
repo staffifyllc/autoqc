@@ -495,64 +495,173 @@ def update_property_status(db, property_id: str):
     cursor.close()
 
 
+def run_finalization(db, property_id, thresholds):
+    """
+    Finalization: set consistency check + property status update.
+    Called by the last photo Lambda to finish processing.
+    """
+    cursor = db.cursor()
+
+    # Get all processed photos' metrics for consistency check
+    cursor.execute(
+        """
+        SELECT id, status, "colorTemp", exposure, saturation, "qcScore", issues
+        FROM "Photo"
+        WHERE "propertyId" = %s
+        """,
+        (property_id,),
+    )
+    rows = cursor.fetchall()
+
+    all_metrics = []
+    for row in rows:
+        all_metrics.append({
+            "id": row[0],
+            "status": row[1],
+            "color_temp": row[2],
+            "exposure": row[3],
+            "saturation": row[4],
+            "qc_score": row[5],
+            "issues": row[6] or {},
+        })
+
+    # Set consistency check
+    if len(all_metrics) > 1:
+        consistency_results = check_consistency(
+            all_metrics, thresholds["color_temp_consistency"]
+        )
+        for i, is_inconsistent in enumerate(
+            consistency_results.get("inconsistent_indices", [])
+        ):
+            if is_inconsistent and all_metrics[i]["status"] == "PASSED":
+                photo_id = all_metrics[i]["id"]
+                current_issues = all_metrics[i]["issues"]
+                if isinstance(current_issues, str):
+                    current_issues = json.loads(current_issues)
+                current_issues["consistency"] = {
+                    "severity": 0.5,
+                    "detail": "Color temperature differs significantly from the rest of the set",
+                }
+                new_score = calculate_qc_score(current_issues, 12)
+                cursor.execute(
+                    """
+                    UPDATE "Photo" SET
+                        status = 'FLAGGED',
+                        issues = %s,
+                        "qcScore" = %s,
+                        "updatedAt" = NOW()
+                    WHERE id = %s
+                    """,
+                    (json.dumps(current_issues), new_score, photo_id),
+                )
+
+    cursor.close()
+    update_property_status(db, property_id)
+
+
 def handler(event, context):
-    """AWS Lambda handler. Processes SQS messages."""
+    """
+    AWS Lambda handler. Processes SQS messages.
+
+    Supports two message modes:
+    - "photo": process a single photo (parallel)
+    - "batch" (legacy): process all photos for a property sequentially
+    """
     db = get_db()
 
     try:
         for record in event.get("Records", []):
             body = json.loads(record["body"])
+            mode = body.get("mode", "batch")
             property_id = body["propertyId"]
             agency_id = body["agencyId"]
-            photo_ids = body["photoIds"]
             client_profile_id = body.get("clientProfileId")
 
-            # Get thresholds
             thresholds = get_profile_thresholds(db, agency_id, client_profile_id)
 
-            # Get photo S3 keys
-            cursor = db.cursor()
-            cursor.execute(
-                """
-                SELECT id, "s3KeyOriginal" FROM "Photo"
-                WHERE id = ANY(%s)
-                """,
-                (photo_ids,),
-            )
-            photos = cursor.fetchall()
-            cursor.close()
+            if mode == "photo":
+                # Single photo processing (parallel mode)
+                photo_id = body["photoId"]
 
-            # Process each photo
-            all_results = []
-            for photo_id, s3_key in photos:
-                result = process_photo(photo_id, s3_key, thresholds)
-                all_results.append(result)
-                update_photo_in_db(db, result)
-
-            # Run set consistency check
-            if len(all_results) > 1:
-                consistency_results = check_consistency(
-                    [r["metrics"] for r in all_results],
-                    thresholds["color_temp_consistency"],
+                cursor = db.cursor()
+                cursor.execute(
+                    'SELECT id, "s3KeyOriginal" FROM "Photo" WHERE id = %s',
+                    (photo_id,),
                 )
-                # Flag inconsistent photos
-                for i, is_inconsistent in enumerate(consistency_results.get("inconsistent_indices", [])):
-                    if is_inconsistent and all_results[i]["status"] == "PASSED":
-                        all_results[i]["issues"]["consistency"] = {
-                            "severity": 0.5,
-                            "detail": "Color temperature differs significantly from the rest of the set",
-                        }
-                        all_results[i]["status"] = "FLAGGED"
-                        all_results[i]["qc_score"] = calculate_qc_score(
-                            all_results[i]["issues"], 12
-                        )
-                        update_photo_in_db(db, all_results[i])
+                row = cursor.fetchone()
+                cursor.close()
 
-            # Update property status
-            update_property_status(db, property_id)
-            db.commit()
+                if not row:
+                    print(f"Photo {photo_id} not found, skipping")
+                    continue
 
-            print(f"Processed {len(photos)} photos for property {property_id}")
+                # Process this photo
+                result = process_photo(row[0], row[1], thresholds)
+                update_photo_in_db(db, result)
+                db.commit()
+
+                # Atomically check if this is the last photo to finish
+                # If yes, run finalization (consistency check + property status)
+                cursor = db.cursor()
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) FROM "Photo"
+                    WHERE "propertyId" = %s AND status = 'PROCESSING'
+                    """,
+                    (property_id,),
+                )
+                remaining = cursor.fetchone()[0]
+                cursor.close()
+
+                if remaining == 0:
+                    # Try to atomically claim the finalization role
+                    # Only one Lambda can transition the property from PROCESSING
+                    cursor = db.cursor()
+                    cursor.execute(
+                        """
+                        UPDATE "Property"
+                        SET status = 'REVIEW'
+                        WHERE id = %s AND status = 'PROCESSING'
+                        RETURNING id
+                        """,
+                        (property_id,),
+                    )
+                    claimed = cursor.fetchone()
+                    cursor.close()
+
+                    if claimed:
+                        print(f"Finalizing property {property_id}")
+                        run_finalization(db, property_id, thresholds)
+                        db.commit()
+                        print(f"Finalized property {property_id}")
+                    else:
+                        print(f"Property {property_id} already finalized by another Lambda")
+
+                print(f"Processed photo {photo_id}, {remaining} remaining")
+
+            else:
+                # Legacy batch mode (kept for backward compat)
+                photo_ids = body.get("photoIds", [])
+
+                cursor = db.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, "s3KeyOriginal" FROM "Photo"
+                    WHERE id = ANY(%s)
+                    """,
+                    (photo_ids,),
+                )
+                photos = cursor.fetchall()
+                cursor.close()
+
+                for photo_id, s3_key in photos:
+                    result = process_photo(photo_id, s3_key, thresholds)
+                    update_photo_in_db(db, result)
+
+                db.commit()
+                run_finalization(db, property_id, thresholds)
+                db.commit()
+                print(f"Processed {len(photos)} photos for property {property_id}")
 
     except Exception as e:
         print(f"Handler error: {e}")
