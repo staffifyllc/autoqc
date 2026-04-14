@@ -104,19 +104,26 @@ def check_color(
     cast_info = detect_color_cast(img)
 
     # Check if color temp is in acceptable range
-    failed = color_temp < temp_min or color_temp > temp_max
+    # Be forgiving - warm/cool editorial styles are INTENTIONAL, not defects
+    # Only flag if WAY off (more than 500K from acceptable range)
+    failed = color_temp < (temp_min - 500) or color_temp > (temp_max + 500)
     severity = 0
 
     if failed:
-        if color_temp < temp_min:
-            severity = min((temp_min - color_temp) / 2000, 1.0)
+        if color_temp < (temp_min - 500):
+            severity = min((temp_min - 500 - color_temp) / 2000, 1.0)
         else:
-            severity = min((color_temp - temp_max) / 2000, 1.0)
+            severity = min((color_temp - temp_max - 500) / 2000, 1.0)
 
-    # Also fail on strong color casts
-    if cast_info["cast"] and cast_info["strength"] > 0.08:
+    # Only flag strong unintentional color casts (green from fluorescents is
+    # the main one to catch - other casts could be stylistic)
+    if cast_info["cast"] == "green" and cast_info["strength"] > 0.08:
         failed = True
         severity = max(severity, min(cast_info["strength"] * 5, 1.0))
+    elif cast_info["cast"] and cast_info["strength"] > 0.15:
+        # Other casts: only flag if very strong
+        failed = True
+        severity = max(severity, min(cast_info["strength"] * 3, 1.0))
 
     return {
         "color_temp": round(color_temp, 0),

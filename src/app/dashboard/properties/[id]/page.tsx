@@ -448,6 +448,7 @@ export default function PropertyDetailPage({
               {/* Image area */}
               <div className="flex-1 flex items-center justify-center p-8">
                 {selectedPhoto.fixedUrl && selectedPhoto.originalUrl ? (
+                  // Has both original + fixed: show before/after slider
                   <div className="w-full max-h-full rounded-xl overflow-hidden">
                     <ReactCompareSlider
                       itemOne={
@@ -468,6 +469,19 @@ export default function PropertyDetailPage({
                       <span>Original</span>
                       <span>Auto-Fixed</span>
                     </div>
+                  </div>
+                ) : selectedPhoto.originalUrl ||
+                  (selectedPhoto as any).thumbnailUrl ? (
+                  // Only original: show it full-size
+                  <div className="w-full max-h-[80vh] rounded-xl overflow-hidden bg-black">
+                    <img
+                      src={
+                        selectedPhoto.originalUrl ||
+                        (selectedPhoto as any).thumbnailUrl
+                      }
+                      alt={selectedPhoto.fileName}
+                      className="w-full h-full object-contain"
+                    />
                   </div>
                 ) : (
                   <div className="w-full aspect-[4/3] rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">

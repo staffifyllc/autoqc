@@ -61,20 +61,22 @@ def get_profile_thresholds(db, agency_id: str, client_profile_id: str = None):
     """Get QC thresholds from the agency's style profile and optional client overrides."""
     cursor = db.cursor()
 
-    # Default thresholds based on real estate photography industry standards
+    # Default thresholds - CONSERVATIVE by default
+    # Goal: only flag photos that have clear, visible issues
+    # Style-specific edits (warm editorial, moody, etc.) should NOT be flagged
     thresholds = {
-        "vertical_tolerance": 1.0,      # degrees - industry standard is 0.5-1.0
-        "horizon_tolerance": 0.5,        # degrees
-        "color_temp_min": 3500,          # Kelvin
-        "color_temp_max": 6500,          # Kelvin
-        "color_temp_consistency": 300,   # Max Kelvin variance across a set
-        "exposure_min": -1.0,            # EV
-        "exposure_max": 1.5,             # EV
-        "saturation_min": 15,            # percentage
-        "saturation_max": 85,            # percentage
-        "sharpness_threshold": 100.0,    # Laplacian variance
-        "halo_max_px": 5,               # max halo width in pixels
-        "chromatic_aberration_threshold": 2.0,  # pixel fringe width
+        "vertical_tolerance": 1.5,      # degrees - forgiving for RE photos
+        "horizon_tolerance": 1.0,        # degrees
+        "color_temp_min": 2800,          # Kelvin - allow warm cozy styles
+        "color_temp_max": 7500,          # Kelvin - allow cool bright-airy styles
+        "color_temp_consistency": 500,   # Max Kelvin variance across a set
+        "exposure_min": -1.5,            # EV
+        "exposure_max": 2.0,             # EV
+        "saturation_min": 10,            # percentage
+        "saturation_max": 90,            # percentage
+        "sharpness_threshold": 50.0,     # Laplacian variance - truly blurry only
+        "halo_max_px": 8,                # max halo width in pixels
+        "chromatic_aberration_threshold": 3.0,  # pixel fringe width
     }
 
     # Try to get agency default profile (Prisma uses camelCase column names)
@@ -307,61 +309,76 @@ def process_photo(
                 }
 
         # === AUTO-FIX ===
+        # Philosophy: be CONSERVATIVE. A well-edited photo should not be "fixed."
+        # Only apply fixes when issue is clear and significant.
         needs_fix = False
 
-        # Fix verticals if off by more than tolerance but less than 5 degrees
-        if "vertical_tilt" in issues and vert_result["deviation"] < 5.0:
-            fixed_path = fix_verticals(local_path, vert_result["deviation"], vert_result["direction"])
+        # Calculate preliminary QC score to decide if auto-fix is even warranted
+        # If the photo is already good (score > 85), don't touch it
+        prelim_score = calculate_qc_score(issues, 12)
+        should_autofix = prelim_score < 85
+
+        # Fix verticals ONLY if significantly off (>1.5 degrees) and fixable
+        if (
+            should_autofix
+            and "vertical_tilt" in issues
+            and vert_result["deviation"] > 1.5
+            and vert_result["deviation"] < 5.0
+        ):
+            fixed_path = fix_verticals(
+                local_path, vert_result["deviation"], vert_result["direction"]
+            )
             if fixed_path:
                 local_path = fixed_path
-                fixes_applied.append(f"Vertical corrected ({vert_result['deviation']:.1f} deg)")
+                fixes_applied.append(
+                    f"Vertical corrected ({vert_result['deviation']:.1f} deg)"
+                )
                 needs_fix = True
 
-        # Fix horizon if off
-        if "horizon_tilt" in issues and horiz_result["deviation"] < 3.0:
+        # Fix horizon ONLY if significantly off (>1 degree)
+        if (
+            should_autofix
+            and "horizon_tilt" in issues
+            and horiz_result["deviation"] > 1.0
+            and horiz_result["deviation"] < 3.0
+        ):
             fixed_path = fix_horizon(local_path, horiz_result["deviation"])
             if fixed_path:
                 local_path = fixed_path
-                fixes_applied.append(f"Horizon leveled ({horiz_result['deviation']:.1f} deg)")
+                fixes_applied.append(
+                    f"Horizon leveled ({horiz_result['deviation']:.1f} deg)"
+                )
                 needs_fix = True
 
-        # Fix color temperature if out of range
-        if "color_temp" in issues:
+        # Fix color temp ONLY if truly out of range (severity > 0.4)
+        # Don't touch intentional warm/cool editorial styling
+        if (
+            should_autofix
+            and "color_temp" in issues
+            and color_result.get("severity", 0) > 0.4
+        ):
             fixed_path = fix_color(local_path, color_result)
             if fixed_path:
                 local_path = fixed_path
-                fixes_applied.append(f"White balance corrected ({color_result['color_temp']:.0f}K)")
+                fixes_applied.append(
+                    f"White balance corrected ({color_result['color_temp']:.0f}K)"
+                )
                 needs_fix = True
 
-        # Fix sharpness - three-tier approach:
-        # 1. Barely soft (80-100): local unsharp mask (free, instant)
-        # 2. Moderately soft (50-80): AI deblur via Replicate (~$0.001, better results)
-        # 3. Heavy blur (<50): try AI deblur but likely unrecoverable
-        if "soft_focus" in issues:
+        # Fix sharpness - only when ACTUALLY blurry
+        # Professional RE photos often score 80-150 on Laplacian variance naturally
+        # Don't mess with them. Only fix if clearly below 50 (visibly soft).
+        if should_autofix and "soft_focus" in issues:
             sharpness_val = sharp_result["sharpness"]
 
-            if sharpness_val >= 80:
-                # Barely soft - local sharpening is sufficient and free
-                fixed_path, description = fix_sharpness(local_path, sharpness_val)
-                if fixed_path:
-                    local_path = fixed_path
-                    fixes_applied.append(description)
-                    needs_fix = True
-            elif sharpness_val >= 30:
-                # Moderately soft - try AI deblur first (better quality for this range)
+            if sharpness_val >= 30 and sharpness_val < 50:
+                # Clearly soft - try AI deblur
                 fixed_path, description = ai_deblur(local_path, sharpness_val)
                 if fixed_path:
                     local_path = fixed_path
                     fixes_applied.append(description)
                     needs_fix = True
-                else:
-                    # AI deblur failed or unavailable, fall back to local sharpening
-                    fixed_path, description = fix_sharpness(local_path, sharpness_val)
-                    if fixed_path:
-                        local_path = fixed_path
-                        fixes_applied.append(description)
-                        needs_fix = True
-            # Below 30: too blurry, flagged for reshoot (no fix attempted)
+            # Below 30 or above 50: don't touch. Too blurry to save or sharp enough.
 
         # Upload fixed version
         if needs_fix:
