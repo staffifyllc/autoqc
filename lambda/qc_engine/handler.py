@@ -418,8 +418,9 @@ def process_photo(
     else:
         qc_score = calculate_qc_score(issues, checks_run=12)
 
-    # Determine status from Claude's pass_fail if available
-    overall_pass_fail = (full_analysis or {}).get("overall", {}).get("pass_fail")
+    # Determine status from Claude's tier if available
+    overall = (full_analysis or {}).get("overall", {})
+    tier = overall.get("tier") or overall.get("pass_fail")  # backward compat
     ethics_risk = (
         (full_analysis or {})
         .get("categories", {})
@@ -427,13 +428,17 @@ def process_photo(
         .get("high_risk", False)
     )
 
-    if ethics_risk or overall_pass_fail == "reject":
+    if ethics_risk or tier == "reject":
         status = "FLAGGED"  # Ethics or severe issues - human must review
-    elif overall_pass_fail == "pass" or (len(issues) == 0 and qc_score >= 85):
+    elif tier in ("premium", "pass_high", "pass") or (
+        not tier and qc_score >= 80
+    ):
         status = "PASSED"
     elif fixes_applied:
         status = "FIXED"
-    elif overall_pass_fail in ("minor", "major") or qc_score < 85:
+    elif tier in ("pass_low", "minor_fail", "major_fail", "minor", "major") or (
+        not tier and qc_score < 80
+    ):
         status = "FLAGGED"
     else:
         status = "PASSED"

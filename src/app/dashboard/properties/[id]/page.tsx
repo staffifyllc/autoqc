@@ -36,6 +36,25 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   REJECTED: { label: "Rejected", color: "text-red-400", bg: "bg-red-500/10" },
 };
 
+// Helper to get tier from a photo's full analysis
+const getTier = (photo: any): string | null =>
+  photo?.issues?._full_analysis?.overall?.tier || null;
+
+const tierConfig: Record<string, { label: string; color: string; bg: string; emoji: string }> = {
+  premium: {
+    label: "Premium",
+    color: "text-yellow-300",
+    bg: "bg-gradient-to-br from-yellow-500/30 to-amber-500/20 border border-yellow-500/40",
+    emoji: "★",
+  },
+  pass_high: { label: "Pass (High)", color: "text-green-300", bg: "bg-green-500/10", emoji: "" },
+  pass: { label: "Pass", color: "text-green-400", bg: "bg-green-500/10", emoji: "" },
+  pass_low: { label: "Pass (Low)", color: "text-amber-400", bg: "bg-amber-500/10", emoji: "" },
+  minor_fail: { label: "Minor Fail", color: "text-amber-400", bg: "bg-amber-500/15", emoji: "" },
+  major_fail: { label: "Major Fail", color: "text-red-400", bg: "bg-red-500/15", emoji: "" },
+  reject: { label: "Reject", color: "text-red-300", bg: "bg-red-500/20", emoji: "" },
+};
+
 const issueLabels: Record<string, string> = {
   vertical_tilt: "Vertical Tilt",
   horizon_tilt: "Horizon Tilt",
@@ -155,6 +174,7 @@ export default function PropertyDetailPage({
 
   const filteredPhotos = property?.photos?.filter((p: Photo) => {
     if (filter === "all") return true;
+    if (filter === "premium") return getTier(p) === "premium";
     if (filter === "issues") return ["FLAGGED", "FIXED"].includes(p.status);
     if (filter === "passed") return p.status === "PASSED";
     return p.status === filter.toUpperCase();
@@ -241,6 +261,35 @@ export default function PropertyDetailPage({
                 Re-run QC
               </button>
             )}
+            {property.photos.length > 0 &&
+              property.photos.some((p: Photo) =>
+                ["PASSED", "FIXED", "APPROVED"].includes(p.status)
+              ) && (
+                <button
+                  onClick={async () => {
+                    const res = await fetch(
+                      `/api/properties/${params.id}/download?which=approved`
+                    );
+                    const data = await res.json();
+                    // Open each in a new tab - browser handles parallel downloads
+                    data.downloads.forEach((d: any, i: number) => {
+                      setTimeout(() => {
+                        const a = document.createElement("a");
+                        a.href = d.url;
+                        a.download = d.fileName;
+                        a.target = "_blank";
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                      }, i * 200);
+                    });
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass hover:bg-white/10 text-sm font-medium transition"
+                >
+                  <Download className="w-4 h-4" />
+                  Download All
+                </button>
+              )}
             {/* Apply All / Approve All - accepts auto-fixes + marks flagged as approved */}
             {property.photos.length > 0 &&
               (property.status === "REVIEW" ||
@@ -312,6 +361,85 @@ export default function PropertyDetailPage({
         </motion.div>
       )}
 
+      {/* Room Coverage Check - suggests missing essential room types */}
+      {(() => {
+        const roomTypes = new Set(
+          property.photos
+            .map((p: Photo) => (p as any).issues?._room_type)
+            .filter(Boolean)
+        );
+        if (roomTypes.size === 0) return null;
+
+        const essential = [
+          { id: "kitchen", label: "Kitchen" },
+          { id: "living_room", label: "Living Room" },
+          { id: "bedroom", label: "Bedroom" },
+          { id: "bathroom", label: "Bathroom" },
+          { id: "exterior_front", label: "Exterior Front" },
+        ];
+        const missing = essential.filter((r) => !roomTypes.has(r.id));
+        if (missing.length === 0) return null;
+
+        return (
+          <motion.div
+            variants={fadeUp}
+            className="glass-card p-4 mb-6 bg-amber-500/5 border-amber-500/20"
+          >
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-amber-300">
+                  Possibly missing room photos
+                </p>
+                <p className="text-xs text-amber-400/80 mt-0.5">
+                  This set doesn&apos;t appear to include:{" "}
+                  {missing.map((r) => r.label).join(", ")}. Verify or add
+                  photos before delivery.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        );
+      })()}
+
+      {/* Tier Breakdown - if any photos have tiers */}
+      {(() => {
+        const tierCounts: Record<string, number> = {};
+        property.photos.forEach((p: Photo) => {
+          const t = getTier(p);
+          if (t) tierCounts[t] = (tierCounts[t] || 0) + 1;
+        });
+        const hasAnyTiers = Object.keys(tierCounts).length > 0;
+        if (!hasAnyTiers) return null;
+
+        return (
+          <motion.div variants={fadeUp} className="glass-card p-5 mb-6">
+            <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wider">
+              Quality Tier Breakdown
+            </p>
+            <div className="flex items-center gap-3 flex-wrap">
+              {["premium", "pass_high", "pass", "pass_low", "minor_fail", "major_fail", "reject"].map(
+                (tier) => {
+                  const count = tierCounts[tier] || 0;
+                  if (count === 0) return null;
+                  const t = tierConfig[tier];
+                  return (
+                    <div
+                      key={tier}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${t.bg}`}
+                    >
+                      {t.emoji && <span className={t.color}>{t.emoji}</span>}
+                      <span className={`text-sm font-bold ${t.color}`}>{count}</span>
+                      <span className="text-xs text-muted-foreground">{t.label}</span>
+                    </div>
+                  );
+                }
+              )}
+            </div>
+          </motion.div>
+        );
+      })()}
+
       {/* Summary Stats */}
       <motion.div variants={fadeUp} className="grid grid-cols-4 gap-4 mb-6">
         <div className="glass-card p-4 text-center">
@@ -337,13 +465,22 @@ export default function PropertyDetailPage({
       </motion.div>
 
       {/* Filter tabs */}
-      <motion.div variants={fadeUp} className="flex items-center gap-2 mb-6">
-        {[
-          { key: "all", label: `All (${property.photos.length})` },
-          { key: "passed", label: `Passed (${passCount})` },
-          { key: "issues", label: `Issues (${fixedCount + flaggedCount})` },
-          { key: "flagged", label: `Flagged (${flaggedCount})` },
-        ].map((tab) => (
+      <motion.div variants={fadeUp} className="flex items-center gap-2 mb-6 flex-wrap">
+        {(() => {
+          const premiumCount = property.photos.filter(
+            (p: Photo) => getTier(p) === "premium"
+          ).length;
+          const tabs = [
+            { key: "all", label: `All (${property.photos.length})` },
+            { key: "passed", label: `Passed (${passCount})` },
+            { key: "issues", label: `Issues (${fixedCount + flaggedCount})` },
+            { key: "flagged", label: `Flagged (${flaggedCount})` },
+          ];
+          if (premiumCount > 0) {
+            tabs.splice(1, 0, { key: "premium", label: `★ Premium (${premiumCount})` });
+          }
+          return tabs;
+        })().map((tab) => (
           <button
             key={tab.key}
             onClick={() => setFilter(tab.key)}
@@ -392,12 +529,30 @@ export default function PropertyDetailPage({
               {/* Subtle gradient overlay for badge readability */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
 
-              {/* Status badge */}
-              <div
-                className={`absolute top-2 right-2 px-2 py-1 rounded-lg ${status.bg} ${status.color} text-xs font-medium backdrop-blur-sm`}
-              >
-                {status.label}
-              </div>
+              {/* Tier badge takes precedence over status if available */}
+              {(() => {
+                const tier = getTier(photo);
+                if (tier && tierConfig[tier]) {
+                  const t = tierConfig[tier];
+                  return (
+                    <div
+                      className={`absolute top-2 right-2 px-2 py-1 rounded-lg ${t.bg} ${t.color} text-xs font-bold backdrop-blur-sm flex items-center gap-1 ${
+                        tier === "premium" ? "shadow-lg shadow-yellow-500/30" : ""
+                      }`}
+                    >
+                      {t.emoji && <span>{t.emoji}</span>}
+                      {t.label}
+                    </div>
+                  );
+                }
+                return (
+                  <div
+                    className={`absolute top-2 right-2 px-2 py-1 rounded-lg ${status.bg} ${status.color} text-xs font-medium backdrop-blur-sm`}
+                  >
+                    {status.label}
+                  </div>
+                );
+              })()}
 
               {/* Before/After badge - shows when this photo has an auto-fix */}
               {(photo as any).fixedUrl && (
