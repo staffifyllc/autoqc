@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { enqueueQCJob } from "@/lib/sqs";
 import { chargeForProperty, checkPaymentCapability } from "@/lib/credits";
 import { getDownloadUrl } from "@/lib/s3";
+import { filterValidDistractionCategories } from "@/lib/distractionCategories";
 
 // GET /api/properties/[id] - get property with photos
 export async function GET(
@@ -154,6 +155,61 @@ export async function POST(
     console.error("Property action error:", error);
     return NextResponse.json(
       { error: "Action failed" },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH /api/properties/[id] - update property-level settings
+// Currently supports: tier, distractionCategories
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await requireAgency();
+    const body = await req.json();
+
+    const existing = await prisma.property.findFirst({
+      where: { id: params.id, agencyId: session.user.agencyId },
+      select: { id: true },
+    });
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Property not found" },
+        { status: 404 }
+      );
+    }
+
+    const data: Record<string, unknown> = {};
+
+    if (body.tier === "STANDARD" || body.tier === "PREMIUM") {
+      data.tier = body.tier;
+    }
+
+    if (Array.isArray(body.distractionCategories)) {
+      data.distractionCategories = filterValidDistractionCategories(
+        body.distractionCategories
+      );
+    }
+
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json(
+        { error: "No valid fields to update" },
+        { status: 400 }
+      );
+    }
+
+    const updated = await prisma.property.update({
+      where: { id: params.id },
+      data,
+    });
+
+    return NextResponse.json({ property: updated });
+  } catch (error) {
+    console.error("Property PATCH error:", error);
+    return NextResponse.json(
+      { error: "Update failed" },
       { status: 500 }
     );
   }
