@@ -39,39 +39,38 @@ export function UploadStatusPanel() {
       animate={{ opacity: 1, y: 0 }}
       className="fixed bottom-4 right-4 z-50 w-96 max-w-[calc(100vw-32px)]"
     >
-      <div className="glass-card overflow-hidden shadow-2xl shadow-black/40">
+      <div className="panel hairline-top overflow-hidden shadow-2xl shadow-black/60">
         {/* Header */}
         <button
           onClick={() => setMinimized(!minimized)}
-          className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition"
+          className="w-full px-3.5 py-3 flex items-center gap-3 hover:bg-[hsl(var(--surface-3))] transition-colors"
         >
           <div
-            className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+            className={`w-7 h-7 rounded-md flex items-center justify-center ${
               anyActive
-                ? "bg-brand-500/20 border border-brand-500/30"
-                : "bg-green-500/20 border border-green-500/30"
+                ? "bg-primary/15 border border-primary/30"
+                : "bg-emerald-500/15 border border-emerald-500/30"
             }`}
           >
             {anyActive ? (
-              <Loader2 className="w-4 h-4 text-brand-400 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
             ) : (
-              <CheckCircle2 className="w-4 h-4 text-green-400" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
             )}
           </div>
           <div className="flex-1 text-left min-w-0">
-            <p className="text-sm font-medium">
-              {anyActive
-                ? `Uploading ${uploadedFiles}/${totalFiles} photos`
-                : `Uploaded ${uploadedFiles} photos`}
+            <p className="text-[13px] font-medium leading-tight">
+              {anyActive ? "Uploading photos" : "Uploads complete"}
             </p>
-            <p className="text-xs text-muted-foreground truncate">
-              {allJobs.length} propert{allJobs.length === 1 ? "y" : "ies"}
+            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+              {uploadedFiles} / {totalFiles} files · {allJobs.length} propert
+              {allJobs.length === 1 ? "y" : "ies"}
             </p>
           </div>
           {minimized ? (
-            <ChevronUp className="w-4 h-4 text-muted-foreground" />
+            <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
           ) : (
-            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
           )}
         </button>
 
@@ -100,14 +99,14 @@ export function UploadStatusPanel() {
                   return (
                     <div
                       key={job.id}
-                      className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2"
+                      className="p-3 rounded-md bg-[hsl(var(--surface-1))] border border-border space-y-2"
                     >
                       <div className="flex items-center gap-2">
                         <Link
                           href={`/dashboard/properties/${job.propertyId}`}
-                          className="flex-1 min-w-0 flex items-center gap-1.5 hover:underline"
+                          className="flex-1 min-w-0 flex items-center gap-1.5 hover:text-primary transition-colors"
                         >
-                          <p className="text-sm font-medium truncate">
+                          <p className="text-[13px] font-medium truncate">
                             {job.propertyAddress}
                           </p>
                           <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0" />
@@ -115,7 +114,8 @@ export function UploadStatusPanel() {
                         {isDone && (
                           <button
                             onClick={() => dismissJob(job.id)}
-                            className="p-1 rounded hover:bg-white/10 transition"
+                            className="p-1 rounded hover:bg-[hsl(var(--surface-3))] transition"
+                            aria-label="Dismiss"
                           >
                             <X className="w-3 h-3 text-muted-foreground" />
                           </button>
@@ -123,37 +123,37 @@ export function UploadStatusPanel() {
                       </div>
 
                       {/* Progress bar */}
-                      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                      <div className="h-1 rounded-full bg-[hsl(var(--surface-3))] overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all duration-300 ${
                             errored > 0
                               ? "bg-amber-400"
                               : isDone
-                              ? "bg-green-400"
-                              : "gradient-bg"
+                              ? "bg-emerald-400"
+                              : "bg-primary"
                           }`}
                           style={{ width: `${progress}%` }}
                         />
                       </div>
 
-                      <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center justify-between text-[11px] font-mono">
                         <span className="text-muted-foreground">
-                          {done}/{job.files.length} uploaded
+                          {done}/{job.files.length}
                           {errored > 0 && ` · ${errored} failed`}
                         </span>
                         <span
-                          className={`font-medium ${
+                          className={`font-semibold stat-num ${
                             errored > 0
-                              ? "text-amber-400"
+                              ? "text-amber-300"
                               : isDone
-                              ? "text-green-400"
-                              : "text-brand-400"
+                              ? "text-emerald-300"
+                              : "text-primary"
                           }`}
                         >
                           {isDone
-                            ? "Done"
+                            ? "DONE"
                             : job.status === "error"
-                            ? "Error"
+                            ? "ERROR"
                             : `${progress}%`}
                         </span>
                       </div>
