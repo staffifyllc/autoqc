@@ -105,6 +105,12 @@ model Agency {
   // Default tier applied when creating new properties
   defaultTier        PropertyTier @default(STANDARD)
 
+  // Default distraction removal categories applied on new Premium properties.
+  // Empty array means the check is skipped. Safe defaults suggested in the UI
+  // are trash_bin / garden_hose / kids_toy / cables / etc. Risky ones
+  // (parked_car, satellite_dish, power_line) require explicit opt-in.
+  distractionCategoriesDefault String[] @default([])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -196,6 +202,12 @@ model Property {
   address         String
   status          PropertyStatus @default(PENDING)
   tier            PropertyTier   @default(STANDARD)
+
+  // Per-property distraction categories enabled for removal. Inherits
+  // from Agency.distractionCategoriesDefault on create unless overridden.
+  // Only runs when tier == PREMIUM AND this list is non-empty.
+  distractionCategories String[] @default([])
+
   photoCount      Int      @default(0)
   qcPassCount     Int      @default(0)
   qcFailCount     Int      @default(0)
