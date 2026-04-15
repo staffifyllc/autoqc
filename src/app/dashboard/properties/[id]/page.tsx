@@ -127,6 +127,40 @@ export default function PropertyDetailPage({
     return () => clearInterval(interval);
   }, [property]);
 
+  // Keyboard navigation in photo modal: Esc to close, arrows to navigate
+  useEffect(() => {
+    if (!selectedPhoto || !property) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedPhoto(null);
+        return;
+      }
+
+      // Use filtered photos (respects current tab filter) for navigation
+      const list = filteredPhotos || property.photos;
+      if (!list || list.length === 0) return;
+
+      const currentIndex = list.findIndex(
+        (p: Photo) => p.id === selectedPhoto.id
+      );
+      if (currentIndex === -1) return;
+
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const prev = list[(currentIndex - 1 + list.length) % list.length];
+        setSelectedPhoto(prev);
+      } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        const next = list[(currentIndex + 1) % list.length];
+        setSelectedPhoto(next);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedPhoto, property, filter]);
+
   const fetchProperty = async () => {
     try {
       const res = await fetch(`/api/properties/${params.id}`);
@@ -742,6 +776,82 @@ export default function PropertyDetailPage({
               className="absolute inset-0 bg-black/80 backdrop-blur-sm"
               onClick={() => setSelectedPhoto(null)}
             />
+
+            {/* Previous arrow button */}
+            {(() => {
+              const list = filteredPhotos || property?.photos || [];
+              if (list.length <= 1) return null;
+              const currentIndex = list.findIndex(
+                (p: Photo) => p.id === selectedPhoto.id
+              );
+              if (currentIndex === -1) return null;
+              return (
+                <button
+                  onClick={() => {
+                    const prev =
+                      list[(currentIndex - 1 + list.length) % list.length];
+                    setSelectedPhoto(prev);
+                  }}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 rounded-full glass hover:bg-white/20 transition flex items-center justify-center"
+                  aria-label="Previous photo"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+              );
+            })()}
+
+            {/* Next arrow button */}
+            {(() => {
+              const list = filteredPhotos || property?.photos || [];
+              if (list.length <= 1) return null;
+              const currentIndex = list.findIndex(
+                (p: Photo) => p.id === selectedPhoto.id
+              );
+              if (currentIndex === -1) return null;
+              return (
+                <button
+                  onClick={() => {
+                    const next = list[(currentIndex + 1) % list.length];
+                    setSelectedPhoto(next);
+                  }}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 rounded-full glass hover:bg-white/20 transition flex items-center justify-center"
+                  aria-label="Next photo"
+                >
+                  <ArrowLeft className="w-5 h-5 rotate-180" />
+                </button>
+              );
+            })()}
+
+            {/* Keyboard shortcuts hint */}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/50 backdrop-blur-sm text-xs text-muted-foreground border border-white/10">
+              <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-[10px]">
+                ESC
+              </kbd>
+              close
+              <span className="mx-1 opacity-50">·</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-[10px]">
+                ←
+              </kbd>
+              <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-[10px]">
+                →
+              </kbd>
+              navigate
+              {(() => {
+                const list = filteredPhotos || property?.photos || [];
+                const currentIndex = list.findIndex(
+                  (p: Photo) => p.id === selectedPhoto.id
+                );
+                if (currentIndex === -1 || list.length <= 1) return null;
+                return (
+                  <>
+                    <span className="mx-1 opacity-50">·</span>
+                    <span>
+                      {currentIndex + 1} of {list.length}
+                    </span>
+                  </>
+                );
+              })()}
+            </div>
 
             <motion.div
               initial={{ opacity: 0, x: 20 }}
