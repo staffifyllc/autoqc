@@ -39,19 +39,70 @@ function formatEta(seconds: number): string {
   return rem ? `~${hrs}h ${rem}m left` : `~${hrs}h left`;
 }
 
-function etaForProperty(property: any): string | null {
-  if (property.status !== "PROCESSING" && property.status !== "PENDING") {
-    return null;
-  }
+type ProgressInfo =
+  | { kind: "eta"; label: string; tone: string }
+  | { kind: "action"; label: string; tone: string }
+  | null;
+
+function progressForProperty(property: any): ProgressInfo {
+  const status = property.status;
   const remaining =
     typeof property.photosRemaining === "number"
       ? property.photosRemaining
       : property.photoCount ?? 0;
-  if (remaining <= 0) return "finalizing";
-  const seconds =
-    Math.ceil(remaining / PROCESSING_CONCURRENCY) * SECONDS_PER_PHOTO +
-    FINALIZATION_BUFFER_SECONDS;
-  return formatEta(seconds);
+
+  // REVIEW: photos flagged, user needs to approve or reject.
+  if (status === "REVIEW") {
+    return {
+      kind: "action",
+      label: "Needs your review",
+      tone: "text-amber-300",
+    };
+  }
+
+  // PENDING with no photos yet: agent still uploading.
+  if (status === "PENDING" && property.photoCount === 0) {
+    return {
+      kind: "action",
+      label: "Upload photos to start",
+      tone: "text-muted-foreground",
+    };
+  }
+
+  // PROCESSING or PENDING with photos: compute ETA.
+  if (status === "PROCESSING" || status === "PENDING") {
+    // Stuck detection: updatedAt is older than 2x the expected ETA. Usually
+    // means the lambda hit an unhandled error.
+    const startedAt = property.updatedAt
+      ? new Date(property.updatedAt).getTime()
+      : null;
+    const expectedSeconds =
+      Math.ceil(Math.max(1, remaining) / PROCESSING_CONCURRENCY) *
+        SECONDS_PER_PHOTO +
+      FINALIZATION_BUFFER_SECONDS;
+    if (
+      startedAt &&
+      Date.now() - startedAt > expectedSeconds * 1000 * 2 &&
+      remaining > 0
+    ) {
+      return {
+        kind: "action",
+        label: "Stuck. Check logs or retry",
+        tone: "text-red-300",
+      };
+    }
+
+    if (remaining <= 0) {
+      return { kind: "eta", label: "finalizing", tone: "text-muted-foreground" };
+    }
+    return {
+      kind: "eta",
+      label: formatEta(expectedSeconds),
+      tone: "text-muted-foreground",
+    };
+  }
+
+  return null;
 }
 
 const statusConfig: Record<
@@ -340,13 +391,18 @@ export default function PropertiesPage() {
                   </div>
                 )}
 
-                {/* ETA for in-flight jobs */}
+                {/* Progress / action indicator */}
                 {(() => {
-                  const eta = etaForProperty(property);
-                  if (!eta) return null;
+                  const info = progressForProperty(property);
+                  if (!info) return null;
                   return (
-                    <span className="hidden sm:inline text-[10px] font-mono text-muted-foreground whitespace-nowrap">
-                      {eta}
+                    <span
+                      className={`inline-flex items-center gap-1 text-[10px] font-mono whitespace-nowrap ${info.tone}`}
+                    >
+                      {info.kind === "action" && (
+                        <AlertTriangle className="w-3 h-3" />
+                      )}
+                      {info.label}
                     </span>
                   );
                 })()}
