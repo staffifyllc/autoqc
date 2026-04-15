@@ -34,6 +34,7 @@ from fixes.horizon_fix import fix_horizon
 from fixes.sharpness_fix import fix_sharpness
 from fixes.ai_deblur import ai_deblur
 from fixes.blur_personal import apply_privacy_blur
+from fixes.apply_actions import apply_recommended_actions
 from fixes.remove_distractions import remove_distractions
 
 s3 = boto3.client("s3")
@@ -319,6 +320,7 @@ def process_photo(
         ai_notes = comp_result.get("analysis", "")
         full_analysis = comp_result.get("full_analysis")
         fix_actions = comp_result.get("fix_actions", [])
+        structured_actions = comp_result.get("structured_actions", [])
         room_type = comp_result.get("room_type")
 
         # Merge every category issue from the vision analysis into the flat
@@ -328,8 +330,10 @@ def process_photo(
                 "analysis",
                 "full_analysis",
                 "fix_actions",
+                "structured_actions",
                 "room_type",
                 "confidence",
+                "privacy",
             ):
                 continue
             if isinstance(val, dict) and "severity" in val:
@@ -395,6 +399,29 @@ def process_photo(
                     fixes_applied.append(description)
                     needs_fix = True
             # Below 30 or above 50: don't touch. Too blurry to save or sharp enough.
+
+        # === RECOMMENDED ADJUSTMENTS (Lightroom-style, from Claude Vision) ===
+        # Every structured action from the composition check gets executed
+        # here: exposure, highlights, shadows, contrast, saturation (global
+        # and per-channel), temperature, tint. Magnitudes are clamped inside
+        # the executor so Claude cannot over-do it even if the prompt drifts.
+        if structured_actions:
+            adjusted_path, applied = apply_recommended_actions(
+                local_path, structured_actions
+            )
+            if adjusted_path and applied:
+                local_path = adjusted_path
+                for a in applied:
+                    label = a["op"]
+                    if a.get("channel"):
+                        label = f"{label} ({a['channel']})"
+                    fixes_applied.append(
+                        f"{label} {a['amount']:+.2f}"
+                        + (f" — {a['reason']}" if a.get("reason") else "")
+                    )
+                needs_fix = True
+                # Record what ran so the UI can show applied-not-suggested
+                issues["_applied_actions"] = applied
 
         # === PRIVACY BLUR (PREMIUM tier only) ===
         # Uses the privacy data already returned from the unified composition call.

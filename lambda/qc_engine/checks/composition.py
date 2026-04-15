@@ -111,9 +111,17 @@ USER_PROMPT = """Analyze this real estate photograph and return ONE JSON object 
     }
   },
   "fix_actions": [
-    "Specific action-oriented instruction with magnitude when possible",
-    "e.g. 'Pull highlights -5 to -10 to recover ceiling detail'",
-    "e.g. 'Straighten verticals approximately 1.5 to 2 degrees right'"
+    "Human-readable action, short, present tense. e.g. 'Pull highlights -8 to recover ceiling detail'"
+  ],
+  "structured_actions": [
+    { "op": "exposure", "amount": -0.3, "reason": "Ceiling slightly over-bright" },
+    { "op": "highlights", "amount": -10, "reason": "Recover window detail" },
+    { "op": "shadows", "amount": 8, "reason": "Lift dark floor corners" },
+    { "op": "contrast", "amount": -5, "reason": "Soften harsh midtone contrast" },
+    { "op": "saturation_global", "amount": -4, "reason": "Slight overprocessing" },
+    { "op": "saturation_channel", "channel": "greens", "amount": -6, "reason": "Grass oversaturated" },
+    { "op": "temperature", "amount": -3, "reason": "Cool slightly toward neutral" },
+    { "op": "tint", "amount": 2, "reason": "Neutralize green cast" }
   ],
   "room_type": "kitchen" | "living_room" | "bedroom" | "bathroom" | "exterior_front" | "exterior_back" | "exterior_pool" | "dining_room" | "office" | "hallway" | "basement" | "other",
   "confidence": 0-1.0,
@@ -147,7 +155,15 @@ Items that should NOT be blurred:
 
 Bounding boxes: normalized 0-1 where (0,0) is top-left. Pad boxes +5% each side. Only include regions with confidence >= 0.7.
 
-Calibration: most professional photos should land PASS_HIGH (88-94) or PASS (80-87). Don't punish stylistic choices (warm cozy interior, moody dark floors) if the photo is accurate and truthful."""
+Calibration: most professional photos should land PASS_HIGH (88-94) or PASS (80-87). Don't punish stylistic choices (warm cozy interior, moody dark floors) if the photo is accurate and truthful.
+
+STRUCTURED ACTIONS are what the system executes automatically. Rules:
+- Use them for anything you would adjust in Lightroom global panels. Skip "fix_actions" that require local brush work.
+- Supported ops: exposure, highlights, shadows, contrast, saturation_global, saturation_channel (with channel in reds, oranges, yellows, greens, aquas, blues, purples, magentas), temperature, tint.
+- Magnitudes are clamped. Stay conservative: exposure +/- 0.5 max, highlights/shadows/contrast/saturation in -20 to +20 range, temperature/tint in -10 to +10. Real RE adjustments rarely need big moves.
+- Only emit an action when the photo actually needs it. An empty array is a valid answer for a clean photo.
+- Every action MUST have a short "reason" (under 80 chars) so the agent knows why it was applied.
+- "fix_actions" is the human-readable version for the UI. "structured_actions" is what the fixer runs. Keep them consistent; every structured action should have a matching fix_actions line when an adjustment is executed."""
 
 
 def _call_with_retry(client, args: dict, max_attempts: int = 5) -> anthropic.types.Message:
@@ -248,6 +264,7 @@ def check_composition(image_path: str) -> dict:
             "room_type": parsed.get("room_type"),
             "confidence": parsed.get("confidence", 0.8),
             "fix_actions": parsed.get("fix_actions", []),
+            "structured_actions": parsed.get("structured_actions", []),
             "privacy": parsed.get("privacy", {"has_personal": False, "regions": []}),
         }
 

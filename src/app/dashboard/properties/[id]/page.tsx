@@ -896,13 +896,6 @@ export default function PropertyDetailPage({
                 </div>
               )}
 
-              {/* Issue count */}
-              {hasIssues && (
-                <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-red-500/30 text-red-200 text-[11px] font-mono stat-num font-semibold backdrop-blur-sm">
-                  {Object.keys(photo.issues!).length} iss
-                </div>
-              )}
-
               {/* Hover overlay */}
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
                 <Eye className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -1283,13 +1276,64 @@ export default function PropertyDetailPage({
                   </div>
                 )}
 
-                {/* Recommended Fix Actions */}
-                {selectedPhoto.issues?._fix_actions &&
-                  Array.isArray(selectedPhoto.issues._fix_actions) &&
-                  selectedPhoto.issues._fix_actions.length > 0 && (
+                {/* Adjustments applied automatically */}
+                {Array.isArray((selectedPhoto.issues as any)?._applied_actions) &&
+                  (selectedPhoto.issues as any)._applied_actions.length > 0 && (
                     <div>
                       <h4 className="text-sm font-medium mb-3">
-                        Recommended Fixes
+                        Auto-adjustments applied
+                      </h4>
+                      <div className="space-y-1.5">
+                        {(selectedPhoto.issues as any)._applied_actions.map(
+                          (a: any, i: number) => {
+                            const sign = Number(a.amount) >= 0 ? "+" : "";
+                            const label = a.channel
+                              ? `${a.op} (${a.channel})`
+                              : a.op;
+                            return (
+                              <div
+                                key={i}
+                                className="flex items-start gap-2 py-2 px-3 rounded-lg bg-emerald-500/5 border border-emerald-500/15"
+                              >
+                                <span className="text-emerald-400 shrink-0 mt-0.5">
+                                  ✓
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 text-xs">
+                                    <span className="font-mono text-emerald-200">
+                                      {String(label).replace(/_/g, " ")}
+                                    </span>
+                                    <span className="font-mono text-emerald-300/80">
+                                      {sign}
+                                      {Number(a.amount).toFixed(2)}
+                                    </span>
+                                  </div>
+                                  {a.reason && (
+                                    <p className="text-[11px] text-emerald-300/70 mt-0.5 leading-snug">
+                                      {a.reason}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          }
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                {/* Additional human-readable suggestions that are NOT
+                    executable (crop, local brush work, etc). Only shown
+                    when they add info beyond what was auto-applied. */}
+                {selectedPhoto.issues?._fix_actions &&
+                  Array.isArray(selectedPhoto.issues._fix_actions) &&
+                  selectedPhoto.issues._fix_actions.length > 0 &&
+                  (!Array.isArray((selectedPhoto.issues as any)?._applied_actions) ||
+                    (selectedPhoto.issues as any)._applied_actions.length <
+                      selectedPhoto.issues._fix_actions.length) && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-3">
+                        Manual-review suggestions
                       </h4>
                       <div className="space-y-1.5">
                         {selectedPhoto.issues._fix_actions.map(
