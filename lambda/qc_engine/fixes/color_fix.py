@@ -52,24 +52,27 @@ def fix_color(image_path: str, color_result: dict) -> str | None:
     scale_b, scale_g, scale_r = 1.0, 1.0, 1.0
 
     if cast == "green":
-        # Reduce green slightly, boost magenta minimally
-        # Scale down green by up to 8% based on severity
-        reduction = min(cast_strength * 0.5, 0.08)
+        # Reduce green fluorescent cast. Max 10%.
+        reduction = min(cast_strength * 0.6, 0.10)
         scale_g = 1.0 - reduction
         scale_r = 1.0 + reduction * 0.3
         scale_b = 1.0 + reduction * 0.3
     elif cast == "orange":
-        # Reduce red, boost blue minimally
+        # Reduce warm/tungsten cast. Max 8%.
+        reduction = min(cast_strength * 0.5, 0.08)
+        scale_r = 1.0 - reduction
+        scale_b = 1.0 + reduction * 0.4
+    elif cast == "blue":
+        # Reduce blue/shade cast. Max 8%.
+        reduction = min(cast_strength * 0.5, 0.08)
+        scale_b = 1.0 - reduction
+        scale_r = 1.0 + reduction * 0.3
+    elif cast == "warm" or cast == "magenta":
+        # Generic warm/magenta drift. Small correction.
         reduction = min(cast_strength * 0.4, 0.06)
         scale_r = 1.0 - reduction
         scale_b = 1.0 + reduction * 0.5
-    elif cast == "blue":
-        # Reduce blue, boost red minimally
-        reduction = min(cast_strength * 0.4, 0.06)
-        scale_b = 1.0 - reduction
-        scale_r = 1.0 + reduction * 0.4
     else:
-        # No clear cast - don't fix
         return None
 
     # CLAMP scales to safe range - prevent destructive shifts

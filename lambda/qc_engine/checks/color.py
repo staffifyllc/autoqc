@@ -165,14 +165,15 @@ def check_color(
     cast = None
     cast_strength = 0
     if anchors["found"]:
-        # Use ceiling/trim as ground truth for what should be neutral
-        if anchors["g_dev"] > 0.05:
-            cast = "green"  # Fluorescent lighting - PRIORITY FIX
+        # Use ceiling/trim as ground truth for what should be neutral.
+        # Lower threshold picks up mild casts; fix magnitude is still clamped.
+        if anchors["g_dev"] > 0.04:
+            cast = "green"  # Fluorescent lighting
             cast_strength = anchors["g_dev"]
-        elif anchors["r_dev"] > 0.08:
+        elif anchors["r_dev"] > 0.05:
             cast = "orange"  # Tungsten / golden hour
             cast_strength = anchors["r_dev"]
-        elif anchors["b_dev"] > 0.08:
+        elif anchors["b_dev"] > 0.05:
             cast = "blue"  # Shade or overcorrected daylight
             cast_strength = anchors["b_dev"]
 

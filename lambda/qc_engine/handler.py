@@ -323,58 +323,45 @@ def process_photo(
                 issues[key] = val
 
         # === AUTO-FIX ===
-        # Philosophy: be CONSERVATIVE. A well-edited photo should not be "fixed."
-        # Only apply fixes when issue is clear and significant.
+        # Philosophy: reliably fix the mechanical stuff every single time.
+        # Tilted photos, minor WB drift, soft focus - these should never ship.
+        # No "only fix if score is bad enough" gating.
         needs_fix = False
-
-        # Calculate preliminary QC score to decide if auto-fix is even warranted
-        # If the photo is already good (score > 85), don't touch it
         prelim_score = calculate_qc_score(issues, 12)
-        should_autofix = prelim_score < 85
+        should_autofix = True  # Always attempt fixes; individual modules self-gate
 
-        # Fix verticals ONLY if significantly off (>1.5 degrees) and fixable
-        if (
-            should_autofix
-            and "vertical_tilt" in issues
-            and vert_result["deviation"] > 1.5
-            and vert_result["deviation"] < 5.0
-        ):
+        # Fix verticals - ALWAYS when detected (0.5 to 5 degree range)
+        # A tilted photo is never acceptable even at a 90 QC score.
+        vert_dev = vert_result.get("deviation", 0)
+        if vert_dev > 0.5 and vert_dev < 5.0:
             fixed_path = fix_verticals(
-                local_path, vert_result["deviation"], vert_result["direction"]
+                local_path, vert_dev, vert_result.get("direction", "left")
             )
             if fixed_path:
                 local_path = fixed_path
-                fixes_applied.append(
-                    f"Vertical corrected ({vert_result['deviation']:.1f} deg)"
-                )
+                fixes_applied.append(f"Vertical corrected ({vert_dev:.1f} deg)")
                 needs_fix = True
 
-        # Fix horizon ONLY if significantly off (>1 degree)
-        if (
-            should_autofix
-            and "horizon_tilt" in issues
-            and horiz_result["deviation"] > 1.0
-            and horiz_result["deviation"] < 3.0
-        ):
-            fixed_path = fix_horizon(local_path, horiz_result["deviation"])
+        # Fix horizon - ALWAYS when detected (0.5 to 3 degree range)
+        horiz_dev = horiz_result.get("deviation", 0)
+        if horiz_dev > 0.5 and horiz_dev < 3.0:
+            fixed_path = fix_horizon(local_path, horiz_dev)
             if fixed_path:
                 local_path = fixed_path
-                fixes_applied.append(
-                    f"Horizon leveled ({horiz_result['deviation']:.1f} deg)"
-                )
+                fixes_applied.append(f"Horizon leveled ({horiz_dev:.1f} deg)")
                 needs_fix = True
 
-        # Fix color temp ONLY when:
-        # - Photo is interior (exteriors never get auto-WB)
-        # - Cast is reliably detected via neutral surface anchors
-        # - The check explicitly flagged it as should_autofix (green fluorescent only by default)
-        # - Severity is truly significant
-        # All of this is gated inside fix_color() - we just call it
+        # Fix WB - ANY detected cast on interior photo (not just fluorescent).
+        # Exteriors and already-neutral photos are gated inside fix_color() itself.
+        # The clamped scale (+/- 10%) prevents the destructive magenta disaster.
         if (
-            should_autofix
-            and "color_temp" in issues
-            and color_result.get("should_autofix", False)
+            color_result.get("color_cast")
+            and color_result.get("cast_strength", 0) > 0.04
+            and not color_result.get("is_exterior", False)
+            and not color_result.get("already_neutral", False)
         ):
+            # Force should_autofix so fix_color will act on any detected cast
+            color_result["should_autofix"] = True
             fixed_path = fix_color(local_path, color_result)
             if fixed_path:
                 local_path = fixed_path
@@ -383,10 +370,8 @@ def process_photo(
                 )
                 needs_fix = True
 
-        # Fix sharpness - only when ACTUALLY blurry
-        # Professional RE photos often score 80-150 on Laplacian variance naturally
-        # Don't mess with them. Only fix if clearly below 50 (visibly soft).
-        if should_autofix and "soft_focus" in issues:
+        # Fix sharpness - runs on actually-soft photos
+        if "soft_focus" in issues:
             sharpness_val = sharp_result["sharpness"]
 
             if sharpness_val >= 30 and sharpness_val < 50:
