@@ -167,21 +167,20 @@ export default function LandingPage() {
               variants={fadeUp}
               className="text-4xl md:text-6xl font-semibold tracking-tight leading-[1.05]"
             >
-              A full shoot, reviewed and edited,
+              A full shoot, edited in minutes.
               <br />
-              <span className="text-primary">
-                before the photographer leaves the driveway.
-              </span>
+              <span className="text-primary">Not overnight.</span>
             </motion.h1>
 
             <motion.p
               variants={fadeUp}
               className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed"
             >
-              AutoQC ingests your raw upload, scores every shot across nine
-              categories, fixes the mechanical stuff, blurs the private stuff,
-              and cleans up the distractions. You deliver listing-ready photos
-              without opening Lightroom.
+              Upload raw. AutoQC scores every shot across nine categories,
+              fixes the mechanical stuff, blurs the private stuff, and cleans
+              up the distractions. A 30 to 60 photo property finishes in
+              under ten minutes. No Lightroom. No editor queue. Same day
+              delivery, every time.
             </motion.p>
 
             <motion.div
@@ -598,7 +597,7 @@ export default function LandingPage() {
             viewport={{ once: true }}
             className="text-3xl md:text-4xl font-semibold tracking-tight"
           >
-            Ship the shoot before you drive back.
+            Deliver same-day. Every time.
           </motion.h2>
           <motion.p
             initial={{ opacity: 0 }}

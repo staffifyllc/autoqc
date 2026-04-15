@@ -134,11 +134,11 @@ def main() -> None:
         fill=ACCENT,
     )
 
-    # Headline (two lines)
+    # Headline (three lines, last one accent)
     headline_font = load(FONT_BOLD, 54)
     draw.text((64, 212), "A full shoot,", font=headline_font, fill=TEXT)
-    draw.text((64, 272), "edited before you", font=headline_font, fill=TEXT)
-    draw.text((64, 332), "leave the driveway.", font=headline_font, fill=ACCENT)
+    draw.text((64, 272), "edited in minutes.", font=headline_font, fill=TEXT)
+    draw.text((64, 332), "Not overnight.", font=headline_font, fill=ACCENT)
 
     # Feature chips
     chip_font = load(FONT_MONO, 13)
