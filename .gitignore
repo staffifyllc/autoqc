@@ -10,3 +10,4 @@ lambda/qc_engine/build/
 lambda/qc_engine/package.zip
 /tmp
 .DS_Store
+.vercel
