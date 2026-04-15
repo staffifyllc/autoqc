@@ -1,9 +1,10 @@
 /**
- * Client-side ZIP builder for Lightroom export.
+ * Client-side ZIP builder for exports.
  *
- * Fetches photos from signed S3 URLs, pairs them with XMP sidecars
- * (generated server-side from AutoQC analysis), and produces a
- * single .zip the user can drag into Lightroom.
+ * Two modes:
+ * - "lightroom": photos (original) + XMP sidecars + README
+ * - "full": photos at original resolution (no XMP)
+ * - "mls": photos resized to MLS spec (max 2MB, 2048px long edge)
  */
 
 import JSZip from "jszip";

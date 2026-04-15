@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { ReactCompareSlider, ReactCompareSliderImage } from "react-compare-slider";
 import { PhotoUploader } from "@/components/upload/PhotoUploader";
-import { downloadLightroomZip } from "@/lib/lightroomZip";
+import { downloadPhotoZip } from "@/lib/photoZip";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -335,81 +335,15 @@ export default function PropertyDetailPage({
                   )}
                 </button>
               )}
-            {property.photos.length > 0 &&
-              property.photos.some((p: Photo) =>
-                ["PASSED", "FIXED", "APPROVED"].includes(p.status)
-              ) && (
-                <button
-                  onClick={async () => {
-                    const res = await fetch(
-                      `/api/properties/${params.id}/download?which=approved`
-                    );
-                    const data = await res.json();
-                    // Open each in a new tab - browser handles parallel downloads
-                    data.downloads.forEach((d: any, i: number) => {
-                      setTimeout(() => {
-                        const a = document.createElement("a");
-                        a.href = d.url;
-                        a.download = d.fileName;
-                        a.target = "_blank";
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                      }, i * 200);
-                    });
-                  }}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass hover:bg-white/10 text-sm font-medium transition"
-                >
-                  <Download className="w-4 h-4" />
-                  Download All
-                </button>
-              )}
+            {/* Export dropdown - 3 options */}
             {property.photos.length > 0 &&
               property.photos.some((p: Photo) => p.qcScore !== null) && (
-                <button
-                  onClick={async () => {
-                    try {
-                      await downloadLightroomZip(
-                        params.id,
-                        property.address || "AutoQC_export",
-                        (p) =>
-                          setZipProgress({
-                            phase: p.phase,
-                            done: p.done,
-                            total: p.total,
-                            current: p.currentFileName,
-                          })
-                      );
-                      setTimeout(() => setZipProgress(null), 2000);
-                    } catch (err: any) {
-                      alert(
-                        "Export failed: " +
-                          (err?.message || "unknown error")
-                      );
-                      setZipProgress(null);
-                    }
-                  }}
-                  disabled={zipProgress !== null && zipProgress.phase !== "done"}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/30 hover:from-blue-500/30 hover:to-cyan-500/30 text-blue-300 text-sm font-medium transition disabled:opacity-70 disabled:cursor-not-allowed"
-                  title="Download zip with photos + Lightroom XMP sidecars"
-                >
-                  {zipProgress ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                      {zipProgress.phase === "fetching-xmp" &&
-                        "Preparing..."}
-                      {zipProgress.phase === "downloading" &&
-                        `${zipProgress.done}/${zipProgress.total}`}
-                      {zipProgress.phase === "zipping" && `Zipping ${zipProgress.done}%`}
-                      {zipProgress.phase === "done" && "Done!"}
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4" />
-                      Export Lightroom ZIP
-                    </>
-                  )}
-                </button>
+                <ExportButton
+                  propertyId={params.id}
+                  propertyAddress={property.address || "AutoQC_export"}
+                  zipProgress={zipProgress}
+                  setZipProgress={setZipProgress}
+                />
               )}
             {/* Apply All / Approve All - accepts auto-fixes + marks flagged as approved */}
             {property.photos.length > 0 &&
@@ -633,6 +567,62 @@ export default function PropertyDetailPage({
           <p className="text-xs text-muted-foreground mt-1">Flagged</p>
         </div>
       </motion.div>
+
+      {/* Summary of Changes - per-property fix report */}
+      {(() => {
+        const fixSummary: Record<string, number> = {};
+        const blurredCount = property.photos.filter(
+          (p: Photo) => (p as any).issues?.privacy_blurred
+        ).length;
+
+        property.photos.forEach((p: Photo) => {
+          const fixes = p.fixesApplied || [];
+          fixes.forEach((f) => {
+            // Group by fix type (strip numbers for aggregation)
+            const cat = f
+              .replace(/\(.*?\)/g, "")
+              .replace(/\d+(\.\d+)?/g, "")
+              .trim();
+            fixSummary[cat] = (fixSummary[cat] || 0) + 1;
+          });
+        });
+
+        const totalFixes = Object.values(fixSummary).reduce(
+          (a, b) => a + b,
+          0
+        );
+        if (totalFixes === 0 && blurredCount === 0) return null;
+
+        return (
+          <motion.div variants={fadeUp} className="glass-card p-5 mb-6">
+            <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wider">
+              Summary of Changes
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(fixSummary).map(([fixType, count]) => (
+                <div
+                  key={fixType}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20"
+                >
+                  <Zap className="w-3 h-3 text-amber-400" />
+                  <span className="text-xs font-bold text-amber-300">
+                    {count}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {fixType}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              {totalFixes} total adjustments applied across{" "}
+              {property.photos.filter((p: Photo) => p.fixesApplied?.length)
+                .length}{" "}
+              photo(s){blurredCount > 0 ? `, ${blurredCount} privacy-blurred` : ""}
+            </p>
+          </motion.div>
+        );
+      })()}
 
       {/* Filter tabs */}
       <motion.div variants={fadeUp} className="flex items-center gap-2 mb-6 flex-wrap">
@@ -1235,5 +1225,127 @@ export default function PropertyDetailPage({
         )}
       </AnimatePresence>
     </motion.div>
+  );
+}
+
+function ExportButton({
+  propertyId,
+  propertyAddress,
+  zipProgress,
+  setZipProgress,
+}: {
+  propertyId: string;
+  propertyAddress: string;
+  zipProgress: any;
+  setZipProgress: (p: any) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const startExport = async (mode: "lightroom" | "full" | "mls") => {
+    setOpen(false);
+    try {
+      await downloadPhotoZip(
+        propertyId,
+        propertyAddress,
+        mode,
+        (p) =>
+          setZipProgress({
+            phase: p.phase,
+            done: p.done,
+            total: p.total,
+            current: p.currentFileName,
+          })
+      );
+      setTimeout(() => setZipProgress(null), 2000);
+    } catch (err: any) {
+      alert("Export failed: " + (err?.message || "unknown error"));
+      setZipProgress(null);
+    }
+  };
+
+  const isBusy = zipProgress !== null && zipProgress.phase !== "done";
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => !isBusy && setOpen(!open)}
+        disabled={isBusy}
+        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/30 hover:from-blue-500/30 hover:to-cyan-500/30 text-blue-300 text-sm font-medium transition disabled:opacity-70 disabled:cursor-not-allowed"
+      >
+        {zipProgress ? (
+          <>
+            <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+            {zipProgress.phase === "fetching-xmp" && "Preparing..."}
+            {zipProgress.phase === "downloading" &&
+              `${zipProgress.done}/${zipProgress.total}`}
+            {zipProgress.phase === "resizing" &&
+              `Resizing ${zipProgress.done}/${zipProgress.total}`}
+            {zipProgress.phase === "zipping" && `Zipping ${zipProgress.done}%`}
+            {zipProgress.phase === "done" && "Done!"}
+          </>
+        ) : (
+          <>
+            <Download className="w-4 h-4" />
+            Export
+            <ChevronDown className="w-3 h-3" />
+          </>
+        )}
+      </button>
+
+      {open && !isBusy && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute top-full right-0 mt-2 w-80 glass-card p-2 z-50 shadow-2xl">
+            <button
+              onClick={() => startExport("full")}
+              className="w-full p-3 rounded-xl hover:bg-white/5 transition text-left"
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Download className="w-4 h-4 text-green-400" />
+                <span className="font-medium text-sm">Full Resolution</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Original photos at full quality. For client delivery or
+                archiving.
+              </p>
+            </button>
+
+            <button
+              onClick={() => startExport("mls")}
+              className="w-full p-3 rounded-xl hover:bg-white/5 transition text-left"
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Download className="w-4 h-4 text-amber-400" />
+                <span className="font-medium text-sm">MLS-Ready</span>
+                <span className="ml-auto text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                  Max 2MB
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Resized to MLS spec (2048px long edge, &lt;2MB). Ready to
+                upload directly.
+              </p>
+            </button>
+
+            <button
+              onClick={() => startExport("lightroom")}
+              className="w-full p-3 rounded-xl hover:bg-white/5 transition text-left"
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Download className="w-4 h-4 text-blue-400" />
+                <span className="font-medium text-sm">Lightroom Bundle</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Photos + XMP sidecars with AutoQC adjustments. Import into
+                Lightroom for fine-tuning.
+              </p>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

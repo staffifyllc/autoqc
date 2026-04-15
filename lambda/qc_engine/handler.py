@@ -26,7 +26,6 @@ from checks.chromatic_aberration import check_chromatic_aberration
 from checks.window_blowout import check_window_blowout
 from checks.hdr_artifacts import check_hdr_artifacts
 from checks.sky import check_sky
-from checks.personal_images import detect_personal_images
 
 from fixes.vertical_fix import fix_verticals
 from fixes.color_fix import fix_color
@@ -384,26 +383,24 @@ def process_photo(
             # Below 30 or above 50: don't touch. Too blurry to save or sharp enough.
 
         # === PRIVACY BLUR (PREMIUM tier only) ===
-        # Detects family photos, kids' pics, personal documents, diplomas with names
-        # and applies Gaussian blur to those regions before delivery.
-        # This is a premium feature because each check costs an extra Claude Vision call.
+        # Uses the privacy data already returned from the unified composition call.
+        # Saves an extra Claude Vision API call (halves rate limit pressure).
         if tier == "PREMIUM":
-            personal_result = detect_personal_images(local_path)
-            if personal_result.get("has_personal") and personal_result.get("regions"):
-                blurred_path = apply_privacy_blur(
-                    local_path, personal_result["regions"]
-                )
+            privacy_data = comp_result.get("privacy", {})
+            regions = privacy_data.get("regions", [])
+            if privacy_data.get("has_personal") and regions:
+                blurred_path = apply_privacy_blur(local_path, regions)
                 if blurred_path:
                     local_path = blurred_path
-                    region_count = len(personal_result["regions"])
+                    region_count = len(regions)
                     fixes_applied.append(
                         f"Privacy blur applied to {region_count} personal item"
                         + ("s" if region_count != 1 else "")
                     )
                     issues["privacy_blurred"] = {
-                        "severity": 0.1,  # Not a defect, just info
+                        "severity": 0.1,
                         "category": "privacy",
-                        "detail": personal_result.get("summary", ""),
+                        "detail": f"{region_count} personal items blurred",
                         "region_count": region_count,
                     }
                     needs_fix = True
