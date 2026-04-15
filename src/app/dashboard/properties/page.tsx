@@ -7,7 +7,6 @@ import {
   Home,
   Plus,
   Search,
-  Filter,
   CheckCircle2,
   Clock,
   AlertTriangle,
@@ -15,26 +14,43 @@ import {
   Send,
   ChevronRight,
   X,
+  Image as ImageIcon,
 } from "lucide-react";
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 12 },
   visible: { opacity: 1, y: 0 },
 };
 
 const statusConfig: Record<
   string,
-  { label: string; color: string; icon: typeof CheckCircle2 }
+  { label: string; tone: string; icon: typeof CheckCircle2 }
 > = {
-  PENDING: { label: "Pending", color: "text-gray-400", icon: Clock },
-  PROCESSING: { label: "Processing", color: "text-blue-400", icon: Zap },
+  PENDING: {
+    label: "Pending",
+    tone: "text-muted-foreground bg-[hsl(var(--surface-1))]",
+    icon: Clock,
+  },
+  PROCESSING: {
+    label: "Running",
+    tone: "text-blue-300 bg-blue-500/10",
+    icon: Zap,
+  },
   REVIEW: {
-    label: "Needs Review",
-    color: "text-amber-400",
+    label: "Review",
+    tone: "text-amber-300 bg-amber-500/10",
     icon: AlertTriangle,
   },
-  APPROVED: { label: "Approved", color: "text-green-400", icon: CheckCircle2 },
-  PUSHED: { label: "Delivered", color: "text-purple-400", icon: Send },
+  APPROVED: {
+    label: "Approved",
+    tone: "text-emerald-300 bg-emerald-500/10",
+    icon: CheckCircle2,
+  },
+  PUSHED: {
+    label: "Delivered",
+    tone: "text-violet-300 bg-violet-500/10",
+    icon: Send,
+  },
 };
 
 export default function PropertiesPage() {
@@ -49,9 +65,15 @@ export default function PropertiesPage() {
 
   useEffect(() => {
     fetchProperties();
-    // Auto-refresh every 5 seconds to show processing status changes
     const interval = setInterval(fetchProperties, 5000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Auto-open new-property modal when ?new=true
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "true") setShowNewProperty(true);
   }, []);
 
   const fetchProperties = async () => {
@@ -69,7 +91,6 @@ export default function PropertiesPage() {
   const handleCreateProperty = async () => {
     if (!address.trim()) return;
     setCreating(true);
-
     try {
       const res = await fetch("/api/properties", {
         method: "POST",
@@ -77,8 +98,6 @@ export default function PropertiesPage() {
         body: JSON.stringify({ address, tier }),
       });
       const data = await res.json();
-      // Navigate directly to the property detail page (persistent)
-      // Upload happens there, progress is saved even if user navigates away
       window.location.href = `/dashboard/properties/${data.property.id}?upload=true`;
     } catch (err) {
       console.error("Failed to create property:", err);
@@ -86,161 +105,218 @@ export default function PropertiesPage() {
     }
   };
 
+  const counts = {
+    all: properties.length,
+    in_progress: properties.filter(
+      (p: any) => p.status === "PENDING" || p.status === "PROCESSING"
+    ).length,
+    review: properties.filter((p: any) => p.status === "REVIEW").length,
+    approved: properties.filter((p: any) => p.status === "APPROVED").length,
+    pushed: properties.filter((p: any) => p.status === "PUSHED").length,
+  };
+
+  const tabs: Array<{ key: string; label: string; count: number }> = [
+    { key: "all", label: "All", count: counts.all },
+    { key: "in_progress", label: "In Progress", count: counts.in_progress },
+    { key: "review", label: "Review", count: counts.review },
+    { key: "approved", label: "Approved", count: counts.approved },
+    { key: "pushed", label: "Delivered", count: counts.pushed },
+  ];
+
+  const filtered = properties
+    .filter((p: any) => {
+      if (statusFilter === "in_progress")
+        return p.status === "PENDING" || p.status === "PROCESSING";
+      if (statusFilter === "review") return p.status === "REVIEW";
+      if (statusFilter === "approved") return p.status === "APPROVED";
+      if (statusFilter === "pushed") return p.status === "PUSHED";
+      return true;
+    })
+    .filter(
+      (p: any) =>
+        !searchQuery ||
+        p.address.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
   return (
-    <motion.div initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.08 } } }}>
+    <motion.div
+      initial="hidden"
+      animate="visible"
+      variants={{ visible: { transition: { staggerChildren: 0.06 } } }}
+    >
       {/* Header */}
       <motion.div
         variants={fadeUp}
-        className="flex items-center justify-between mb-8"
+        className="flex items-end justify-between mb-6"
       >
         <div>
-          <h1 className="text-2xl font-bold">Properties</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Manage your property photo shoots and QC results.
+          <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-1.5">
+            Workspace · Properties
           </p>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Properties{" "}
+            <span className="font-mono text-muted-foreground/60 text-base ml-1">
+              {properties.length}
+            </span>
+          </h1>
         </div>
         <button
           onClick={() => setShowNewProperty(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition glow-sm"
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md accent-bg text-sm font-medium hover:opacity-90 transition glow-sm"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
           New Property
         </button>
       </motion.div>
 
-      {/* Search + Filter Tabs */}
-      <motion.div variants={fadeUp} className="mb-6 space-y-4">
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+      {/* Toolbar */}
+      <motion.div
+        variants={fadeUp}
+        className="mb-5 flex items-center gap-3 flex-wrap"
+      >
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search properties..."
+            placeholder="Search address..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition"
+            className="w-full pl-9 pr-3 py-2 rounded-md bg-[hsl(var(--surface-2))] border border-border text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/30 transition"
           />
         </div>
 
-        {/* Status tabs */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {(() => {
-            const counts = {
-              all: properties.length,
-              in_progress: properties.filter(
-                (p: any) =>
-                  p.status === "PENDING" || p.status === "PROCESSING"
-              ).length,
-              review: properties.filter((p: any) => p.status === "REVIEW")
-                .length,
-              approved: properties.filter(
-                (p: any) => p.status === "APPROVED"
-              ).length,
-              pushed: properties.filter((p: any) => p.status === "PUSHED")
-                .length,
-            };
-            const tabs = [
-              { key: "all", label: `All (${counts.all})` },
-              { key: "in_progress", label: `In Progress (${counts.in_progress})`, color: "text-blue-400" },
-              { key: "review", label: `Review (${counts.review})`, color: "text-amber-400" },
-              { key: "approved", label: `Approved (${counts.approved})`, color: "text-green-400" },
-              { key: "pushed", label: `Delivered (${counts.pushed})`, color: "text-purple-400" },
-            ];
-            return tabs.map((tab) => (
+        <div className="flex items-center gap-1 p-0.5 rounded-md bg-[hsl(var(--surface-2))] border border-border">
+          {tabs.map((tab) => {
+            const isActive = statusFilter === tab.key;
+            return (
               <button
                 key={tab.key}
                 onClick={() => setStatusFilter(tab.key)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
-                  statusFilter === tab.key
-                    ? "bg-white/10 text-foreground"
-                    : `${tab.color || "text-muted-foreground"} hover:text-foreground hover:bg-white/5`
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  isActive
+                    ? "bg-[hsl(var(--surface-3))] text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {tab.label}
+                {tab.label}{" "}
+                <span
+                  className={`ml-1 font-mono text-[10px] ${
+                    isActive ? "text-muted-foreground" : "text-muted-foreground/60"
+                  }`}
+                >
+                  {tab.count}
+                </span>
               </button>
-            ));
-          })()}
+            );
+          })}
         </div>
       </motion.div>
 
-      {/* Properties List */}
-      {properties.length === 0 ? (
+      {/* List */}
+      {loading ? (
+        <SkeletonList />
+      ) : filtered.length === 0 ? (
         <motion.div
           variants={fadeUp}
-          className="glass-card p-12 text-center"
+          className="panel hairline-top dot-pattern py-16 px-8 text-center"
         >
-          <div className="w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-4">
-            <Home className="w-10 h-10 text-muted-foreground" />
+          <div className="w-12 h-12 rounded-lg border border-border bg-[hsl(var(--surface-1))] flex items-center justify-center mx-auto mb-4">
+            <Home className="w-5 h-5 text-muted-foreground" />
           </div>
-          <h3 className="text-lg font-medium">No properties yet</h3>
-          <p className="text-sm text-muted-foreground mt-2 max-w-sm mx-auto">
-            Create your first property and upload photos to start running QC
-            checks.
+          <h3 className="text-base font-medium">
+            {properties.length === 0
+              ? "No properties yet"
+              : "Nothing matches that filter"}
+          </h3>
+          <p className="text-sm text-muted-foreground mt-1.5 max-w-sm mx-auto">
+            {properties.length === 0
+              ? "Create your first property and upload photos to start running QC checks."
+              : "Try changing the search or status filter above."}
           </p>
-          <button
-            onClick={() => setShowNewProperty(true)}
-            className="mt-6 inline-flex items-center gap-2 px-6 py-2.5 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition"
-          >
-            <Plus className="w-4 h-4" />
-            Create Property
-          </button>
+          {properties.length === 0 && (
+            <button
+              onClick={() => setShowNewProperty(true)}
+              className="mt-5 inline-flex items-center gap-1.5 px-4 py-2 rounded-md accent-bg text-sm font-medium hover:opacity-90 transition"
+            >
+              <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+              Create property
+            </button>
+          )}
         </motion.div>
       ) : (
-        <motion.div variants={fadeUp} className="space-y-3">
-          {properties
-            .filter((p: any) => {
-              if (statusFilter === "in_progress") {
-                return p.status === "PENDING" || p.status === "PROCESSING";
-              } else if (statusFilter === "review") {
-                return p.status === "REVIEW";
-              } else if (statusFilter === "approved") {
-                return p.status === "APPROVED";
-              } else if (statusFilter === "pushed") {
-                return p.status === "PUSHED";
-              }
-              return true;
-            })
-            .filter((p: any) =>
-              !searchQuery ||
-              p.address.toLowerCase().includes(searchQuery.toLowerCase())
-            )
-            .map((property: any) => {
-            const status = statusConfig[property.status] || statusConfig.PENDING;
+        <motion.div
+          variants={fadeUp}
+          className="panel hairline-top divide-y divide-border overflow-hidden"
+        >
+          {filtered.map((property: any) => {
+            const status =
+              statusConfig[property.status] || statusConfig.PENDING;
             const StatusIcon = status.icon;
+            const score =
+              property.totalQcScore !== null &&
+              property.totalQcScore !== undefined
+                ? Math.round(property.totalQcScore)
+                : null;
 
             return (
               <Link
                 key={property.id}
                 href={`/dashboard/properties/${property.id}`}
-                className="glass-card-hover p-5 flex items-center gap-4 group"
+                className="flex items-center gap-4 px-5 py-3.5 hover:bg-[hsl(var(--surface-3))] transition-colors group"
               >
-                <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
-                  <Home className="w-5 h-5 text-muted-foreground" />
+                {/* Thumb / icon */}
+                <div className="w-9 h-9 rounded-md border border-border bg-[hsl(var(--surface-1))] flex items-center justify-center shrink-0">
+                  <Home className="w-4 h-4 text-muted-foreground" />
                 </div>
+
+                {/* Address + meta */}
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{property.address}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {property.photoCount} photos
-                    {property.client &&
-                      ` for ${property.client.clientName}`}
+                  <p className="text-sm font-medium truncate">
+                    {property.address}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground font-mono mt-0.5 flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1">
+                      <ImageIcon className="w-3 h-3" />
+                      {property.photoCount}
+                    </span>
+                    {property.client?.clientName && (
+                      <>
+                        <span className="opacity-40">·</span>
+                        <span className="truncate">
+                          {property.client.clientName}
+                        </span>
+                      </>
+                    )}
+                    {property.tier === "PREMIUM" && (
+                      <>
+                        <span className="opacity-40">·</span>
+                        <span className="text-yellow-300/80">★ Premium</span>
+                      </>
+                    )}
                   </p>
                 </div>
-                <div className="flex items-center gap-4">
-                  {property.totalQcScore !== null && (
-                    <div className="text-right">
-                      <p className="text-lg font-bold">
-                        {Math.round(property.totalQcScore)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">QC Score</p>
-                    </div>
-                  )}
-                  <div
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 ${status.color}`}
-                  >
-                    <StatusIcon className="w-3.5 h-3.5" />
-                    <span className="text-xs font-medium">{status.label}</span>
+
+                {/* Score */}
+                {score !== null && (
+                  <div className="text-right hidden md:block">
+                    <span className="font-mono text-sm stat-num font-semibold">
+                      {score}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground ml-0.5">
+                      /100
+                    </span>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition" />
-                </div>
+                )}
+
+                {/* Status pill */}
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider ${status.tone}`}
+                >
+                  <StatusIcon className="w-2.5 h-2.5" />
+                  {status.label}
+                </span>
+
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-foreground/80 transition" />
               </Link>
             );
           })}
@@ -260,7 +336,7 @@ export default function PropertiesPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
               onClick={() => {
                 if (!creating) {
                   setShowNewProperty(false);
@@ -270,10 +346,11 @@ export default function PropertiesPage() {
             />
 
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative glass-card p-8 w-full max-w-md"
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="relative panel hairline-top w-full max-w-md p-6"
             >
               <button
                 onClick={() => {
@@ -282,20 +359,23 @@ export default function PropertiesPage() {
                     setAddress("");
                   }
                 }}
-                className="absolute top-4 right-4 p-2 rounded-lg hover:bg-white/10 transition"
+                className="absolute top-3.5 right-3.5 p-1.5 rounded-md hover:bg-[hsl(var(--surface-3))] transition"
+                aria-label="Close"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
 
-              <h2 className="text-xl font-bold mb-1">New Property</h2>
-              <p className="text-sm text-muted-foreground mb-6">
-                Enter the address. We&apos;ll save it immediately so you can
-                upload photos now or come back later.
+              <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-1">
+                Create
+              </p>
+              <h2 className="text-lg font-semibold">New Property</h2>
+              <p className="text-xs text-muted-foreground mt-1 mb-5">
+                Save the address now. Upload photos here or come back later.
               </p>
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium mb-1.5 block">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-1.5 block">
                     Property Address
                   </label>
                   <input
@@ -308,14 +388,14 @@ export default function PropertiesPage() {
                         handleCreateProperty();
                       }
                     }}
-                    className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition"
+                    className="w-full px-3 py-2 rounded-md bg-[hsl(var(--surface-1))] border border-border text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/30 transition"
                     autoFocus
                     disabled={creating}
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium mb-2 block">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-1.5 block">
                     Tier
                   </label>
                   <div className="grid grid-cols-2 gap-2">
@@ -323,44 +403,43 @@ export default function PropertiesPage() {
                       type="button"
                       onClick={() => setTier("STANDARD")}
                       disabled={creating}
-                      className={`p-3 rounded-xl text-left transition ${
+                      className={`p-3 rounded-md text-left transition border ${
                         tier === "STANDARD"
-                          ? "bg-brand-500/15 border border-brand-500/40"
-                          : "glass hover:bg-white/10"
+                          ? "border-primary/60 bg-primary/5"
+                          : "border-border bg-[hsl(var(--surface-1))] hover:border-white/15"
                       }`}
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm font-semibold">Standard</span>
-                        <span className="text-xs font-bold text-brand-400">
-                          1 credit
+                        <span className="text-[10px] font-mono text-primary">
+                          1 cr
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground leading-tight">
-                        9-category QC, auto-fix verticals + color. No privacy
-                        blur.
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        9-category QC, auto-fix verticals + color.
                       </p>
                     </button>
                     <button
                       type="button"
                       onClick={() => setTier("PREMIUM")}
                       disabled={creating}
-                      className={`p-3 rounded-xl text-left transition relative ${
+                      className={`p-3 rounded-md text-left transition border ${
                         tier === "PREMIUM"
-                          ? "bg-gradient-to-br from-yellow-500/20 to-amber-500/15 border border-yellow-500/40"
-                          : "glass hover:bg-white/10"
+                          ? "border-yellow-400/60 bg-yellow-500/5"
+                          : "border-border bg-[hsl(var(--surface-1))] hover:border-white/15"
                       }`}
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm font-semibold flex items-center gap-1">
-                          <span className="text-yellow-300">★</span> Premium
+                          <span className="text-yellow-300">★</span>
+                          Premium
                         </span>
-                        <span className="text-xs font-bold text-yellow-300">
-                          2 credits
+                        <span className="text-[10px] font-mono text-yellow-300">
+                          2 cr
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground leading-tight">
-                        Everything in Standard + privacy blur (family photos,
-                        kids, diplomas).
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        Standard plus privacy blur on family/kids/docs.
                       </p>
                     </button>
                   </div>
@@ -369,18 +448,17 @@ export default function PropertiesPage() {
                 <button
                   onClick={handleCreateProperty}
                   disabled={!address.trim() || creating}
-                  className="w-full py-3 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full py-2.5 rounded-md accent-bg text-sm font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {creating ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                       Creating...
                     </>
                   ) : (
                     <>
-                      Create{" "}
-                      {tier === "PREMIUM" ? "Premium" : "Standard"} Property
-                      <ChevronRight className="w-4 h-4" />
+                      Create {tier === "PREMIUM" ? "Premium" : "Standard"} Property
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </>
                   )}
                 </button>
@@ -390,5 +468,22 @@ export default function PropertiesPage() {
         )}
       </AnimatePresence>
     </motion.div>
+  );
+}
+
+function SkeletonList() {
+  return (
+    <div className="panel hairline-top divide-y divide-border overflow-hidden">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="flex items-center gap-4 px-5 py-3.5">
+          <div className="w-9 h-9 rounded-md bg-[hsl(var(--surface-3))] animate-pulse-soft" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 w-1/2 rounded bg-[hsl(var(--surface-3))] animate-pulse-soft" />
+            <div className="h-2 w-1/4 rounded bg-[hsl(var(--surface-3))] animate-pulse-soft" />
+          </div>
+          <div className="h-5 w-16 rounded-full bg-[hsl(var(--surface-3))] animate-pulse-soft" />
+        </div>
+      ))}
+    </div>
   );
 }
