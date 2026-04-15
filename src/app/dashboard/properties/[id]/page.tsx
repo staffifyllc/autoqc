@@ -1013,106 +1013,110 @@ export default function PropertyDetailPage({
             >
               {/* Image area */}
               <div className="flex-1 flex flex-col items-center justify-center p-8 gap-3">
-                {selectedPhoto.fixedUrl && selectedPhoto.originalUrl ? (
-                  // Has both original + fixed: show before/after slider
-                  <>
-                    <div className="w-full max-h-[75vh] rounded-xl overflow-hidden border border-white/10 shadow-2xl shadow-black/50">
-                      <ReactCompareSlider
-                        itemOne={
-                          <ReactCompareSliderImage
-                            src={selectedPhoto.originalUrl}
-                            alt="Original"
-                          />
-                        }
-                        itemTwo={
-                          <ReactCompareSliderImage
-                            src={selectedPhoto.fixedUrl}
-                            alt="Fixed"
-                          />
-                        }
-                        className="rounded-xl"
-                      />
-                    </div>
-                    <div className="flex items-center justify-between w-full max-w-md text-xs">
-                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
-                        <span className="text-muted-foreground">←</span>
-                        <span className="font-medium">Original</span>
+                {(() => {
+                  const origSrc =
+                    selectedPhoto.originalUrl ||
+                    (selectedPhoto as any).thumbnailUrl;
+                  const fixedSrc = selectedPhoto.fixedUrl;
+                  const hasFix = Boolean(fixedSrc);
+
+                  if (!origSrc) {
+                    return (
+                      <div className="w-full aspect-[4/3] rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+                        <span className="text-muted-foreground">
+                          {selectedPhoto.fileName}
+                        </span>
                       </div>
-                      <span className="text-muted-foreground text-center">
-                        Drag the slider to compare
-                      </span>
-                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300">
-                        <span className="font-medium">Auto-Fixed</span>
-                        <span>→</span>
+                    );
+                  }
+
+                  // Always render a slider. When there is no fix, feed the
+                  // original as itemTwo so the slider still draws but both
+                  // halves show the same image. A "No changes applied" pill
+                  // makes the reason explicit.
+                  const itemTwoSrc = hasFix ? (fixedSrc as string) : origSrc;
+
+                  return (
+                    <>
+                      <div className="relative w-full max-h-[75vh] rounded-xl overflow-hidden border border-white/10 shadow-2xl shadow-black/50">
+                        <ReactCompareSlider
+                          itemOne={
+                            <ReactCompareSliderImage
+                              src={origSrc}
+                              alt="Original"
+                            />
+                          }
+                          itemTwo={
+                            <ReactCompareSliderImage
+                              src={itemTwoSrc}
+                              alt={hasFix ? "Fixed" : "Original (no changes)"}
+                            />
+                          }
+                          className="rounded-xl"
+                        />
+                        {!hasFix && (
+                          <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/70 border border-white/10 text-[10px] font-mono uppercase tracking-wider text-muted-foreground backdrop-blur-sm">
+                            No changes applied
+                          </div>
+                        )}
                       </div>
-                    </div>
-                    {/* Download buttons - fetch as blob then save to avoid new tabs */}
-                    <div className="flex items-center gap-2">
-                      {selectedPhoto.originalUrl && (
+
+                      <div className="flex items-center justify-between w-full max-w-md text-xs">
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
+                          <span className="text-muted-foreground">←</span>
+                          <span className="font-medium">Original</span>
+                        </div>
+                        <span className="text-muted-foreground text-center">
+                          {hasFix
+                            ? "Drag the slider to compare"
+                            : "Photo passed QC without edits"}
+                        </span>
+                        <div
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
+                            hasFix
+                              ? "bg-amber-500/10 border border-amber-500/20 text-amber-300"
+                              : "bg-white/5 border border-white/10 text-muted-foreground"
+                          }`}
+                        >
+                          <span className="font-medium">
+                            {hasFix ? "Auto-Fixed" : "Unchanged"}
+                          </span>
+                          <span>→</span>
+                        </div>
+                      </div>
+
+                      {/* Download buttons */}
+                      <div className="flex items-center gap-2">
                         <button
                           onClick={() =>
                             downloadFile(
-                              selectedPhoto.originalUrl as string,
+                              origSrc as string,
                               `original_${selectedPhoto.fileName}`
                             )
                           }
                           className="text-xs px-3 py-1.5 rounded-lg glass hover:bg-white/10 transition flex items-center gap-1.5"
                         >
                           <Download className="w-3 h-3" />
-                          Original
+                          {hasFix ? "Original" : "Download"}
                         </button>
-                      )}
-                      {selectedPhoto.fixedUrl && (
-                        <button
-                          onClick={() =>
-                            downloadFile(
-                              selectedPhoto.fixedUrl as string,
-                              `fixed_${selectedPhoto.fileName}`
-                            )
-                          }
-                          className="text-xs px-3 py-1.5 rounded-lg gradient-bg text-white hover:opacity-90 transition flex items-center gap-1.5"
-                        >
-                          <Download className="w-3 h-3" />
-                          Fixed Version
-                        </button>
-                      )}
-                    </div>
-                  </>
-                ) : selectedPhoto.originalUrl ||
-                  (selectedPhoto as any).thumbnailUrl ? (
-                  // Only original: show it full-size
-                  <>
-                    <div className="w-full max-h-[80vh] rounded-xl overflow-hidden bg-black border border-white/10 shadow-2xl shadow-black/50">
-                      <img
-                        src={
-                          selectedPhoto.originalUrl ||
-                          (selectedPhoto as any).thumbnailUrl
-                        }
-                        alt={selectedPhoto.fileName}
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                    <a
-                      href={
-                        selectedPhoto.originalUrl ||
-                        (selectedPhoto as any).thumbnailUrl
-                      }
-                      download={selectedPhoto.fileName}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs px-3 py-1.5 rounded-lg glass hover:bg-white/10 transition flex items-center gap-1.5"
-                    >
-                      <Download className="w-3 h-3" />
-                      Download
-                    </a>
-                  </>
-                ) : (
-                  <div className="w-full aspect-[4/3] rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
-                    <span className="text-muted-foreground">
-                      {selectedPhoto.fileName}
-                    </span>
-                  </div>
-                )}
+                        {hasFix && (
+                          <button
+                            onClick={() =>
+                              downloadFile(
+                                fixedSrc as string,
+                                `fixed_${selectedPhoto.fileName}`
+                              )
+                            }
+                            className="text-xs px-3 py-1.5 rounded-lg gradient-bg text-white hover:opacity-90 transition flex items-center gap-1.5"
+                          >
+                            <Download className="w-3 h-3" />
+                            Fixed Version
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Detail panel */}
