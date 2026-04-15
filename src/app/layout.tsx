@@ -17,9 +17,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 const SITE_URL = "https://www.autoqc.io";
-const OG_TITLE = "AutoQC. Real estate photo QC, automated.";
+const OG_TITLE = "AutoQC. The final checkpoint before delivery.";
 const OG_DESCRIPTION =
-  "A full shoot, edited in minutes. Not overnight. Verticals, color, exposure, privacy blur, and distraction removal. From $8 per property.";
+  "Catch what your editors miss, before your agent does. A twelve-point audit on every property before it reaches the client. Verticals, color, privacy blur, distraction removal. From $8 per property.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
         url: "/og.jpg",
         width: 1200,
         height: 630,
-        alt: "AutoQC. A full real estate photo shoot, edited in minutes. Not overnight.",
+        alt: "AutoQC. Catch what your editors miss, before your agent does.",
       },
     ],
   },

@@ -119,11 +119,11 @@ export default function LandingPage() {
             <a href="#what-it-does" className="hover:text-foreground transition">
               What it does
             </a>
-            <a href="#never" className="hover:text-foreground transition">
-              What we never do
+            <a href="#why" className="hover:text-foreground transition">
+              Why it matters
             </a>
-            <a href="#how" className="hover:text-foreground transition">
-              How it works
+            <a href="#never" className="hover:text-foreground transition">
+              Trust
             </a>
             <Link href="/pricing" className="hover:text-foreground transition">
               Pricing
@@ -160,27 +160,28 @@ export default function LandingPage() {
               className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border text-[11px] font-mono uppercase tracking-wider text-muted-foreground"
             >
               <span className="w-1.5 h-1.5 rounded-full accent-bg" />
-              Built for real estate photo teams
+              The final checkpoint before delivery
             </motion.div>
 
             <motion.h1
               variants={fadeUp}
               className="text-4xl md:text-6xl font-semibold tracking-tight leading-[1.05]"
             >
-              A full shoot, edited in minutes.
+              Catch what your editors miss.
               <br />
-              <span className="text-primary">Not overnight.</span>
+              <span className="text-primary">Before your agent does.</span>
             </motion.h1>
 
             <motion.p
               variants={fadeUp}
               className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed"
             >
-              Upload raw. AutoQC scores every shot across nine categories,
-              fixes the mechanical stuff, blurs the private stuff, and cleans
-              up the distractions. A 30 to 60 photo property finishes in
-              under ten minutes. No Lightroom. No editor queue. Same day
-              delivery, every time.
+              Overseas editing teams and auto-editing tools both miss things.
+              A blown window. A crooked wall. A family photo left unblurred.
+              By the time the agent spots it, it is already a revision request
+              or a lost contract. AutoQC reviews every property against a
+              twelve-point checklist before you deliver. One final pass, built
+              on trust, so the mistakes never reach your client.
             </motion.p>
 
             <motion.div
@@ -271,16 +272,16 @@ export default function LandingPage() {
               variants={fadeUp}
               className="text-3xl md:text-4xl font-semibold tracking-tight"
             >
-              Twelve corrections. One upload.
+              Twelve checks. Every photo. Every property.
             </motion.h2>
             <motion.p
               variants={fadeUp}
               className="text-muted-foreground mt-3"
             >
-              The checks and fixes below run on every property. Premium-only
-              features are flagged. Nothing is a suggestion. Every recommended
-              adjustment is executed automatically, within safe magnitude caps,
-              before you see the photo.
+              The checks below run on every single photo before it reaches
+              your agent. Premium-only features are flagged. Nothing is just
+              a suggestion. When a fix is safe to apply automatically, we
+              apply it. When it needs your eyes, we flag it clearly.
             </motion.p>
           </motion.div>
 
@@ -377,6 +378,78 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Why this matters (trust angle) */}
+      <section id="why" className="py-20 px-6 border-t border-border">
+        <div className="max-w-5xl mx-auto">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={stagger}
+            className="mb-10"
+          >
+            <motion.p
+              variants={fadeUp}
+              className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-3"
+            >
+              Why this matters
+            </motion.p>
+            <motion.h2
+              variants={fadeUp}
+              className="text-3xl md:text-4xl font-semibold tracking-tight"
+            >
+              One missed error, one lost agent.
+            </motion.h2>
+            <motion.p
+              variants={fadeUp}
+              className="text-muted-foreground mt-3 max-w-2xl"
+            >
+              Real estate photographers do not lose clients over average work.
+              They lose clients over the single listing where a crooked wall,
+              a blown window, or a visible family portrait slipped past the
+              editor. That one mistake is what the agent remembers.
+            </motion.p>
+          </motion.div>
+
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={stagger}
+            className="grid md:grid-cols-3 gap-3"
+          >
+            <motion.div variants={fadeUp} className="panel p-5">
+              <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-2">
+                Before AutoQC
+              </p>
+              <p className="text-sm leading-relaxed">
+                You deliver what the editor sent back. Sometimes that is fine.
+                Sometimes the agent finds the problem before you do.
+              </p>
+            </motion.div>
+            <motion.div variants={fadeUp} className="panel p-5">
+              <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-2">
+                With AutoQC
+              </p>
+              <p className="text-sm leading-relaxed">
+                Every shot runs through an automated twelve-point audit
+                before delivery. Mistakes get caught and fixed or flagged
+                for your eyes only.
+              </p>
+            </motion.div>
+            <motion.div variants={fadeUp} className="panel p-5 border-[hsl(var(--primary))]/40">
+              <p className="text-[11px] font-mono uppercase tracking-wider text-primary mb-2">
+                Result
+              </p>
+              <p className="text-sm leading-relaxed">
+                Fewer revision requests. Fewer awkward Slack messages with
+                your agent. Fewer contracts lost to a single missed photo.
+              </p>
+            </motion.div>
+          </motion.div>
+        </div>
+      </section>
+
       {/* What we never do */}
       <section id="never" className="py-20 px-6 border-t border-border">
         <div className="max-w-4xl mx-auto">
@@ -397,14 +470,14 @@ export default function LandingPage() {
               variants={fadeUp}
               className="text-3xl md:text-4xl font-semibold tracking-tight"
             >
-              The property is the property.
+              Trust works both ways.
             </motion.h2>
             <motion.p
               variants={fadeUp}
               className="text-muted-foreground mt-3 max-w-xl mx-auto"
             >
-              Hard product rules. No exceptions. If we could not do it honestly
-              in the darkroom, we do not do it here.
+              If you are going to trust AutoQC as your final checkpoint, you
+              need to know what it refuses to do. These rules do not bend.
             </motion.p>
           </motion.div>
 
@@ -597,7 +670,7 @@ export default function LandingPage() {
             viewport={{ once: true }}
             className="text-3xl md:text-4xl font-semibold tracking-tight"
           >
-            Deliver same-day. Every time.
+            Deliver with confidence. Every time.
           </motion.h2>
           <motion.p
             initial={{ opacity: 0 }}
@@ -606,8 +679,8 @@ export default function LandingPage() {
             transition={{ delay: 0.1 }}
             className="text-muted-foreground mt-3"
           >
-            Create an account in a minute. Upload your first property. See what
-            every listing could look like.
+            Add AutoQC as the last step before your photos reach the agent.
+            Protect the relationships you spent years building.
           </motion.p>
           <motion.div
             initial={{ opacity: 0 }}

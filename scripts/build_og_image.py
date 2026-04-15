@@ -129,16 +129,16 @@ def main() -> None:
     kicker_font = load(FONT_MONO, 14)
     draw.text(
         (64, 180),
-        "REAL ESTATE PHOTO QC, AUTOMATED",
+        "THE FINAL CHECKPOINT BEFORE DELIVERY",
         font=kicker_font,
         fill=ACCENT,
     )
 
     # Headline (three lines, last one accent)
-    headline_font = load(FONT_BOLD, 54)
-    draw.text((64, 212), "A full shoot,", font=headline_font, fill=TEXT)
-    draw.text((64, 272), "edited in minutes.", font=headline_font, fill=TEXT)
-    draw.text((64, 332), "Not overnight.", font=headline_font, fill=ACCENT)
+    headline_font = load(FONT_BOLD, 50)
+    draw.text((64, 212), "Catch what your", font=headline_font, fill=TEXT)
+    draw.text((64, 268), "editors miss.", font=headline_font, fill=TEXT)
+    draw.text((64, 324), "Before your agent does.", font=headline_font, fill=ACCENT)
 
     # Feature chips
     chip_font = load(FONT_MONO, 13)
