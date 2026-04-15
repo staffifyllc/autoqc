@@ -246,21 +246,54 @@ export default function PropertyDetailPage({
                 Push to Platform
               </button>
             )}
-            {property.photos.length > 0 && property.status !== "PENDING" && (
-              <button
-                onClick={() => {
-                  fetch(`/api/properties/${params.id}`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: "run_qc" }),
-                  }).then(fetchProperty);
-                }}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass hover:bg-white/10 text-sm font-medium transition"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Re-run QC
-              </button>
-            )}
+            {property.photos.length > 0 &&
+              property.status !== "PROCESSING" && (
+                <button
+                  onClick={async () => {
+                    const res = await fetch(
+                      `/api/properties/${params.id}`,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ action: "run_qc" }),
+                      }
+                    );
+                    if (res.status === 402) {
+                      const data = await res.json();
+                      alert(
+                        data.message ||
+                          "Payment required. Add credits or payment method."
+                      );
+                      window.location.href = "/dashboard/credits";
+                      return;
+                    }
+                    if (!res.ok) {
+                      const data = await res.json();
+                      alert(data.error || "Failed to start QC");
+                      return;
+                    }
+                    fetchProperty();
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition ${
+                    property.status === "PENDING"
+                      ? "gradient-bg text-white hover:opacity-90 glow-sm"
+                      : "glass hover:bg-white/10"
+                  }`}
+                >
+                  {property.status === "PENDING" ? (
+                    <>
+                      <Zap className="w-4 h-4" />
+                      Run QC on {property.photos.length} Photo
+                      {property.photos.length !== 1 ? "s" : ""}
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="w-4 h-4" />
+                      Re-run QC
+                    </>
+                  )}
+                </button>
+              )}
             {property.photos.length > 0 &&
               property.photos.some((p: Photo) =>
                 ["PASSED", "FIXED", "APPROVED"].includes(p.status)
@@ -358,6 +391,55 @@ export default function PropertyDetailPage({
               fetchProperty();
             }}
           />
+        </motion.div>
+      )}
+
+      {/* PENDING state - prominent "Run QC" banner */}
+      {property.status === "PENDING" && property.photos.length > 0 && (
+        <motion.div
+          variants={fadeUp}
+          className="glass-card p-6 mb-6 bg-brand-500/5 border-brand-500/30"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-brand-500/20 border border-brand-500/30 flex items-center justify-center shrink-0">
+              <Zap className="w-6 h-6 text-brand-400" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold">Ready to run QC</h3>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {property.photos.length} photos uploaded. Click below to start
+                the quality check. Processing takes about 30-60 seconds.
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                const res = await fetch(`/api/properties/${params.id}`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "run_qc" }),
+                });
+                if (res.status === 402) {
+                  const data = await res.json();
+                  alert(
+                    data.message ||
+                      "Payment required. Add credits or payment method."
+                  );
+                  window.location.href = "/dashboard/credits";
+                  return;
+                }
+                if (!res.ok) {
+                  const data = await res.json();
+                  alert(data.error || "Failed to start QC");
+                  return;
+                }
+                fetchProperty();
+              }}
+              className="flex items-center gap-2 px-6 py-3 rounded-xl gradient-bg text-white font-semibold hover:opacity-90 transition glow"
+            >
+              <Zap className="w-5 h-5" />
+              Start Quality Check
+            </button>
+          </div>
         </motion.div>
       )}
 
