@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
+import { Analytics } from "@vercel/analytics/next";
 import { AuthProvider } from "@/components/providers/SessionProvider";
 
 const inter = Inter({
@@ -60,6 +61,7 @@ export default function RootLayout({
     >
       <body className={`${inter.className} font-sans`}>
         <AuthProvider>{children}</AuthProvider>
+        <Analytics />
         <Toaster
           position="bottom-right"
           theme="dark"

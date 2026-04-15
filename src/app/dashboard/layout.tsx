@@ -13,6 +13,7 @@ import {
   Coins,
   Settings,
   LogOut,
+  ShieldCheck,
 } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
 import { motion } from "framer-motion";
@@ -53,13 +54,30 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const [credits, setCredits] = useState<number | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     fetch("/api/credits")
       .then((r) => r.json())
       .then((d) => setCredits(typeof d.balance === "number" ? d.balance : 0))
       .catch(() => setCredits(0));
+    // Ping the admin endpoint. 200 => admin. 403 => not.
+    fetch("/api/admin/usage")
+      .then((r) => setIsAdmin(r.status === 200))
+      .catch(() => setIsAdmin(false));
   }, [pathname]);
+
+  const sections = isAdmin
+    ? [
+        ...navSections,
+        {
+          label: "Admin",
+          items: [
+            { href: "/dashboard/admin", label: "Platform usage", icon: ShieldCheck },
+          ],
+        },
+      ]
+    : navSections;
 
   return (
     <div className="min-h-screen bg-background flex relative">
@@ -85,7 +103,7 @@ export default function DashboardLayout({
 
         {/* Nav */}
         <nav className="flex-1 px-2.5 py-4 overflow-y-auto">
-          {navSections.map((section, idx) => (
+          {sections.map((section, idx) => (
             <div key={section.label} className={idx > 0 ? "mt-5" : ""}>
               <p className="px-2.5 mb-1.5 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/60">
                 {section.label}
