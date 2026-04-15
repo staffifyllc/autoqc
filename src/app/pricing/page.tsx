@@ -148,6 +148,12 @@ export default function PricingPage() {
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-yellow-400 shrink-0" />
+                    <span className="font-medium">
+                      AI distraction removal (trash bins, hoses, toys, cables)
+                    </span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-yellow-400 shrink-0" />
                     Priority processing queue
                   </li>
                   <li className="flex items-center gap-2">
