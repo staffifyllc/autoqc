@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { ReactCompareSlider, ReactCompareSliderImage } from "react-compare-slider";
 import { PhotoUploader } from "@/components/upload/PhotoUploader";
-import { downloadPhotoZip } from "@/lib/photoZip";
+import { downloadPhotoZip, downloadFile } from "@/lib/photoZip";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -887,28 +887,36 @@ export default function PropertyDetailPage({
                         <span>→</span>
                       </div>
                     </div>
-                    {/* Download buttons */}
+                    {/* Download buttons - fetch as blob then save to avoid new tabs */}
                     <div className="flex items-center gap-2">
-                      <a
-                        href={selectedPhoto.originalUrl}
-                        download={`original_${selectedPhoto.fileName}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs px-3 py-1.5 rounded-lg glass hover:bg-white/10 transition flex items-center gap-1.5"
-                      >
-                        <Download className="w-3 h-3" />
-                        Original
-                      </a>
-                      <a
-                        href={selectedPhoto.fixedUrl}
-                        download={`fixed_${selectedPhoto.fileName}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs px-3 py-1.5 rounded-lg gradient-bg text-white hover:opacity-90 transition flex items-center gap-1.5"
-                      >
-                        <Download className="w-3 h-3" />
-                        Fixed Version
-                      </a>
+                      {selectedPhoto.originalUrl && (
+                        <button
+                          onClick={() =>
+                            downloadFile(
+                              selectedPhoto.originalUrl as string,
+                              `original_${selectedPhoto.fileName}`
+                            )
+                          }
+                          className="text-xs px-3 py-1.5 rounded-lg glass hover:bg-white/10 transition flex items-center gap-1.5"
+                        >
+                          <Download className="w-3 h-3" />
+                          Original
+                        </button>
+                      )}
+                      {selectedPhoto.fixedUrl && (
+                        <button
+                          onClick={() =>
+                            downloadFile(
+                              selectedPhoto.fixedUrl as string,
+                              `fixed_${selectedPhoto.fileName}`
+                            )
+                          }
+                          className="text-xs px-3 py-1.5 rounded-lg gradient-bg text-white hover:opacity-90 transition flex items-center gap-1.5"
+                        >
+                          <Download className="w-3 h-3" />
+                          Fixed Version
+                        </button>
+                      )}
                     </div>
                   </>
                 ) : selectedPhoto.originalUrl ||
@@ -1241,7 +1249,7 @@ function ExportButton({
 }) {
   const [open, setOpen] = useState(false);
 
-  const startExport = async (mode: "lightroom" | "full" | "mls") => {
+  const startExport = async (mode: "lightroom" | "full" | "mls" | "both") => {
     setOpen(false);
     try {
       await downloadPhotoZip(
@@ -1305,10 +1313,10 @@ function ExportButton({
             >
               <div className="flex items-center gap-2 mb-1">
                 <Download className="w-4 h-4 text-green-400" />
-                <span className="font-medium text-sm">Full Resolution</span>
+                <span className="font-medium text-sm">Full Size</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Original photos at full quality. For client delivery or
+                Original photos at full resolution. For client delivery or
                 archiving.
               </p>
             </button>
@@ -1319,28 +1327,31 @@ function ExportButton({
             >
               <div className="flex items-center gap-2 mb-1">
                 <Download className="w-4 h-4 text-amber-400" />
-                <span className="font-medium text-sm">MLS-Ready</span>
+                <span className="font-medium text-sm">MLS</span>
                 <span className="ml-auto text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300">
                   Max 2MB
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Resized to MLS spec (2048px long edge, &lt;2MB). Ready to
+                Resized to MLS spec (2048px long edge, &lt;2MB each). Ready to
                 upload directly.
               </p>
             </button>
 
             <button
-              onClick={() => startExport("lightroom")}
-              className="w-full p-3 rounded-xl hover:bg-white/5 transition text-left"
+              onClick={() => startExport("both")}
+              className="w-full p-3 rounded-xl hover:bg-white/5 transition text-left border-t border-white/5 mt-1"
             >
               <div className="flex items-center gap-2 mb-1">
                 <Download className="w-4 h-4 text-blue-400" />
-                <span className="font-medium text-sm">Lightroom Bundle</span>
+                <span className="font-medium text-sm">Both</span>
+                <span className="ml-auto text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300">
+                  Recommended
+                </span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Photos + XMP sidecars with AutoQC adjustments. Import into
-                Lightroom for fine-tuning.
+                Single ZIP containing /full and /mls folders. Full size for
+                archive, MLS-ready for upload.
               </p>
             </button>
           </div>
