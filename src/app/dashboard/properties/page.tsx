@@ -459,7 +459,7 @@ export default function PropertiesPage() {
                         </span>
                       </div>
                       <p className="text-[11px] text-muted-foreground leading-snug">
-                        9-category QC, auto-fix verticals + color.
+                        Color correction, color temperature, verticals.
                       </p>
                     </button>
                     <button
@@ -482,7 +482,8 @@ export default function PropertiesPage() {
                         </span>
                       </div>
                       <p className="text-[11px] text-muted-foreground leading-snug">
-                        Standard plus privacy blur on family/kids/docs.
+                        Blur personal photos. Remove garbage cans, hoses,
+                        toys, cables.
                       </p>
                     </button>
                   </div>
