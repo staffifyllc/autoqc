@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { ReactCompareSlider, ReactCompareSliderImage } from "react-compare-slider";
 import { PhotoUploader } from "@/components/upload/PhotoUploader";
+import { downloadLightroomZip } from "@/lib/lightroomZip";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -102,6 +103,12 @@ export default function PropertyDetailPage({
   const [filter, setFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [showUploader, setShowUploader] = useState(false);
+  const [zipProgress, setZipProgress] = useState<{
+    phase: string;
+    done: number;
+    total: number;
+    current?: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchProperty();
@@ -361,51 +368,47 @@ export default function PropertyDetailPage({
               property.photos.some((p: Photo) => p.qcScore !== null) && (
                 <button
                   onClick={async () => {
-                    if (
-                      !confirm(
-                        "This will download all photos + matching .xmp sidecar files. Put them in the same folder and import into Lightroom - AutoQC adjustments apply automatically.\n\nReady to download?"
-                      )
-                    )
-                      return;
-                    const res = await fetch(
-                      `/api/properties/${params.id}/xmp`
-                    );
-                    const data = await res.json();
-
-                    // Download each photo + XMP pair with a small delay
-                    for (let i = 0; i < data.sidecars.length; i++) {
-                      const s = data.sidecars[i];
-                      await new Promise((r) => setTimeout(r, 150));
-
-                      // Download photo
-                      const photoLink = document.createElement("a");
-                      photoLink.href = s.photoUrl;
-                      photoLink.download = s.photoFileName;
-                      document.body.appendChild(photoLink);
-                      photoLink.click();
-                      document.body.removeChild(photoLink);
-
-                      await new Promise((r) => setTimeout(r, 150));
-
-                      // Download XMP (as a blob from content)
-                      const blob = new Blob([s.xmpContent], {
-                        type: "application/xml",
-                      });
-                      const url = URL.createObjectURL(blob);
-                      const xmpLink = document.createElement("a");
-                      xmpLink.href = url;
-                      xmpLink.download = s.xmpFileName;
-                      document.body.appendChild(xmpLink);
-                      xmpLink.click();
-                      document.body.removeChild(xmpLink);
-                      URL.revokeObjectURL(url);
+                    try {
+                      await downloadLightroomZip(
+                        params.id,
+                        property.address || "AutoQC_export",
+                        (p) =>
+                          setZipProgress({
+                            phase: p.phase,
+                            done: p.done,
+                            total: p.total,
+                            current: p.currentFileName,
+                          })
+                      );
+                      setTimeout(() => setZipProgress(null), 2000);
+                    } catch (err: any) {
+                      alert(
+                        "Export failed: " +
+                          (err?.message || "unknown error")
+                      );
+                      setZipProgress(null);
                     }
                   }}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/30 hover:from-blue-500/30 hover:to-cyan-500/30 text-blue-300 text-sm font-medium transition"
-                  title="Download photos with Lightroom adjustment sidecars"
+                  disabled={zipProgress !== null && zipProgress.phase !== "done"}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/30 hover:from-blue-500/30 hover:to-cyan-500/30 text-blue-300 text-sm font-medium transition disabled:opacity-70 disabled:cursor-not-allowed"
+                  title="Download zip with photos + Lightroom XMP sidecars"
                 >
-                  <Download className="w-4 h-4" />
-                  Export to Lightroom
+                  {zipProgress ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                      {zipProgress.phase === "fetching-xmp" &&
+                        "Preparing..."}
+                      {zipProgress.phase === "downloading" &&
+                        `${zipProgress.done}/${zipProgress.total}`}
+                      {zipProgress.phase === "zipping" && `Zipping ${zipProgress.done}%`}
+                      {zipProgress.phase === "done" && "Done!"}
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Export Lightroom ZIP
+                    </>
+                  )}
                 </button>
               )}
             {/* Apply All / Approve All - accepts auto-fixes + marks flagged as approved */}
