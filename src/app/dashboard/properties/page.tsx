@@ -22,6 +22,38 @@ const fadeUp = {
   visible: { opacity: 1, y: 0 },
 };
 
+// ETA tuning. Derived from observed lambda telemetry: each photo takes
+// about 25 seconds end to end (OpenCV + Claude Vision + occasional fix),
+// and SQS/Lambda settles at ~4 concurrent invocations for the QC queue.
+// Add a small buffer for finalization and cold start.
+const SECONDS_PER_PHOTO = 25;
+const PROCESSING_CONCURRENCY = 4;
+const FINALIZATION_BUFFER_SECONDS = 15;
+
+function formatEta(seconds: number): string {
+  if (seconds < 60) return `~${Math.max(10, Math.round(seconds / 10) * 10)}s left`;
+  const mins = Math.ceil(seconds / 60);
+  if (mins < 60) return `~${mins} min left`;
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem ? `~${hrs}h ${rem}m left` : `~${hrs}h left`;
+}
+
+function etaForProperty(property: any): string | null {
+  if (property.status !== "PROCESSING" && property.status !== "PENDING") {
+    return null;
+  }
+  const remaining =
+    typeof property.photosRemaining === "number"
+      ? property.photosRemaining
+      : property.photoCount ?? 0;
+  if (remaining <= 0) return "finalizing";
+  const seconds =
+    Math.ceil(remaining / PROCESSING_CONCURRENCY) * SECONDS_PER_PHOTO +
+    FINALIZATION_BUFFER_SECONDS;
+  return formatEta(seconds);
+}
+
 const statusConfig: Record<
   string,
   { label: string; tone: string; icon: typeof CheckCircle2 }
@@ -307,6 +339,17 @@ export default function PropertiesPage() {
                     </span>
                   </div>
                 )}
+
+                {/* ETA for in-flight jobs */}
+                {(() => {
+                  const eta = etaForProperty(property);
+                  if (!eta) return null;
+                  return (
+                    <span className="hidden sm:inline text-[10px] font-mono text-muted-foreground whitespace-nowrap">
+                      {eta}
+                    </span>
+                  );
+                })()}
 
                 {/* Status pill */}
                 <span

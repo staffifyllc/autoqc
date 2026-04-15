@@ -17,11 +17,43 @@ export async function GET() {
       include: {
         client: { select: { clientName: true } },
         _count: { select: { photos: true } },
+        // Only pull the lightweight status column for in-flight photos.
+        // Used by the UI to compute a realistic ETA for PROCESSING rows.
+        photos: {
+          select: { status: true },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json({ properties });
+    // Summarize per-property progress so the client can render ETA without
+    // needing to scan the photo list itself. photosRemaining = anything not
+    // yet at a terminal status.
+    const TERMINAL_PHOTO_STATUSES = new Set([
+      "PASSED",
+      "FIXED",
+      "FLAGGED",
+      "APPROVED",
+      "REJECTED",
+    ]);
+
+    const enriched = properties.map((p) => {
+      const total = p.photos.length;
+      const done = p.photos.filter((ph) =>
+        TERMINAL_PHOTO_STATUSES.has(ph.status),
+      ).length;
+      // Strip the photo list from the response so we are not shipping it
+      // all to the client unnecessarily.
+      const { photos, ...rest } = p;
+      return {
+        ...rest,
+        photoCount: total,
+        photosDone: done,
+        photosRemaining: Math.max(0, total - done),
+      };
+    });
+
+    return NextResponse.json({ properties: enriched });
   } catch (error) {
     console.error("Properties error:", error);
     return NextResponse.json(
