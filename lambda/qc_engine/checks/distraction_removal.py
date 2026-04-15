@@ -63,7 +63,15 @@ RISKY_CATEGORIES = [
     "power_line",
 ]
 
-ALL_CATEGORIES = DEFAULT_CATEGORIES + RISKY_CATEGORIES
+# Sensitive-accuracy categories. Not risky in the MLS sense, but the
+# detector will see false positives unless we tune hard for precision.
+# photographer_reflection falls here because "person with camera" can
+# match any visible person through a window or on a TV screen.
+SENSITIVE_CATEGORIES = [
+    "photographer_reflection",
+]
+
+ALL_CATEGORIES = DEFAULT_CATEGORIES + RISKY_CATEGORIES + SENSITIVE_CATEGORIES
 
 
 # Human readable prompt fragment used by Grounding DINO.
@@ -82,6 +90,31 @@ CATEGORY_PROMPTS = {
     "parked_car": "parked car",
     "satellite_dish": "satellite dish",
     "power_line": "power line",
+    # Two complementary phrasings. Grounding DINO accepts dot separated
+    # prompts and scores each. We want the photographer specifically, not
+    # any person visible through a window (e.g. a neighbor walking past).
+    "photographer_reflection": (
+        "photographer holding camera reflected in mirror. "
+        "person with DSLR camera reflected in window"
+    ),
+}
+
+
+# Per-category confidence floor. Anything below is discarded. Default is
+# the model's baseline. photographer_reflection is tuned much tighter so
+# we do not blur out random window content.
+CATEGORY_CONFIDENCE_FLOOR = {
+    "photographer_reflection": 0.55,
+}
+DEFAULT_CONFIDENCE_FLOOR = 0.35
+
+
+# Per-category area cap as a fraction of the image. If a detection covers
+# more than this fraction, it is almost certainly a false positive (the
+# detector latched onto something too large to be what we asked for).
+# Real photographer reflections in a mirror or window are small.
+CATEGORY_MAX_AREA_FRACTION = {
+    "photographer_reflection": 0.08,
 }
 
 
@@ -180,13 +213,26 @@ def detect_distractions(image_path: str, enabled_categories: list) -> dict:
     try:
         client = replicate.Client(api_token=api_token)
 
+        # The default negative prompt suppresses "person" because nearly
+        # every RE photo has neighbors walking past or family in frame we
+        # do NOT want to remove. But photographer_reflection is literally
+        # "person with camera," so we drop the person exclusion when that
+        # category is enabled and rely on the tighter confidence floor
+        # and area cap to keep precision up.
+        if "photographer_reflection" in enabled:
+            negative_prompt = "house, building, roof, window frame, door"
+        else:
+            negative_prompt = (
+                "person, face, house, building, roof, window, door"
+            )
+
         with open(image_path, "rb") as f:
             output = client.run(
                 GROUNDED_SAM_MODEL,
                 input={
                     "image": f,
                     "mask_prompt": text_prompt,
-                    "negative_mask_prompt": "person, face, house, building, roof, window, door",
+                    "negative_mask_prompt": negative_prompt,
                     "adjustment_factor": 0,
                 },
             )
@@ -224,6 +270,30 @@ def detect_distractions(image_path: str, enabled_categories: list) -> dict:
 
             label = labels[i] if i < len(labels) else enabled[0]
             score = float(scores[i]) if i < len(scores) else 0.85
+
+            # Per-category confidence floor. Sensitive categories like
+            # photographer_reflection require much higher confidence.
+            floor = CATEGORY_CONFIDENCE_FLOOR.get(
+                label, DEFAULT_CONFIDENCE_FLOOR
+            )
+            if score < floor:
+                print(
+                    f"INFO drop {label} below confidence floor "
+                    f"({score:.2f} < {floor})"
+                )
+                continue
+
+            # Per-category area cap. A photographer reflection covering
+            # 30 percent of the image is not a reflection, it is a false
+            # positive. Real reflections are small.
+            area_frac = bbox["width"] * bbox["height"]
+            area_cap = CATEGORY_MAX_AREA_FRACTION.get(label)
+            if area_cap is not None and area_frac > area_cap:
+                print(
+                    f"INFO drop {label} exceeds area cap "
+                    f"({area_frac:.2f} > {area_cap})"
+                )
+                continue
 
             regions.append({
                 "type": label,

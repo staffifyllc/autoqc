@@ -75,6 +75,18 @@ export const DISTRACTION_CATEGORIES: DistractionCategory[] = [
     risky: false,
   },
 
+  // Photographer reflection. Technically safe to remove but the
+  // detector will hit false positives on any person visible through a
+  // window, so the check runs with a 0.55 confidence floor and an 8
+  // percent area cap. Opt in per property, review the before/after.
+  {
+    id: "photographer_reflection",
+    label: "Photographer Reflection",
+    description:
+      "You or your camera caught in a mirror or window. Runs with tight precision thresholds. Always double check the result.",
+    risky: false,
+  },
+
   // Risky: permanent or structural. Removing these can raise MLS or NAR
   // ethics concerns in some jurisdictions. Agents must opt in explicitly.
   {

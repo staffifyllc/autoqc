@@ -539,7 +539,7 @@ export default function PropertiesPage() {
                       </div>
                       <p className="text-[11px] text-muted-foreground leading-snug">
                         Blur personal photos. Remove garbage cans, hoses,
-                        toys, cables.
+                        toys, cables, photographer reflections.
                       </p>
                     </button>
                   </div>
