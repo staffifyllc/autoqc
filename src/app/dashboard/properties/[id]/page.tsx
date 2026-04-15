@@ -323,6 +323,57 @@ export default function PropertyDetailPage({
                   Download All
                 </button>
               )}
+            {property.photos.length > 0 &&
+              property.photos.some((p: Photo) => p.qcScore !== null) && (
+                <button
+                  onClick={async () => {
+                    if (
+                      !confirm(
+                        "This will download all photos + matching .xmp sidecar files. Put them in the same folder and import into Lightroom - AutoQC adjustments apply automatically.\n\nReady to download?"
+                      )
+                    )
+                      return;
+                    const res = await fetch(
+                      `/api/properties/${params.id}/xmp`
+                    );
+                    const data = await res.json();
+
+                    // Download each photo + XMP pair with a small delay
+                    for (let i = 0; i < data.sidecars.length; i++) {
+                      const s = data.sidecars[i];
+                      await new Promise((r) => setTimeout(r, 150));
+
+                      // Download photo
+                      const photoLink = document.createElement("a");
+                      photoLink.href = s.photoUrl;
+                      photoLink.download = s.photoFileName;
+                      document.body.appendChild(photoLink);
+                      photoLink.click();
+                      document.body.removeChild(photoLink);
+
+                      await new Promise((r) => setTimeout(r, 150));
+
+                      // Download XMP (as a blob from content)
+                      const blob = new Blob([s.xmpContent], {
+                        type: "application/xml",
+                      });
+                      const url = URL.createObjectURL(blob);
+                      const xmpLink = document.createElement("a");
+                      xmpLink.href = url;
+                      xmpLink.download = s.xmpFileName;
+                      document.body.appendChild(xmpLink);
+                      xmpLink.click();
+                      document.body.removeChild(xmpLink);
+                      URL.revokeObjectURL(url);
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/30 hover:from-blue-500/30 hover:to-cyan-500/30 text-blue-300 text-sm font-medium transition"
+                  title="Download photos with Lightroom adjustment sidecars"
+                >
+                  <Download className="w-4 h-4" />
+                  Export to Lightroom
+                </button>
+              )}
             {/* Apply All / Approve All - accepts auto-fixes + marks flagged as approved */}
             {property.photos.length > 0 &&
               (property.status === "REVIEW" ||
