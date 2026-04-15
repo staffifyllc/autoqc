@@ -234,7 +234,7 @@ export default function PropertyDetailPage({
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -248,42 +248,55 @@ export default function PropertyDetailPage({
   }
 
   return (
-    <motion.div initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.08 } } }}>
+    <motion.div initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.06 } } }}>
       {/* Header */}
-      <motion.div variants={fadeUp} className="mb-8">
+      <motion.div variants={fadeUp} className="mb-6">
         <Link
           href="/dashboard/properties"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition mb-4"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition mb-3 font-mono uppercase tracking-wider"
         >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Properties
+          <ArrowLeft className="w-3 h-3" />
+          Properties
         </Link>
 
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">{property.address}</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              {property.photos.length} photos
-              {property.client && ` for ${property.client.clientName}`}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold tracking-tight truncate">
+              {property.address}
+            </h1>
+            <p className="text-xs text-muted-foreground font-mono mt-1.5 flex items-center gap-2">
+              <span>{property.photos.length} photos</span>
+              {property.client && (
+                <>
+                  <span className="opacity-40">·</span>
+                  <span>{property.client.clientName}</span>
+                </>
+              )}
+              {property.tier === "PREMIUM" && (
+                <>
+                  <span className="opacity-40">·</span>
+                  <span className="text-yellow-300/80">★ Premium</span>
+                </>
+              )}
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 shrink-0">
             {!showUploader && (
               <button
                 onClick={() => setShowUploader(true)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass hover:bg-white/10 text-sm font-medium transition"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-[hsl(var(--surface-2))] hover:bg-[hsl(var(--surface-3))] text-sm font-medium transition"
               >
-                <Upload className="w-4 h-4" />
-                {property.photos.length === 0 ? "Upload Photos" : "Add More Photos"}
+                <Upload className="w-3.5 h-3.5" />
+                {property.photos.length === 0 ? "Upload Photos" : "Add Photos"}
               </button>
             )}
             {property.status === "APPROVED" && (
               <button
                 onClick={() => handlePush("ARYEO")}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition glow-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md accent-bg text-sm font-medium hover:opacity-90 transition glow-sm"
               >
-                <Send className="w-4 h-4" />
+                <Send className="w-3.5 h-3.5" />
                 Push to Platform
               </button>
             )}
@@ -315,21 +328,21 @@ export default function PropertyDetailPage({
                     }
                     fetchProperty();
                   }}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition ${
                     property.status === "PENDING"
-                      ? "gradient-bg text-white hover:opacity-90 glow-sm"
-                      : "glass hover:bg-white/10"
+                      ? "accent-bg hover:opacity-90 glow-sm"
+                      : "border border-border bg-[hsl(var(--surface-2))] hover:bg-[hsl(var(--surface-3))]"
                   }`}
                 >
                   {property.status === "PENDING" ? (
                     <>
-                      <Zap className="w-4 h-4" />
+                      <Zap className="w-3.5 h-3.5" strokeWidth={2.5} />
                       Run QC on {property.photos.length} Photo
                       {property.photos.length !== 1 ? "s" : ""}
                     </>
                   ) : (
                     <>
-                      <RotateCcw className="w-4 h-4" />
+                      <RotateCcw className="w-3.5 h-3.5" />
                       Re-run QC
                     </>
                   )}
@@ -366,9 +379,9 @@ export default function PropertyDetailPage({
                     });
                     fetchProperty();
                   }}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition glow-sm"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md accent-bg text-sm font-medium hover:opacity-90 transition glow-sm"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-3.5 h-3.5" strokeWidth={2.5} />
                   Apply All Changes
                 </button>
               )}
@@ -420,17 +433,17 @@ export default function PropertyDetailPage({
       {property.status === "PENDING" && property.photos.length > 0 && (
         <motion.div
           variants={fadeUp}
-          className="glass-card p-6 mb-6 bg-brand-500/5 border-brand-500/30"
+          className="panel hairline-top p-5 mb-5 border-primary/30 bg-primary/[0.04]"
         >
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-brand-500/20 border border-brand-500/30 flex items-center justify-center shrink-0">
-              <Zap className="w-6 h-6 text-brand-400" />
+            <div className="w-10 h-10 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0">
+              <Zap className="w-5 h-5 text-primary" strokeWidth={2.25} />
             </div>
-            <div className="flex-1">
-              <h3 className="font-semibold">Ready to run QC</h3>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {property.photos.length} photos uploaded. Click below to start
-                the quality check. Processing takes about 30-60 seconds.
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-sm">Ready to run QC</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {property.photos.length} photos uploaded. Processing takes about
+                30 to 60 seconds.
               </p>
             </div>
             <button
@@ -456,9 +469,9 @@ export default function PropertyDetailPage({
                 }
                 fetchProperty();
               }}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl gradient-bg text-white font-semibold hover:opacity-90 transition glow"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-md accent-bg text-sm font-semibold hover:opacity-90 transition glow"
             >
-              <Zap className="w-5 h-5" />
+              <Zap className="w-4 h-4" strokeWidth={2.5} />
               Start Quality Check
             </button>
           </div>
@@ -487,18 +500,16 @@ export default function PropertyDetailPage({
         return (
           <motion.div
             variants={fadeUp}
-            className="glass-card p-4 mb-6 bg-amber-500/5 border-amber-500/20"
+            className="rounded-md border border-amber-500/25 bg-amber-500/5 p-3 mb-5"
           >
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-amber-300">
-                  Possibly missing room photos
-                </p>
-                <p className="text-xs text-amber-400/80 mt-0.5">
-                  This set doesn&apos;t appear to include:{" "}
-                  {missing.map((r) => r.label).join(", ")}. Verify or add
-                  photos before delivery.
+            <div className="flex items-center gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-amber-200">
+                  Possibly missing room photos:{" "}
+                  <span className="text-amber-100/80 font-mono">
+                    {missing.map((r) => r.label).join(", ")}
+                  </span>
                 </p>
               </div>
             </div>
@@ -517,55 +528,105 @@ export default function PropertyDetailPage({
         if (!hasAnyTiers) return null;
 
         return (
-          <motion.div variants={fadeUp} className="glass-card p-5 mb-6">
-            <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wider">
+          <motion.div variants={fadeUp} className="panel hairline-top p-5 mb-5">
+            <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-3">
               Quality Tier Breakdown
             </p>
-            <div className="flex items-center gap-3 flex-wrap">
-              {["premium", "pass_high", "pass", "pass_low", "minor_fail", "major_fail", "reject"].map(
-                (tier) => {
-                  const count = tierCounts[tier] || 0;
-                  if (count === 0) return null;
-                  const t = tierConfig[tier];
-                  return (
-                    <div
-                      key={tier}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${t.bg}`}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[
+                "premium",
+                "pass_high",
+                "pass",
+                "pass_low",
+                "minor_fail",
+                "major_fail",
+                "reject",
+              ].map((tier) => {
+                const count = tierCounts[tier] || 0;
+                if (count === 0) return null;
+                const t = tierConfig[tier];
+                return (
+                  <div
+                    key={tier}
+                    className={`inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded border ${t.bg.replace(
+                      "bg-",
+                      "border-"
+                    )}/40 ${t.bg}`}
+                  >
+                    {t.emoji && (
+                      <span className={`text-[11px] ${t.color}`}>
+                        {t.emoji}
+                      </span>
+                    )}
+                    <span
+                      className={`font-mono stat-num text-xs font-semibold ${t.color}`}
                     >
-                      {t.emoji && <span className={t.color}>{t.emoji}</span>}
-                      <span className={`text-sm font-bold ${t.color}`}>{count}</span>
-                      <span className="text-xs text-muted-foreground">{t.label}</span>
-                    </div>
-                  );
-                }
-              )}
+                      {count}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {t.label}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </motion.div>
         );
       })()}
 
       {/* Summary Stats */}
-      <motion.div variants={fadeUp} className="grid grid-cols-4 gap-4 mb-6">
-        <div className="glass-card p-4 text-center">
-          <p className="text-2xl font-bold">
-            {property.totalQcScore !== null
-              ? Math.round(property.totalQcScore)
-              : "--"}
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">QC Score</p>
-        </div>
-        <div className="glass-card p-4 text-center">
-          <p className="text-2xl font-bold text-green-400">{passCount}</p>
-          <p className="text-xs text-muted-foreground mt-1">Passed</p>
-        </div>
-        <div className="glass-card p-4 text-center">
-          <p className="text-2xl font-bold text-amber-400">{fixedCount}</p>
-          <p className="text-xs text-muted-foreground mt-1">Auto-Fixed</p>
-        </div>
-        <div className="glass-card p-4 text-center">
-          <p className="text-2xl font-bold text-red-400">{flaggedCount}</p>
-          <p className="text-xs text-muted-foreground mt-1">Flagged</p>
-        </div>
+      <motion.div
+        variants={fadeUp}
+        className="grid grid-cols-4 gap-px bg-border rounded-xl overflow-hidden border border-border mb-6"
+      >
+        {[
+          {
+            label: "QC Score",
+            value:
+              property.totalQcScore !== null
+                ? Math.round(property.totalQcScore).toString()
+                : "--",
+            tone: "text-foreground",
+            suffix:
+              property.totalQcScore !== null ? (
+                <span className="text-[11px] text-muted-foreground ml-0.5">
+                  /100
+                </span>
+              ) : null,
+          },
+          {
+            label: "Passed",
+            value: passCount.toString(),
+            tone: "text-emerald-300",
+          },
+          {
+            label: "Auto-Fixed",
+            value: fixedCount.toString(),
+            tone: "text-amber-300",
+          },
+          {
+            label: "Flagged",
+            value: flaggedCount.toString(),
+            tone: "text-red-300",
+          },
+        ].map((s) => (
+          <div
+            key={s.label}
+            className="bg-[hsl(var(--surface-2))] p-4 hairline-top"
+          >
+            <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+              {s.label}
+            </p>
+            <div className="mt-1.5 flex items-baseline">
+              <span
+                className={`font-mono stat-num text-2xl font-semibold ${s.tone}`}
+              >
+                {s.value}
+              </span>
+              {(s as any).suffix}
+            </div>
+          </div>
+        ))}
       </motion.div>
 
       {/* Summary of Changes - per-property fix report */}
@@ -594,81 +655,105 @@ export default function PropertyDetailPage({
         if (totalFixes === 0 && blurredCount === 0) return null;
 
         return (
-          <motion.div variants={fadeUp} className="glass-card p-5 mb-6">
-            <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wider">
-              Summary of Changes
-            </p>
-            <div className="flex flex-wrap gap-2">
+          <motion.div variants={fadeUp} className="panel hairline-top p-5 mb-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                Summary of Changes
+              </p>
+              <span className="text-[10px] font-mono text-muted-foreground/70">
+                {totalFixes} adjustments ·{" "}
+                {
+                  property.photos.filter((p: Photo) => p.fixesApplied?.length)
+                    .length
+                }{" "}
+                photos
+                {blurredCount > 0 ? ` · ${blurredCount} blurred` : ""}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
               {Object.entries(fixSummary).map(([fixType, count]) => (
                 <div
                   key={fixType}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20"
+                  className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded border border-amber-500/20 bg-amber-500/5"
                 >
-                  <Zap className="w-3 h-3 text-amber-400" />
-                  <span className="text-xs font-bold text-amber-300">
+                  <span className="font-mono stat-num text-xs font-semibold text-amber-300">
                     {count}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-[11px] text-muted-foreground">
                     {fixType}
                   </span>
                 </div>
               ))}
             </div>
-            <p className="text-xs text-muted-foreground mt-3">
-              {totalFixes} total adjustments applied across{" "}
-              {property.photos.filter((p: Photo) => p.fixesApplied?.length)
-                .length}{" "}
-              photo(s){blurredCount > 0 ? `, ${blurredCount} privacy-blurred` : ""}
-            </p>
           </motion.div>
         );
       })()}
 
       {/* Filter tabs */}
-      <motion.div variants={fadeUp} className="flex items-center gap-2 mb-6 flex-wrap">
-        {(() => {
-          const premiumCount = property.photos.filter(
-            (p: Photo) => getTier(p) === "premium"
-          ).length;
-          const tabs = [
-            { key: "all", label: `All (${property.photos.length})` },
-            { key: "passed", label: `Passed (${passCount})` },
-            { key: "issues", label: `Issues (${fixedCount + flaggedCount})` },
-            { key: "flagged", label: `Flagged (${flaggedCount})` },
-          ];
-          if (premiumCount > 0) {
-            tabs.splice(1, 0, { key: "premium", label: `★ Premium (${premiumCount})` });
-          }
-          return tabs;
-        })().map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setFilter(tab.key)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
-              filter === tab.key
-                ? "bg-white/10 text-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <motion.div variants={fadeUp} className="mb-5">
+        <div className="inline-flex items-center gap-1 p-0.5 rounded-md bg-[hsl(var(--surface-2))] border border-border">
+          {(() => {
+            const premiumCount = property.photos.filter(
+              (p: Photo) => getTier(p) === "premium"
+            ).length;
+            const tabs = [
+              { key: "all", label: "All", count: property.photos.length },
+              { key: "passed", label: "Passed", count: passCount },
+              {
+                key: "issues",
+                label: "Issues",
+                count: fixedCount + flaggedCount,
+              },
+              { key: "flagged", label: "Flagged", count: flaggedCount },
+            ];
+            if (premiumCount > 0) {
+              tabs.splice(1, 0, {
+                key: "premium",
+                label: "★ Premium",
+                count: premiumCount,
+              });
+            }
+            return tabs;
+          })().map((tab) => {
+            const isActive = filter === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setFilter(tab.key)}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  isActive
+                    ? "bg-[hsl(var(--surface-3))] text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab.label}{" "}
+                <span
+                  className={`ml-1 font-mono text-[10px] ${
+                    isActive
+                      ? "text-muted-foreground"
+                      : "text-muted-foreground/60"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </motion.div>
 
       {/* Photo Grid */}
-      <motion.div variants={fadeUp} className="grid grid-cols-4 gap-4">
+      <motion.div variants={fadeUp} className="grid grid-cols-4 gap-3">
         {filteredPhotos?.map((photo: Photo) => {
           const status = statusConfig[photo.status] || statusConfig.PENDING;
           const hasIssues =
             photo.issues && Object.keys(photo.issues).length > 0;
 
           return (
-            <motion.button
+            <button
               key={photo.id}
               onClick={() => setSelectedPhoto(photo)}
-              className="group relative rounded-xl overflow-hidden border border-white/10 hover:border-white/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/20 aspect-[4/3] bg-gradient-to-br from-gray-800 to-gray-900"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              className="group relative rounded-md overflow-hidden border border-border hover:border-primary/40 focus:border-primary/60 transition-colors duration-150 aspect-[4/3] bg-[hsl(var(--surface-2))]"
             >
               {/* Actual image thumbnail */}
               {(photo as any).thumbnailUrl ? (
@@ -732,23 +817,23 @@ export default function PropertyDetailPage({
 
               {/* QC score */}
               {photo.qcScore !== null && (
-                <div className="absolute bottom-2 left-2 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-sm text-xs font-bold">
+                <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-black/70 text-[11px] font-mono stat-num font-semibold text-white">
                   {Math.round(photo.qcScore)}
                 </div>
               )}
 
               {/* Issue count */}
               {hasIssues && (
-                <div className="absolute bottom-2 right-2 px-2 py-1 rounded-lg bg-red-500/20 text-red-400 text-xs font-medium backdrop-blur-sm">
-                  {Object.keys(photo.issues!).length} issues
+                <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-red-500/30 text-red-200 text-[11px] font-mono stat-num font-semibold backdrop-blur-sm">
+                  {Object.keys(photo.issues!).length} iss
                 </div>
               )}
 
               {/* Hover overlay */}
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                <Eye className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                <Eye className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
-            </motion.button>
+            </button>
           );
         })}
       </motion.div>
