@@ -35,7 +35,7 @@ import replicate
 # See notes file for verification steps.
 GROUNDED_SAM_MODEL = (
     "schananas/grounded_sam:"
-    "ee871c19befb1d7875444a94d75b604f00e5d4fbdaaaf0c8a13ce2b0a122a40d"
+    "ee871c19efb1941f55f66a3d7d960428c8a5afcb77449547fe8e5a3ab9ebc21c"
 )
 
 

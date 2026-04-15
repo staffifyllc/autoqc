@@ -27,8 +27,8 @@ import replicate
 
 
 LAMA_MODEL = (
-    "cjwbw/lama:"
-    "e09b0c0b7c5ba1e35e5a0e3a8b3c4c8e9d9e1b1b9c8d9e1c2b3d4e5f6a7b8c9d0"
+    "allenhooo/lama:"
+    "cdac78a1bec5b23c07fd29692fb70baa513ea403a39e643c48ec5edadb15fe72"
 )
 
 
