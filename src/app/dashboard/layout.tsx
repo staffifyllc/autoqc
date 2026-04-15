@@ -13,19 +13,37 @@ import {
   Coins,
   Settings,
   LogOut,
-  ChevronRight,
 } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
 import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
 
-const navItems = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { href: "/dashboard/properties", label: "Properties", icon: Home },
-  { href: "/dashboard/profiles", label: "Style Profiles", icon: Palette },
-  { href: "/dashboard/profiles/clients", label: "Clients", icon: Users },
-  { href: "/dashboard/integrations", label: "Integrations", icon: Plug },
-  { href: "/dashboard/credits", label: "Credits", icon: Coins },
-  { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
+const navSections: Array<{
+  label: string;
+  items: Array<{ href: string; label: string; icon: any }>;
+}> = [
+  {
+    label: "Workspace",
+    items: [
+      { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+      { href: "/dashboard/properties", label: "Properties", icon: Home },
+    ],
+  },
+  {
+    label: "Configure",
+    items: [
+      { href: "/dashboard/profiles", label: "Style Profiles", icon: Palette },
+      { href: "/dashboard/profiles/clients", label: "Clients", icon: Users },
+      { href: "/dashboard/integrations", label: "Integrations", icon: Plug },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
+      { href: "/dashboard/credits", label: "Credits", icon: Coins },
+      { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
+    ],
+  },
 ];
 
 export default function DashboardLayout({
@@ -34,68 +52,122 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [credits, setCredits] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch("/api/credits")
+      .then((r) => r.json())
+      .then((d) => setCredits(typeof d.balance === "number" ? d.balance : 0))
+      .catch(() => setCredits(0));
+  }, [pathname]);
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex relative">
+      {/* Faint scanline texture, sits behind everything */}
+      <div className="pointer-events-none fixed inset-0 scanlines z-0" />
+
       {/* Sidebar */}
-      <aside className="w-64 border-r border-border bg-card/50 backdrop-blur-xl flex flex-col fixed h-full z-30">
+      <aside className="w-60 surface-chrome border-r border-border flex flex-col fixed h-full z-30">
         {/* Logo */}
-        <div className="h-16 flex items-center gap-2 px-6 border-b border-border">
-          <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center">
-            <Camera className="w-4 h-4 text-white" />
+        <div className="h-14 flex items-center gap-2.5 px-5 border-b border-border">
+          <div className="w-7 h-7 rounded-md accent-bg flex items-center justify-center">
+            <Camera className="w-3.5 h-3.5" strokeWidth={2.5} />
           </div>
-          <span className="font-bold text-lg">AutoQC</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-semibold text-[15px] tracking-tight">
+              AutoQC
+            </span>
+            <span className="text-[10px] font-mono text-muted-foreground">
+              v1
+            </span>
+          </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          {navItems.map((item) => {
-            const isActive =
-              pathname === item.href ||
-              (item.href !== "/dashboard" && pathname.startsWith(item.href));
+        <nav className="flex-1 px-2.5 py-4 overflow-y-auto">
+          {navSections.map((section, idx) => (
+            <div key={section.label} className={idx > 0 ? "mt-5" : ""}>
+              <p className="px-2.5 mb-1.5 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/60">
+                {section.label}
+              </p>
+              <div className="space-y-0.5">
+                {section.items.map((item) => {
+                  const isActive =
+                    pathname === item.href ||
+                    (item.href !== "/dashboard" &&
+                      pathname.startsWith(item.href));
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 relative ${
-                  isActive
-                    ? "text-foreground bg-white/10"
-                    : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-                }`}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="sidebar-active"
-                    className="absolute inset-0 rounded-xl bg-white/10 border border-white/10"
-                    transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
-                  />
-                )}
-                <item.icon className="w-4 h-4 relative z-10" />
-                <span className="relative z-10">{item.label}</span>
-              </Link>
-            );
-          })}
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`group relative flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] font-medium transition-colors duration-150 ${
+                        isActive
+                          ? "text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId="sidebar-active"
+                          className="absolute inset-0 rounded-md bg-[hsl(var(--surface-3))]"
+                          transition={{
+                            type: "spring",
+                            bounce: 0.2,
+                            duration: 0.4,
+                          }}
+                        />
+                      )}
+                      {isActive && (
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-0.5 rounded-r bg-primary" />
+                      )}
+                      <item.icon
+                        className="w-4 h-4 relative z-10"
+                        strokeWidth={isActive ? 2.25 : 1.75}
+                      />
+                      <span className="relative z-10">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
+        {/* Credits readout */}
+        <div className="px-3 py-3 border-t border-border">
+          <Link
+            href="/dashboard/credits"
+            className="flex items-center justify-between px-2.5 py-2 rounded-md hover:bg-[hsl(var(--surface-3))] transition-colors group"
+          >
+            <div className="flex items-center gap-2 text-[13px] text-muted-foreground group-hover:text-foreground transition-colors">
+              <Coins className="w-3.5 h-3.5" />
+              Credits
+            </div>
+            <span className="font-mono text-[13px] stat-num text-foreground">
+              {credits === null ? "--" : credits.toLocaleString()}
+            </span>
+          </Link>
+        </div>
+
         {/* Bottom */}
-        <div className="p-3 border-t border-border space-y-1">
+        <div className="p-2.5 border-t border-border space-y-0.5">
           <Link
             href="/dashboard/settings"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-white/5 transition"
+            className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-[hsl(var(--surface-3))] transition-colors"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-4 h-4" strokeWidth={1.75} />
             Settings
           </Link>
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-white/5 transition">
-            <LogOut className="w-4 h-4" />
+          <button className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-[hsl(var(--surface-3))] transition-colors">
+            <LogOut className="w-4 h-4" strokeWidth={1.75} />
             Sign Out
           </button>
         </div>
       </aside>
 
       {/* Main */}
-      <main className="flex-1 ml-64">
+      <main className="flex-1 ml-60 relative z-10">
         <div className="max-w-7xl mx-auto px-8 py-8">{children}</div>
       </main>
 

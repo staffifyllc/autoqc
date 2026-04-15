@@ -6,66 +6,86 @@ import {
   Home,
   CheckCircle2,
   AlertTriangle,
-  Clock,
   Zap,
   ArrowUpRight,
   Plus,
-  TrendingUp,
   Coins,
+  Camera,
+  Palette,
+  Plug,
+  Activity,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 12 },
   visible: { opacity: 1, y: 0 },
 };
 
 const stagger = {
-  visible: { transition: { staggerChildren: 0.08 } },
+  visible: { transition: { staggerChildren: 0.06 } },
 };
 
 export default function DashboardPage() {
-  const [credits, setCredits] = useState(0);
+  const [credits, setCredits] = useState<number | null>(null);
+  const [stats, setStats] = useState({
+    total: 0,
+    autoFixed: 0,
+    flagged: 0,
+  });
+  const [recent, setRecent] = useState<any[]>([]);
 
   useEffect(() => {
     fetch("/api/credits")
       .then((r) => r.json())
-      .then((data) => setCredits(data.balance))
+      .then((data) => setCredits(data.balance ?? 0))
+      .catch(() => setCredits(0));
+
+    fetch("/api/properties")
+      .then((r) => r.json())
+      .then((data) => {
+        const props = data.properties || [];
+        // This-month filter
+        const start = new Date();
+        start.setDate(1);
+        start.setHours(0, 0, 0, 0);
+        const monthly = props.filter(
+          (p: any) => new Date(p.createdAt) >= start
+        );
+        setStats({
+          total: monthly.length,
+          autoFixed: props.filter((p: any) => p.status === "APPROVED").length,
+          flagged: props.filter((p: any) => p.status === "REVIEW").length,
+        });
+        setRecent(props.slice(0, 5));
+      })
       .catch(() => {});
   }, []);
 
-  const stats = [
+  const statTiles = [
     {
       label: "Credits",
-      value: String(credits),
-      change: null,
+      value: credits === null ? "--" : credits.toLocaleString(),
       icon: Coins,
-      color: "text-green-400",
-      bg: "bg-green-500/10 border-green-500/20",
+      hint: "available",
     },
     {
-      label: "Properties This Month",
-      value: "0",
-      change: null,
+      label: "Properties",
+      value: stats.total.toString(),
       icon: Home,
-      color: "text-blue-400",
-      bg: "bg-blue-500/10 border-blue-500/20",
+      hint: "this month",
     },
     {
       label: "Auto-Fixed",
-      value: "0",
-      change: null,
+      value: stats.autoFixed.toString(),
       icon: Zap,
-      color: "text-amber-400",
-      bg: "bg-amber-500/10 border-amber-500/20",
+      hint: "approved",
     },
     {
-      label: "Flagged for Review",
-      value: "0",
-      change: null,
+      label: "Flagged",
+      value: stats.flagged.toString(),
       icon: AlertTriangle,
-      color: "text-red-400",
-      bg: "bg-red-500/10 border-red-500/20",
+      hint: "needs review",
     },
   ];
 
@@ -74,144 +94,221 @@ export default function DashboardPage() {
       {/* Header */}
       <motion.div
         variants={fadeUp}
-        className="flex items-center justify-between mb-8"
+        className="flex items-end justify-between mb-8"
       >
         <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Welcome back. Here&apos;s your QC overview.
+          <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-1.5">
+            Workspace
           </p>
+          <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
         </div>
         <Link
           href="/dashboard/properties?new=true"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition glow-sm"
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md accent-bg text-sm font-medium hover:opacity-90 transition glow-sm"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
           New Property
         </Link>
       </motion.div>
 
-      {/* Stats */}
-      <motion.div variants={fadeUp} className="grid grid-cols-4 gap-4 mb-8">
-        {stats.map((stat) => (
+      {/* Stat row */}
+      <motion.div variants={fadeUp} className="grid grid-cols-4 gap-px bg-border rounded-xl overflow-hidden border border-border mb-8">
+        {statTiles.map((s) => (
           <div
-            key={stat.label}
-            className="glass-card p-5 space-y-3"
+            key={s.label}
+            className="bg-[hsl(var(--surface-2))] p-5 hairline-top relative group hover:bg-[hsl(var(--surface-3))] transition-colors"
           >
-            <div className="flex items-center justify-between">
-              <div
-                className={`w-10 h-10 rounded-xl ${stat.bg} border flex items-center justify-center`}
-              >
-                <stat.icon className={`w-5 h-5 ${stat.color}`} />
-              </div>
-              {stat.change && (
-                <span className="flex items-center gap-1 text-xs text-green-400">
-                  <TrendingUp className="w-3 h-3" />
-                  {stat.change}
-                </span>
-              )}
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
+                {s.label}
+              </span>
+              <s.icon className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.75} />
             </div>
-            <div>
-              <p className="text-2xl font-bold">{stat.value}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {stat.label}
-              </p>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-mono stat-num font-semibold text-foreground">
+                {s.value}
+              </span>
+              <span className="text-[11px] text-muted-foreground/70">
+                {s.hint}
+              </span>
             </div>
           </div>
         ))}
       </motion.div>
 
-      {/* Recent Properties + Quick Actions */}
-      <div className="grid grid-cols-3 gap-6">
+      {/* Recent + Quick Actions */}
+      <div className="grid grid-cols-3 gap-5">
         {/* Recent */}
-        <motion.div variants={fadeUp} className="col-span-2 glass-card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold">Recent Properties</h2>
+        <motion.div variants={fadeUp} className="col-span-2 panel hairline-top">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+            <div className="flex items-center gap-2">
+              <Activity className="w-3.5 h-3.5 text-muted-foreground" />
+              <h2 className="font-medium text-sm">Recent activity</h2>
+            </div>
             <Link
               href="/dashboard/properties"
-              className="text-xs text-brand-400 hover:text-brand-300 transition flex items-center gap-1"
+              className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-1"
             >
-              View All
+              View all
               <ArrowUpRight className="w-3 h-3" />
             </Link>
           </div>
 
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-4">
-              <Home className="w-8 h-8 text-muted-foreground" />
+          {recent.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+              <div className="w-12 h-12 rounded-lg border border-border bg-[hsl(var(--surface-1))] flex items-center justify-center mb-4 dot-pattern">
+                <Home className="w-5 h-5 text-muted-foreground" />
+              </div>
+              <h3 className="text-sm font-medium">No properties yet</h3>
+              <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                Upload your first property to see QC results here.
+              </p>
+              <Link
+                href="/dashboard/properties?new=true"
+                className="mt-4 inline-flex items-center gap-1.5 text-xs text-primary hover:opacity-90 transition"
+              >
+                <Plus className="w-3 h-3" />
+                Add property
+              </Link>
             </div>
-            <h3 className="font-medium text-muted-foreground">
-              No properties yet
-            </h3>
-            <p className="text-sm text-muted-foreground/60 mt-1 max-w-xs">
-              Upload your first property to see QC results here.
-            </p>
-            <Link
-              href="/dashboard/properties?new=true"
-              className="mt-4 text-sm text-brand-400 hover:text-brand-300 transition flex items-center gap-1"
-            >
-              <Plus className="w-4 h-4" />
-              Add Property
-            </Link>
-          </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {recent.map((p: any) => {
+                const score =
+                  p.totalQcScore !== null && p.totalQcScore !== undefined
+                    ? Math.round(p.totalQcScore)
+                    : null;
+                return (
+                  <li key={p.id}>
+                    <Link
+                      href={`/dashboard/properties/${p.id}`}
+                      className="flex items-center gap-4 px-5 py-3 hover:bg-[hsl(var(--surface-3))] transition-colors group"
+                    >
+                      <div className="w-8 h-8 rounded-md border border-border bg-[hsl(var(--surface-1))] flex items-center justify-center shrink-0">
+                        <Home className="w-3.5 h-3.5 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {p.address}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                          {p.photoCount} photos
+                          {p.client?.clientName ? ` · ${p.client.clientName}` : ""}
+                        </p>
+                      </div>
+                      {score !== null && (
+                        <div className="text-right">
+                          <span className="font-mono text-sm stat-num font-semibold">
+                            {score}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground ml-0.5">
+                            /100
+                          </span>
+                        </div>
+                      )}
+                      <StatusPill status={p.status} />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </motion.div>
 
-        {/* Quick Actions */}
-        <motion.div variants={fadeUp} className="glass-card p-6 space-y-4">
-          <h2 className="font-semibold">Quick Actions</h2>
+        {/* Quick actions */}
+        <motion.div variants={fadeUp} className="panel hairline-top p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <Zap className="w-3.5 h-3.5 text-muted-foreground" />
+            <h2 className="font-medium text-sm">Quick actions</h2>
+          </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1">
             {[
               {
-                label: "Upload Property",
+                label: "Upload property",
                 href: "/dashboard/properties?new=true",
-                icon: Plus,
+                icon: Camera,
                 desc: "Start a new QC run",
+                kbd: "P",
               },
               {
-                label: "Create Style Profile",
+                label: "Create style profile",
                 href: "/dashboard/profiles?new=true",
-                icon: "palette",
+                icon: Palette,
                 desc: "Define your photo standard",
+                kbd: "S",
               },
               {
-                label: "Connect Platform",
+                label: "Connect platform",
                 href: "/dashboard/integrations",
-                icon: "plug",
+                icon: Plug,
                 desc: "Set up delivery push",
+                kbd: "I",
               },
             ].map((action) => (
               <Link
                 key={action.label}
                 href={action.href}
-                className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition group"
+                className="flex items-center gap-3 px-2.5 py-2 -mx-2.5 rounded-md hover:bg-[hsl(var(--surface-3))] transition-colors group"
               >
-                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:border-white/20 transition">
-                  <Plus className="w-4 h-4 text-muted-foreground" />
+                <div className="w-7 h-7 rounded-md border border-border bg-[hsl(var(--surface-1))] flex items-center justify-center group-hover:border-white/15 transition-colors">
+                  <action.icon
+                    className="w-3.5 h-3.5 text-muted-foreground"
+                    strokeWidth={1.75}
+                  />
                 </div>
-                <div>
-                  <p className="text-sm font-medium">{action.label}</p>
-                  <p className="text-xs text-muted-foreground">{action.desc}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-medium leading-tight">
+                    {action.label}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {action.desc}
+                  </p>
                 </div>
               </Link>
             ))}
           </div>
 
-          {/* QC Score gauge placeholder */}
-          <div className="pt-4 border-t border-border">
-            <p className="text-xs text-muted-foreground mb-2">
-              Average QC Score
-            </p>
-            <div className="flex items-end gap-2">
-              <span className="text-3xl font-bold gradient-text">--</span>
-              <span className="text-sm text-muted-foreground pb-1">/ 100</span>
+          {/* QC score gauge */}
+          <div className="pt-3 mt-3 border-t border-border">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
+                Avg QC Score
+              </p>
+              <span className="text-[10px] font-mono text-muted-foreground/70">
+                30d
+              </span>
             </div>
-            <div className="mt-2 h-2 rounded-full bg-white/5 overflow-hidden">
-              <div className="h-full w-0 rounded-full gradient-bg transition-all duration-1000" />
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-mono stat-num font-semibold">
+                --
+              </span>
+              <span className="text-xs text-muted-foreground">/ 100</span>
+            </div>
+            <div className="mt-2 h-1 rounded-full bg-[hsl(var(--surface-1))] overflow-hidden">
+              <div className="h-full w-0 rounded-full bg-primary transition-all duration-1000" />
             </div>
           </div>
         </motion.div>
       </div>
     </motion.div>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const map: Record<string, { label: string; tone: string }> = {
+    PENDING: { label: "Pending", tone: "text-muted-foreground bg-[hsl(var(--surface-1))]" },
+    PROCESSING: { label: "Running", tone: "text-blue-300 bg-blue-500/10" },
+    REVIEW: { label: "Review", tone: "text-amber-300 bg-amber-500/10" },
+    APPROVED: { label: "Approved", tone: "text-emerald-300 bg-emerald-500/10" },
+    PUSHED: { label: "Delivered", tone: "text-violet-300 bg-violet-500/10" },
+  };
+  const c = map[status] || map.PENDING;
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider ${c.tone}`}
+    >
+      {c.label}
+    </span>
   );
 }
