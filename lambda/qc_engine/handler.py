@@ -163,12 +163,23 @@ def calculate_qc_score(issues: dict, checks_run: int) -> float:
     deductions = 0
 
     for issue_key, severity in issues.items():
+        # Skip metadata keys stored alongside real issues (e.g. _room_type,
+        # _scene, etc). These hold context strings, not severity scores, and
+        # must not feed into the deduction math or float() will crash.
+        if isinstance(issue_key, str) and issue_key.startswith("_"):
+            continue
         weight = weights.get(issue_key, 5)
         # Severity is 0-1, where 1 is worst
         if isinstance(severity, dict):
             sev = severity.get("severity", 0.5)
         else:
-            sev = float(severity) if severity else 0.5
+            try:
+                sev = float(severity) if severity else 0.5
+            except (TypeError, ValueError):
+                # Non-numeric value slipped in. Log and skip rather than
+                # crash the finalization for the whole property.
+                print(f"WARN skipping non-numeric severity for {issue_key}: {severity!r}")
+                continue
         deductions += weight * sev
 
     score = max(0, 100 - (deductions / total_weight * 100))
