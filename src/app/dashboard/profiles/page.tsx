@@ -84,63 +84,64 @@ export default function ProfilesPage() {
   };
 
   return (
-    <motion.div initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.08 } } }}>
+    <motion.div initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.06 } } }}>
       {/* Header */}
       <motion.div
         variants={fadeUp}
-        className="flex items-center justify-between mb-8"
+        className="flex items-end justify-between mb-6"
       >
         <div>
-          <h1 className="text-2xl font-bold">Style Profiles</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Define your agency&apos;s photo standards. QC checks run against these
-            baselines.
+          <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-1.5">
+            Configure
           </p>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Style Profiles{" "}
+            <span className="font-mono text-muted-foreground/60 text-base ml-1">
+              {profiles.length}
+            </span>
+          </h1>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition glow-sm"
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md accent-bg text-sm font-medium hover:opacity-90 transition glow-sm"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
           New Profile
         </button>
       </motion.div>
 
-      {/* How it works card */}
+      {/* How it works strip */}
       <motion.div
         variants={fadeUp}
-        className="glass-card p-6 mb-8 relative overflow-hidden"
+        className="panel hairline-top mesh-gradient p-5 mb-6 flex items-start gap-4"
       >
-        <div className="absolute inset-0 mesh-gradient opacity-30" />
-        <div className="relative flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-brand-500/20 border border-brand-500/30 flex items-center justify-center shrink-0">
-            <Sparkles className="w-6 h-6 text-brand-400" />
-          </div>
-          <div>
-            <h3 className="font-semibold mb-1">How Style Profiles Work</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">
-              Upload 20-50 of your best, approved photos as reference. Our AI
-              analyzes the color temperature, saturation, contrast, exposure, and
-              composition patterns. This becomes your baseline. Every future QC
-              check compares against YOUR standard, not a generic one.
-            </p>
-            <div className="flex items-center gap-6 mt-4">
-              {[
-                { icon: Thermometer, label: "Color Temp" },
-                { icon: Sun, label: "Exposure" },
-                { icon: Contrast, label: "Contrast" },
-                { icon: Aperture, label: "Sharpness" },
-                { icon: Ruler, label: "Verticals" },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground"
-                >
-                  <item.icon className="w-3.5 h-3.5" />
-                  {item.label}
-                </div>
-              ))}
-            </div>
+        <div className="w-9 h-9 rounded-md bg-primary/10 border border-primary/30 flex items-center justify-center shrink-0">
+          <Sparkles className="w-4 h-4 text-primary" strokeWidth={2.25} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-medium text-sm mb-1">How Style Profiles Work</h3>
+          <p className="text-xs text-muted-foreground leading-relaxed max-w-2xl">
+            Upload 20 to 50 of your best, approved photos as reference. The
+            engine analyzes color temperature, saturation, contrast, exposure,
+            and composition patterns. This becomes your baseline. Every future
+            QC check compares against YOUR standard, not a generic one.
+          </p>
+          <div className="flex items-center gap-3 mt-3 flex-wrap">
+            {[
+              { icon: Thermometer, label: "Color Temp" },
+              { icon: Sun, label: "Exposure" },
+              { icon: Contrast, label: "Contrast" },
+              { icon: Aperture, label: "Sharpness" },
+              { icon: Ruler, label: "Verticals" },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground font-mono"
+              >
+                <item.icon className="w-3 h-3" strokeWidth={1.75} />
+                {item.label}
+              </div>
+            ))}
           </div>
         </div>
       </motion.div>
@@ -149,94 +150,104 @@ export default function ProfilesPage() {
       {profiles.length === 0 ? (
         <motion.div
           variants={fadeUp}
-          className="glass-card p-12 text-center"
+          className="panel hairline-top dot-pattern py-16 px-8 text-center"
         >
-          <div className="w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-4">
-            <Palette className="w-10 h-10 text-muted-foreground" />
+          <div className="w-12 h-12 rounded-md border border-border bg-[hsl(var(--surface-1))] flex items-center justify-center mx-auto mb-4">
+            <Palette className="w-5 h-5 text-muted-foreground" />
           </div>
-          <h3 className="text-lg font-medium">No style profiles yet</h3>
-          <p className="text-sm text-muted-foreground mt-2 max-w-sm mx-auto">
+          <h3 className="text-base font-medium">No style profiles yet</h3>
+          <p className="text-sm text-muted-foreground mt-1.5 max-w-sm mx-auto">
             Create your first profile and upload reference photos to teach the
-            AI your editing standard.
+            engine your editing standard.
           </p>
           <button
             onClick={() => setShowCreate(true)}
-            className="mt-6 inline-flex items-center gap-2 px-6 py-2.5 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition"
+            className="mt-5 inline-flex items-center gap-1.5 px-4 py-2 rounded-md accent-bg text-sm font-medium hover:opacity-90 transition"
           >
-            <Plus className="w-4 h-4" />
-            Create Style Profile
+            <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+            Create style profile
           </button>
         </motion.div>
       ) : (
-        <motion.div variants={fadeUp} className="grid grid-cols-2 gap-4">
-          {profiles.map((profile) => (
-            <a
-              key={profile.id}
-              href={`/dashboard/profiles/${profile.id}`}
-              className="glass-card-hover p-6 space-y-4 cursor-pointer block"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
-                    <Palette className="w-5 h-5 text-brand-400" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-medium">{profile.name}</h3>
-                      {profile.isDefault && (
-                        <span className="px-2 py-0.5 rounded-md bg-brand-500/20 text-brand-400 text-xs font-medium">
-                          Default
-                        </span>
-                      )}
+        <motion.div variants={fadeUp} className="grid grid-cols-2 gap-3">
+          {profiles.map((profile) => {
+            const isLearned = profile.colorTempAvg !== null;
+            return (
+              <a
+                key={profile.id}
+                href={`/dashboard/profiles/${profile.id}`}
+                className="panel-hover hairline-top p-5 space-y-4 cursor-pointer block group"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-md bg-primary/10 border border-primary/30 flex items-center justify-center shrink-0">
+                      <Palette className="w-4 h-4 text-primary" strokeWidth={1.75} />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {profile._count.clients} client
-                      {profile._count.clients !== 1 ? "s" : ""} using this
-                      profile
-                    </p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-sm truncate">
+                          {profile.name}
+                        </h3>
+                        {profile.isDefault && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-primary/15 text-primary">
+                            Default
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                        {profile._count.clients} client
+                        {profile._count.clients !== 1 ? "s" : ""} ·{" "}
+                        {profile.referencePhotos.length} ref photos
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground" />
-              </div>
-
-              {/* Parameters */}
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  {
-                    label: "Color Temp",
-                    value: profile.colorTempAvg
-                      ? `${Math.round(profile.colorTempAvg)}K`
-                      : "Not learned",
-                  },
-                  {
-                    label: "Saturation",
-                    value: profile.saturationAvg
-                      ? `${Math.round(profile.saturationAvg)}%`
-                      : "Not learned",
-                  },
-                  {
-                    label: "Vertical Tol.",
-                    value: `${profile.verticalTolerance} deg`,
-                  },
-                ].map((param) => (
-                  <div
-                    key={param.label}
-                    className="text-center p-2 rounded-lg bg-white/3"
+                  <span
+                    className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider ${
+                      isLearned
+                        ? "bg-emerald-500/10 text-emerald-300"
+                        : "bg-[hsl(var(--surface-1))] text-muted-foreground"
+                    }`}
                   >
-                    <p className="text-xs text-muted-foreground">
-                      {param.label}
-                    </p>
-                    <p className="text-sm font-medium mt-0.5">{param.value}</p>
-                  </div>
-                ))}
-              </div>
+                    {isLearned ? "Learned" : "Pending"}
+                  </span>
+                </div>
 
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Upload className="w-3.5 h-3.5" />
-                {profile.referencePhotos.length} reference photos
-              </div>
-            </a>
-          ))}
+                {/* Parameters */}
+                <div className="grid grid-cols-3 gap-px bg-border rounded-md overflow-hidden border border-border">
+                  {[
+                    {
+                      label: "Temp",
+                      value: profile.colorTempAvg
+                        ? `${Math.round(profile.colorTempAvg)}K`
+                        : "--",
+                    },
+                    {
+                      label: "Sat",
+                      value: profile.saturationAvg
+                        ? `${Math.round(profile.saturationAvg)}%`
+                        : "--",
+                    },
+                    {
+                      label: "V-Tol",
+                      value: `${profile.verticalTolerance}\u00B0`,
+                    },
+                  ].map((param) => (
+                    <div
+                      key={param.label}
+                      className="bg-[hsl(var(--surface-1))] p-2"
+                    >
+                      <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                        {param.label}
+                      </p>
+                      <p className="text-sm font-mono stat-num font-semibold mt-0.5">
+                        {param.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </a>
+            );
+          })}
         </motion.div>
       )}
 
@@ -250,31 +261,35 @@ export default function ProfilesPage() {
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
           >
             <motion.div
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
               onClick={() => setShowCreate(false)}
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative glass-card p-8 w-full max-w-lg"
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="relative panel hairline-top w-full max-w-lg p-6"
             >
               <button
                 onClick={() => setShowCreate(false)}
-                className="absolute top-4 right-4 p-2 rounded-lg hover:bg-white/10 transition"
+                className="absolute top-3.5 right-3.5 p-1.5 rounded-md hover:bg-[hsl(var(--surface-3))] transition"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
 
-              <h2 className="text-xl font-bold mb-1">New Style Profile</h2>
-              <p className="text-sm text-muted-foreground mb-6">
-                Name your profile and set base tolerances. You can upload
-                reference photos after creating it.
+              <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-1">
+                Create
+              </p>
+              <h2 className="text-lg font-semibold">New Style Profile</h2>
+              <p className="text-xs text-muted-foreground mt-1 mb-5">
+                Name your profile and set base tolerances. Upload reference
+                photos after creating it.
               </p>
 
               <div className="space-y-5">
                 <div>
-                  <label className="text-sm font-medium mb-1.5 block">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-1.5 block">
                     Profile Name
                   </label>
                   <input
@@ -284,17 +299,17 @@ export default function ProfilesPage() {
                     onChange={(e) =>
                       setNewProfile({ ...newProfile, name: e.target.value })
                     }
-                    className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition"
+                    className="w-full px-3 py-2 rounded-md bg-[hsl(var(--surface-1))] border border-border text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/30 transition"
                     autoFocus
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium mb-1.5 block">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-1 block">
                     Vertical Tolerance (degrees)
                   </label>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    How many degrees off-vertical before flagging. Most agencies use 0.5-1.5.
+                  <p className="text-[11px] text-muted-foreground mb-2">
+                    How many degrees off-vertical before flagging. Most agencies use 0.5 to 1.5.
                   </p>
                   <input
                     type="range"
@@ -308,18 +323,18 @@ export default function ProfilesPage() {
                         verticalTolerance: parseFloat(e.target.value),
                       })
                     }
-                    className="w-full accent-brand-500"
+                    className="w-full accent-primary"
                   />
-                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                    <span>Strict (0.25)</span>
-                    <span className="font-medium text-foreground">
-                      {newProfile.verticalTolerance} deg
+                  <div className="flex justify-between text-[11px] text-muted-foreground mt-1 font-mono">
+                    <span>Strict 0.25</span>
+                    <span className="font-semibold text-foreground stat-num">
+                      {newProfile.verticalTolerance.toFixed(2)}&deg;
                     </span>
-                    <span>Loose (3.0)</span>
+                    <span>Loose 3.00</span>
                   </div>
                 </div>
 
-                <label className="flex items-center gap-3 cursor-pointer">
+                <label className="flex items-center gap-2.5 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={newProfile.isDefault}
@@ -329,9 +344,9 @@ export default function ProfilesPage() {
                         isDefault: e.target.checked,
                       })
                     }
-                    className="w-4 h-4 rounded accent-brand-500"
+                    className="w-3.5 h-3.5 rounded accent-primary"
                   />
-                  <span className="text-sm">
+                  <span className="text-xs">
                     Set as default profile for new properties
                   </span>
                 </label>
@@ -339,7 +354,7 @@ export default function ProfilesPage() {
                 <button
                   onClick={handleCreate}
                   disabled={!newProfile.name.trim()}
-                  className="w-full py-3 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition disabled:opacity-50"
+                  className="w-full py-2.5 rounded-md accent-bg text-sm font-medium hover:opacity-90 transition disabled:opacity-50"
                 >
                   Create Profile
                 </button>

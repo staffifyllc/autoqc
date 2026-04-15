@@ -57,6 +57,7 @@ export default function ProfileDetailPage({
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState("");
 
@@ -82,13 +83,14 @@ export default function ProfileDetailPage({
       if (!accepted.length) return;
       setUploading(true);
       setUploadProgress({ done: 0, total: accepted.length });
+      setUploadError(null);
 
       try {
         const filesPayload = accepted.map((f) => ({
           name: f.name,
           type: f.type,
         }));
-        const res = await fetch(
+        const signRes = await fetch(
           `/api/profiles/${params.id}/upload-reference`,
           {
             method: "POST",
@@ -96,42 +98,80 @@ export default function ProfileDetailPage({
             body: JSON.stringify({ files: filesPayload }),
           }
         );
-        const { uploads } = await res.json();
+        if (!signRes.ok) {
+          throw new Error(
+            `Could not get upload URLs (HTTP ${signRes.status})`
+          );
+        }
+        const { uploads } = await signRes.json();
 
-        // Upload each in parallel (4 concurrent)
+        // Upload each in parallel (4 concurrent). Track failures explicitly so
+        // we can surface a clear error and not silently leave broken keys.
         const uploadedKeys: string[] = [];
+        const failed: string[] = [];
         const queue = accepted.map((f, i) => ({ file: f, info: uploads[i] }));
+
+        const putOnce = async (job: { file: File; info: any }) => {
+          const res = await fetch(job.info.uploadUrl, {
+            method: "PUT",
+            body: job.file,
+            headers: { "Content-Type": job.file.type },
+          });
+          if (!res.ok) throw new Error(`S3 PUT ${res.status}`);
+        };
 
         const worker = async () => {
           while (queue.length > 0) {
             const job = queue.shift();
             if (!job) break;
             try {
-              await fetch(job.info.uploadUrl, {
-                method: "PUT",
-                body: job.file,
-                headers: { "Content-Type": job.file.type },
-              });
+              // 1 retry on transient failure
+              try {
+                await putOnce(job);
+              } catch {
+                await new Promise((r) => setTimeout(r, 400));
+                await putOnce(job);
+              }
               uploadedKeys.push(job.info.s3Key);
+            } catch (err: any) {
+              console.error(
+                `Reference upload failed for ${job.file.name}:`,
+                err?.message || err
+              );
+              failed.push(job.file.name);
+            } finally {
               setUploadProgress((p) => ({ ...p, done: p.done + 1 }));
-            } catch (err) {
-              console.error("Upload failed:", err);
             }
           }
         };
 
         await Promise.all([worker(), worker(), worker(), worker()]);
 
-        // Save the keys to the profile
-        await fetch(`/api/profiles/${params.id}/upload-reference`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ s3Keys: uploadedKeys }),
-        });
+        if (uploadedKeys.length > 0) {
+          // Save the keys that actually made it to S3
+          const patchRes = await fetch(
+            `/api/profiles/${params.id}/upload-reference`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ s3Keys: uploadedKeys }),
+            }
+          );
+          if (!patchRes.ok) {
+            throw new Error(`Could not save uploads (HTTP ${patchRes.status})`);
+          }
+        }
+
+        if (failed.length > 0) {
+          setUploadError(
+            `${failed.length} of ${accepted.length} photos failed to upload. Check your network and try again.`
+          );
+        }
 
         await fetchProfile();
-      } catch (err) {
+      } catch (err: any) {
         console.error("Upload error:", err);
+        setUploadError(err?.message || "Upload failed. Please try again.");
       } finally {
         setUploading(false);
         setUploadProgress({ done: 0, total: 0 });
@@ -201,17 +241,17 @@ export default function ProfileDetailPage({
       animate="visible"
       variants={{ visible: { transition: { staggerChildren: 0.08 } } }}
     >
-      <motion.div variants={fadeUp} className="mb-8">
+      <motion.div variants={fadeUp} className="mb-6">
         <Link
           href="/dashboard/profiles"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition mb-4"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition mb-3 font-mono uppercase tracking-wider"
         >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Style Profiles
+          <ArrowLeft className="w-3 h-3" />
+          Style Profiles
         </Link>
 
         <div className="flex items-start justify-between">
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             {editingName ? (
               <input
                 type="text"
@@ -223,23 +263,28 @@ export default function ProfileDetailPage({
                   if (e.key === "Escape") setEditingName(false);
                 }}
                 autoFocus
-                className="text-2xl font-bold bg-transparent border-b border-white/20 focus:border-brand-400 outline-none"
+                className="text-2xl font-semibold tracking-tight bg-transparent border-b border-primary/40 outline-none"
               />
             ) : (
               <button
                 onClick={() => setEditingName(true)}
-                className="text-2xl font-bold hover:text-brand-400 transition text-left"
+                className="text-2xl font-semibold tracking-tight hover:text-primary transition text-left"
               >
                 {profile.name}
               </button>
             )}
-            <p className="text-muted-foreground text-sm mt-1">
-              {refPhotos.length} reference photo
-              {refPhotos.length !== 1 ? "s" : ""}
+            <p className="text-xs text-muted-foreground font-mono mt-1.5 flex items-center gap-2">
+              <span>
+                {refPhotos.length} reference photo
+                {refPhotos.length !== 1 ? "s" : ""}
+              </span>
               {profile.isDefault && (
-                <span className="ml-2 px-2 py-0.5 rounded-md bg-brand-500/20 text-brand-400 text-xs font-medium">
-                  Default
-                </span>
+                <>
+                  <span className="opacity-40">·</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider bg-primary/15 text-primary">
+                    Default
+                  </span>
+                </>
               )}
             </p>
           </div>
@@ -247,7 +292,10 @@ export default function ProfileDetailPage({
       </motion.div>
 
       {/* Learned baseline params */}
-      <motion.div variants={fadeUp} className="grid grid-cols-5 gap-3 mb-8">
+      <motion.div
+        variants={fadeUp}
+        className="grid grid-cols-5 gap-px bg-border rounded-xl overflow-hidden border border-border mb-6"
+      >
         {[
           {
             icon: Thermometer,
@@ -256,10 +304,10 @@ export default function ProfileDetailPage({
               ? `${Math.round(profile.colorTempAvg)}K`
               : "--",
             range: profile.colorTempMin
-              ? `${Math.round(profile.colorTempMin)}–${Math.round(
+              ? `${Math.round(profile.colorTempMin)} to ${Math.round(
                   profile.colorTempMax || 0
                 )}K`
-              : "Not learned yet",
+              : "not learned",
           },
           {
             icon: Sun,
@@ -268,10 +316,10 @@ export default function ProfileDetailPage({
               ? `${Math.round(profile.saturationAvg)}%`
               : "--",
             range: profile.saturationMin
-              ? `${Math.round(profile.saturationMin)}–${Math.round(
+              ? `${Math.round(profile.saturationMin)} to ${Math.round(
                   profile.saturationMax || 0
                 )}%`
-              : "Not learned yet",
+              : "not learned",
           },
           {
             icon: Contrast,
@@ -289,16 +337,25 @@ export default function ProfileDetailPage({
           },
           {
             icon: Ruler,
-            label: "Vertical Tol.",
-            value: `${profile.verticalTolerance.toFixed(1)} deg`,
+            label: "Vertical Tol",
+            value: `${profile.verticalTolerance.toFixed(1)}\u00B0`,
             range: "max deviation",
           },
         ].map((m) => (
-          <div key={m.label} className="glass-card p-4 text-center">
-            <m.icon className="w-4 h-4 text-brand-400 mx-auto mb-2" />
-            <p className="text-lg font-bold">{m.value}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{m.label}</p>
-            <p className="text-xs text-muted-foreground/60 mt-1 truncate">
+          <div
+            key={m.label}
+            className="bg-[hsl(var(--surface-2))] p-4 hairline-top"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                {m.label}
+              </span>
+              <m.icon className="w-3 h-3 text-muted-foreground" strokeWidth={1.75} />
+            </div>
+            <p className="font-mono stat-num text-xl font-semibold">
+              {m.value}
+            </p>
+            <p className="text-[10px] text-muted-foreground/70 mt-1 font-mono truncate">
               {m.range}
             </p>
           </div>
@@ -306,29 +363,44 @@ export default function ProfileDetailPage({
       </motion.div>
 
       {/* Upload zone */}
-      <motion.div variants={fadeUp} className="glass-card p-6 mb-6">
-        <div className="flex items-start gap-4 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-brand-500/20 border border-brand-500/30 flex items-center justify-center shrink-0">
-            <Sparkles className="w-5 h-5 text-brand-400" />
+      <motion.div variants={fadeUp} className="panel hairline-top p-5 mb-5">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-9 h-9 rounded-md bg-primary/10 border border-primary/30 flex items-center justify-center shrink-0">
+            <Sparkles className="w-4 h-4 text-primary" strokeWidth={2.25} />
           </div>
           <div>
-            <h3 className="font-semibold">Reference Photos</h3>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Upload 20-50 of your best, approved photos. AutoQC will analyze
-              them to learn YOUR editing standard. Future QC checks will use
-              these as the baseline.
+            <h3 className="font-medium text-sm">Reference Photos</h3>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+              Upload 20 to 50 of your best, approved photos. AutoQC will
+              analyze them to learn YOUR editing standard. Future QC checks
+              use these as the baseline.
             </p>
           </div>
         </div>
 
+        {uploadError && (
+          <div className="mb-3 rounded-md border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-200 flex items-start gap-2">
+            <span className="font-mono uppercase tracking-wider text-[10px] mt-0.5">
+              Error
+            </span>
+            <span className="flex-1">{uploadError}</span>
+            <button
+              onClick={() => setUploadError(null)}
+              className="text-red-300/70 hover:text-red-200"
+              aria-label="Dismiss error"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
         <div
           {...getRootProps()}
-          className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-300 ${
+          className={`border-2 border-dashed rounded-md p-8 text-center cursor-pointer transition-colors duration-150 ${
             isDragActive
-              ? "border-brand-400 bg-brand-500/10"
+              ? "border-primary/60 bg-primary/[0.04]"
               : uploading
-              ? "border-white/15 bg-white/5 cursor-not-allowed"
-              : "border-white/15 hover:border-white/30 hover:bg-white/5"
+              ? "border-border bg-[hsl(var(--surface-1))] cursor-not-allowed"
+              : "border-border hover:border-primary/30 hover:bg-[hsl(var(--surface-1))]"
           }`}
         >
           <input {...getInputProps()} />
