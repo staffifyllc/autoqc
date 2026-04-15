@@ -562,6 +562,14 @@ export default function PropertyDetailPage({
                 </div>
               )}
 
+              {/* Privacy blur badge */}
+              {(photo as any).issues?.privacy_blurred && (
+                <div className="absolute bottom-2 right-2 px-2 py-1 rounded-lg bg-purple-500/30 border border-purple-500/40 text-purple-300 text-xs font-bold backdrop-blur-sm flex items-center gap-1">
+                  <span>🛡</span>
+                  Privacy
+                </div>
+              )}
+
               {/* QC score */}
               {photo.qcScore !== null && (
                 <div className="absolute bottom-2 left-2 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-sm text-xs font-bold">
