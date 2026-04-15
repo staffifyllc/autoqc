@@ -20,6 +20,7 @@ export interface QCJobMessage {
   photoIds: string[];
   styleProfileId?: string;
   clientProfileId?: string;
+  tier?: "STANDARD" | "PREMIUM";
 }
 
 /**
@@ -37,6 +38,7 @@ export async function enqueueQCJob(job: QCJobMessage): Promise<void> {
       agencyId: job.agencyId,
       photoId,
       clientProfileId: job.clientProfileId,
+      tier: job.tier || "STANDARD",
       totalPhotos: job.photoIds.length,
     }),
     MessageGroupId: photoId, // Different groups = parallel processing

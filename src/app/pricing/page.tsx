@@ -71,6 +71,99 @@ export default function PricingPage() {
             </p>
           </motion.div>
 
+          {/* Property tiers - Standard vs Premium */}
+          <motion.div variants={fadeUp} className="mb-16">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold">Two Property Tiers</h2>
+              <p className="text-sm text-muted-foreground mt-2">
+                Pick per property depending on what you need.
+              </p>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="glass-card p-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold">Standard</h3>
+                  <span className="px-3 py-1 rounded-lg bg-brand-500/15 text-brand-300 text-sm font-bold">
+                    1 credit
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-4">
+                  ~$8-10 per property (credits) or $12 (pay-as-you-go)
+                </p>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+                    9-category QC audit (geometry, exposure, color, etc.)
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+                    Auto-fix verticals, horizon, white balance
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+                    Style profile matching
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+                    Ethics/MLS compliance check
+                  </li>
+                  <li className="flex items-center gap-2 text-muted-foreground/70">
+                    <span className="w-4 h-4 shrink-0 text-center">—</span>
+                    Privacy blur (family photos, etc.)
+                  </li>
+                </ul>
+              </div>
+
+              <div className="glass-card p-6 relative overflow-hidden border-yellow-500/30">
+                <div className="absolute top-0 right-0 px-3 py-1 rounded-bl-lg bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs font-bold">
+                  ★ PREMIUM
+                </div>
+                <div className="flex items-center justify-between mb-3 mt-3">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <span className="text-yellow-300">★</span> Premium
+                  </h3>
+                  <span className="px-3 py-1 rounded-lg bg-yellow-500/20 text-yellow-300 text-sm font-bold">
+                    2 credits
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-4">
+                  ~$16-20 per property (credits) or $20 (pay-as-you-go)
+                </p>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-yellow-400 shrink-0" />
+                    Everything in Standard
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-yellow-400 shrink-0" />
+                    <span className="font-medium">
+                      Auto-blur family photos & personal images
+                    </span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-yellow-400 shrink-0" />
+                    <span className="font-medium">
+                      AI deblur for soft focus photos
+                    </span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-yellow-400 shrink-0" />
+                    Priority processing queue
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-yellow-400 shrink-0" />
+                    Per-client style overrides
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground text-center mt-6">
+              Pick tier per property when creating. Defaults to Standard. You
+              can always upgrade a property to Premium by running QC again in
+              Premium mode.
+            </p>
+          </motion.div>
+
           {/* Two pricing modes */}
           <motion.div variants={fadeUp} className="grid md:grid-cols-2 gap-6 mb-16">
             {/* Credits mode */}

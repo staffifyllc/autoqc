@@ -40,6 +40,7 @@ const statusConfig: Record<
 export default function PropertiesPage() {
   const [showNewProperty, setShowNewProperty] = useState(false);
   const [address, setAddress] = useState("");
+  const [tier, setTier] = useState<"STANDARD" | "PREMIUM">("STANDARD");
   const [creating, setCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -73,7 +74,7 @@ export default function PropertiesPage() {
       const res = await fetch("/api/properties", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address }),
+        body: JSON.stringify({ address, tier }),
       });
       const data = await res.json();
       // Navigate directly to the property detail page (persistent)
@@ -313,6 +314,58 @@ export default function PropertiesPage() {
                   />
                 </div>
 
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Tier
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTier("STANDARD")}
+                      disabled={creating}
+                      className={`p-3 rounded-xl text-left transition ${
+                        tier === "STANDARD"
+                          ? "bg-brand-500/15 border border-brand-500/40"
+                          : "glass hover:bg-white/10"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-semibold">Standard</span>
+                        <span className="text-xs font-bold text-brand-400">
+                          1 credit
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-tight">
+                        9-category QC, auto-fix verticals + color. No privacy
+                        blur.
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTier("PREMIUM")}
+                      disabled={creating}
+                      className={`p-3 rounded-xl text-left transition relative ${
+                        tier === "PREMIUM"
+                          ? "bg-gradient-to-br from-yellow-500/20 to-amber-500/15 border border-yellow-500/40"
+                          : "glass hover:bg-white/10"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-semibold flex items-center gap-1">
+                          <span className="text-yellow-300">★</span> Premium
+                        </span>
+                        <span className="text-xs font-bold text-yellow-300">
+                          2 credits
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-tight">
+                        Everything in Standard + privacy blur (family photos,
+                        kids, diplomas).
+                      </p>
+                    </button>
+                  </div>
+                </div>
+
                 <button
                   onClick={handleCreateProperty}
                   disabled={!address.trim() || creating}
@@ -325,7 +378,8 @@ export default function PropertiesPage() {
                     </>
                   ) : (
                     <>
-                      Create Property
+                      Create{" "}
+                      {tier === "PREMIUM" ? "Premium" : "Standard"} Property
                       <ChevronRight className="w-4 h-4" />
                     </>
                   )}

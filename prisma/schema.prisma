@@ -102,6 +102,9 @@ model Agency {
   // Admin / test mode - bypasses credit checks
   isAdmin            Boolean @default(false)
 
+  // Default tier applied when creating new properties
+  defaultTier        PropertyTier @default(STANDARD)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -192,6 +195,7 @@ model Property {
   clientProfileId String?
   address         String
   status          PropertyStatus @default(PENDING)
+  tier            PropertyTier   @default(STANDARD)
   photoCount      Int      @default(0)
   qcPassCount     Int      @default(0)
   qcFailCount     Int      @default(0)
@@ -213,6 +217,11 @@ enum PropertyStatus {
   REVIEW       // needs human review
   APPROVED     // all photos pass
   PUSHED       // delivered to platform
+}
+
+enum PropertyTier {
+  STANDARD     // 1 credit - full QC, no privacy blur
+  PREMIUM      // 2 credits - everything + privacy blur + AI deblur
 }
 
 model Photo {

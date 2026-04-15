@@ -34,8 +34,24 @@ export const CREDIT_PACKAGES = [
 ];
 
 // Pricing
-export const CREDIT_PRICE_CENTS = 1000; // $10 per credit (cheapest package rate ~$8 at highest tier)
-export const PAYG_PRICE_CENTS = 1200; // $12 per property for pay-as-you-go
+export const CREDIT_PRICE_CENTS = 1000; // $10 per credit
+export const PAYG_STANDARD_CENTS = 1200; // $12 / standard property
+export const PAYG_PREMIUM_CENTS = 2000; // $20 / premium property
+export const PAYG_PRICE_CENTS = PAYG_STANDARD_CENTS; // backward compat
+
+// Credit costs per property tier
+export const CREDITS_PER_PROPERTY = {
+  STANDARD: 1,
+  PREMIUM: 2,
+} as const;
+
+export function creditsForTier(tier: "STANDARD" | "PREMIUM"): number {
+  return CREDITS_PER_PROPERTY[tier] || 1;
+}
+
+export function paygPriceForTier(tier: "STANDARD" | "PREMIUM"): number {
+  return tier === "PREMIUM" ? PAYG_PREMIUM_CENTS : PAYG_STANDARD_CENTS;
+}
 
 /**
  * Check if an agency has sufficient means to process a property.
@@ -98,6 +114,15 @@ export async function chargeForProperty(
     };
   }
 
+  // Determine how many credits this property costs based on tier
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { tier: true },
+  });
+  const tier = (property?.tier || "STANDARD") as "STANDARD" | "PREMIUM";
+  const creditsNeeded = creditsForTier(tier);
+  const paygCents = paygPriceForTier(tier);
+
   // Admin accounts: track usage but don't charge
   if (capability.method === "admin") {
     await prisma.usageRecord.create({
@@ -114,19 +139,33 @@ export async function chargeForProperty(
   }
 
   if (capability.method === "credits") {
-    // Deduct 1 credit
+    // Check they have enough credits for this tier
+    const agency = await prisma.agency.findUnique({
+      where: { id: agencyId },
+      select: { creditBalance: true },
+    });
+    if (!agency || agency.creditBalance < creditsNeeded) {
+      return {
+        success: false,
+        method: "credits",
+        error: `${tier} tier requires ${creditsNeeded} credits. You have ${
+          agency?.creditBalance || 0
+        }. Buy more credits or switch this property to Standard tier.`,
+      };
+    }
+
     try {
       await prisma.$transaction([
         prisma.agency.update({
           where: { id: agencyId },
-          data: { creditBalance: { decrement: 1 } },
+          data: { creditBalance: { decrement: creditsNeeded } },
         }),
         prisma.creditTransaction.create({
           data: {
             agencyId,
             type: "USAGE",
-            amount: -1,
-            description: `Property processed: ${propertyId}`,
+            amount: -creditsNeeded,
+            description: `${tier} property processed: ${propertyId}`,
           },
         }),
         prisma.usageRecord.create({
@@ -134,9 +173,9 @@ export async function chargeForProperty(
             agencyId,
             propertyId,
             photoCount,
-            tierPrice: CREDIT_PRICE_CENTS,
+            tierPrice: CREDIT_PRICE_CENTS * creditsNeeded,
             billingMode: "CREDITS",
-            creditsUsed: 1,
+            creditsUsed: creditsNeeded,
           },
         }),
       ]);
@@ -145,7 +184,7 @@ export async function chargeForProperty(
       return {
         success: false,
         method: "credits",
-        error: "Failed to deduct credit",
+        error: "Failed to deduct credits",
       };
     }
   }
@@ -167,10 +206,10 @@ export async function chargeForProperty(
       }
 
       const charge = await stripe.paymentIntents.create({
-        amount: PAYG_PRICE_CENTS,
+        amount: paygCents,
         currency: "usd",
         customer: owner.user.stripeCustomerId,
-        description: `AutoQC property processing: ${propertyId}`,
+        description: `AutoQC ${tier} property processing: ${propertyId}`,
         confirm: true,
         off_session: true,
         payment_method: undefined, // Use default
@@ -189,7 +228,7 @@ export async function chargeForProperty(
           agencyId,
           propertyId,
           photoCount,
-          tierPrice: PAYG_PRICE_CENTS,
+          tierPrice: paygCents,
           billingMode: "PAY_AS_YOU_GO",
           creditsUsed: 0,
           stripeChargeId: charge.id,

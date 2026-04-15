@@ -31,7 +31,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const session = await requireAgency();
-    const { address, clientProfileId } = await req.json();
+    const { address, clientProfileId, tier } = await req.json();
 
     if (!address) {
       return NextResponse.json(
@@ -40,11 +40,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Pick tier from request OR agency default
+    let propertyTier: "STANDARD" | "PREMIUM" = "STANDARD";
+    if (tier === "PREMIUM" || tier === "STANDARD") {
+      propertyTier = tier;
+    } else {
+      const agency = await prisma.agency.findUnique({
+        where: { id: session.user.agencyId! },
+        select: { defaultTier: true },
+      });
+      propertyTier = (agency?.defaultTier || "STANDARD") as
+        | "STANDARD"
+        | "PREMIUM";
+    }
+
     const property = await prisma.property.create({
       data: {
         agencyId: session.user.agencyId!,
         address,
         clientProfileId: clientProfileId || null,
+        tier: propertyTier,
       },
     });
 

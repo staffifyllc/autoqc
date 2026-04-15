@@ -179,6 +179,7 @@ def process_photo(
     s3_key: str,
     thresholds: dict,
     all_photo_data: list = None,
+    tier: str = "STANDARD",
 ) -> dict:
     """Run all QC checks on a single photo."""
     local_path = download_photo(s3_key)
@@ -397,26 +398,30 @@ def process_photo(
                     needs_fix = True
             # Below 30 or above 50: don't touch. Too blurry to save or sharp enough.
 
-        # === PRIVACY BLUR (always runs - privacy is non-negotiable) ===
+        # === PRIVACY BLUR (PREMIUM tier only) ===
         # Detects family photos, kids' pics, personal documents, diplomas with names
-        # and applies Gaussian blur to those regions before delivery
-        personal_result = detect_personal_images(local_path)
-        if personal_result.get("has_personal") and personal_result.get("regions"):
-            blurred_path = apply_privacy_blur(local_path, personal_result["regions"])
-            if blurred_path:
-                local_path = blurred_path
-                region_count = len(personal_result["regions"])
-                fixes_applied.append(
-                    f"Privacy blur applied to {region_count} personal item"
-                    + ("s" if region_count != 1 else "")
+        # and applies Gaussian blur to those regions before delivery.
+        # This is a premium feature because each check costs an extra Claude Vision call.
+        if tier == "PREMIUM":
+            personal_result = detect_personal_images(local_path)
+            if personal_result.get("has_personal") and personal_result.get("regions"):
+                blurred_path = apply_privacy_blur(
+                    local_path, personal_result["regions"]
                 )
-                issues["privacy_blurred"] = {
-                    "severity": 0.1,  # Not a defect, just info
-                    "category": "privacy",
-                    "detail": personal_result.get("summary", ""),
-                    "region_count": region_count,
-                }
-                needs_fix = True
+                if blurred_path:
+                    local_path = blurred_path
+                    region_count = len(personal_result["regions"])
+                    fixes_applied.append(
+                        f"Privacy blur applied to {region_count} personal item"
+                        + ("s" if region_count != 1 else "")
+                    )
+                    issues["privacy_blurred"] = {
+                        "severity": 0.1,  # Not a defect, just info
+                        "category": "privacy",
+                        "detail": personal_result.get("summary", ""),
+                        "region_count": region_count,
+                    }
+                    needs_fix = True
 
         # Upload fixed version
         if needs_fix:
@@ -665,6 +670,7 @@ def handler(event, context):
             property_id = body["propertyId"]
             agency_id = body["agencyId"]
             client_profile_id = body.get("clientProfileId")
+            tier = body.get("tier", "STANDARD")
 
             thresholds = get_profile_thresholds(db, agency_id, client_profile_id)
 
@@ -685,7 +691,7 @@ def handler(event, context):
                     continue
 
                 # Process this photo
-                result = process_photo(row[0], row[1], thresholds)
+                result = process_photo(row[0], row[1], thresholds, tier=tier)
                 update_photo_in_db(db, result)
                 db.commit()
 
@@ -744,7 +750,7 @@ def handler(event, context):
                 cursor.close()
 
                 for photo_id, s3_key in photos:
-                    result = process_photo(photo_id, s3_key, thresholds)
+                    result = process_photo(photo_id, s3_key, thresholds, tier=tier)
                     update_photo_in_db(db, result)
 
                 db.commit()

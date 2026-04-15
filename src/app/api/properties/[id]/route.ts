@@ -121,6 +121,7 @@ export async function POST(
         agencyId: session.user.agencyId!,
         photoIds: property.photos.map((p) => p.id),
         clientProfileId: property.clientProfileId || undefined,
+        tier: (property.tier || "STANDARD") as "STANDARD" | "PREMIUM",
       });
 
       return NextResponse.json({
