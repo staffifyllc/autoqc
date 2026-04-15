@@ -2,54 +2,84 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * AutoQC design tokens
+ *
+ * Aesthetic target: sits between Linear, Raycast, and Lightroom.
+ * Dark first, near-black canvas with a slightly warm tint, crisp 1px
+ * hairlines, no heavy backdrop-blur glass, mono numerics for any data.
+ */
+
 @layer base {
   :root {
+    /* Light is rarely used (app forces .dark), kept tonal-neutral. */
     --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    --foreground: 222 14% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 222 14% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 210 100% 45%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
+    --popover-foreground: 222 14% 11%;
+    --primary: 158 85% 38%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 14% 11%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 220 14% 96%;
+    --accent-foreground: 222 14% 11%;
     --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 210 100% 45%;
-    --radius: 0.75rem;
-    --success: 142 71% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 158 85% 38%;
+    --radius: 0.625rem;
+    --success: 158 85% 38%;
     --warning: 38 92% 50%;
+
+    /* Surface elevation tiers (dark only — see .dark below) */
+    --surface-0: 0 0% 100%;
+    --surface-1: 220 14% 96%;
+    --surface-2: 220 14% 91%;
   }
 
   .dark {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 8%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 8%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 100% 55%;
-    --primary-foreground: 222 47% 6%;
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
-    --ring: 210 100% 55%;
-    --success: 142 71% 45%;
-    --warning: 38 92% 50%;
+    /* Near-black canvas, very slight warm tint to read as photographic
+     * rather than synthetic-blue. */
+    --background: 220 12% 5%;
+    --foreground: 30 6% 96%;
+
+    /* Layered surfaces. Hairline borders carry the elevation, not shadow. */
+    --surface-0: 220 12% 5%;   /* page */
+    --surface-1: 220 11% 8%;   /* sidebar / chrome */
+    --surface-2: 220 10% 11%;  /* card / panel */
+    --surface-3: 220 9% 14%;   /* hover / raised */
+
+    --card: 220 10% 11%;
+    --card-foreground: 30 6% 96%;
+    --popover: 220 10% 11%;
+    --popover-foreground: 30 6% 96%;
+
+    /* Single accent: electric green. Reads as "healthy data" / "passed"
+     * and pairs well with photo content. Used for primary CTAs and the
+     * focus ring. */
+    --primary: 152 76% 52%;
+    --primary-foreground: 220 12% 5%;
+
+    --secondary: 220 9% 14%;
+    --secondary-foreground: 30 6% 96%;
+    --muted: 220 9% 14%;
+    --muted-foreground: 220 5% 60%;
+    --accent: 220 9% 14%;
+    --accent-foreground: 30 6% 96%;
+    --destructive: 0 72% 58%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Hairline borders. Slightly warm so they don't read blue. */
+    --border: 220 8% 17%;
+    --input: 220 8% 17%;
+    --ring: 152 76% 52%;
+    --success: 152 76% 52%;
+    --warning: 38 92% 56%;
   }
 }
 
@@ -57,57 +87,158 @@
   * {
     @apply border-border;
   }
+
+  html {
+    scroll-behavior: smooth;
+    /* Don't show the awful pure-white flash when navigating in dark mode */
+    background: hsl(var(--background));
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  /* Tabular numerics by default for any <code>, <kbd>, mono utility. */
+  code,
+  kbd,
+  pre,
+  .font-mono {
+    font-feature-settings: "tnum", "ss01";
+    letter-spacing: -0.01em;
   }
 }
 
 @layer utilities {
+  /* ---- Surfaces ---- */
+
+  /* Flat panel: 1px hairline, no backdrop-blur, no shadow.
+   * This replaces the old glass-card aesthetic. */
+  .panel {
+    @apply rounded-xl border border-border bg-[hsl(var(--surface-2))];
+  }
+
+  .panel-hover {
+    @apply panel transition-colors duration-150 hover:bg-[hsl(var(--surface-3))] hover:border-white/15;
+  }
+
+  /* Sidebar / chrome surface, one notch darker than panels. */
+  .surface-chrome {
+    background: hsl(var(--surface-1));
+  }
+
+  /* Subtle inset top-hairline that reads as soft elevation in dark mode.
+   * Drop it on the top of cards to give them a sense of depth without
+   * resorting to drop shadows. */
+  .hairline-top {
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+  }
+
+  /* ---- Legacy glass aliases ---- */
+  /* Existing components reference .glass / .glass-card / .glass-card-hover.
+   * Map them to the new flat panel system so we don't have to touch every
+   * file in one pass. They'll be removed as components migrate. */
   .glass {
-    @apply bg-white/80 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10;
+    @apply rounded-lg border border-border bg-[hsl(var(--surface-2))];
   }
 
   .glass-card {
-    @apply bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/30 dark:border-white/10 rounded-2xl shadow-lg shadow-black/5 dark:shadow-black/20;
+    @apply panel hairline-top;
   }
 
   .glass-card-hover {
-    @apply glass-card transition-all duration-300 hover:shadow-xl hover:shadow-black/10 dark:hover:shadow-black/30 hover:border-white/40 dark:hover:border-white/20 hover:-translate-y-0.5;
+    @apply panel-hover hairline-top;
+  }
+
+  /* ---- Accent ---- */
+
+  /* Primary CTA. Solid green, no gradient. Subtle inner highlight. */
+  .accent-bg {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.18);
+  }
+
+  /* Legacy gradient alias. Map to the flat accent so existing CTAs
+   * inherit the new look. */
+  .gradient-bg {
+    @apply accent-bg;
   }
 
   .gradient-text {
-    @apply bg-gradient-to-r from-brand-500 to-blue-400 bg-clip-text text-transparent;
+    background: linear-gradient(180deg, hsl(var(--foreground)) 0%, hsl(var(--muted-foreground)) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
-  .gradient-bg {
-    @apply bg-gradient-to-br from-brand-600 via-brand-500 to-blue-400;
-  }
+  /* ---- Glow / focus ---- */
 
+  /* Tight outer halo using the accent. Used sparingly on primary CTAs. */
   .glow {
-    box-shadow: 0 0 40px -10px hsl(var(--primary) / 0.3);
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.35),
+      0 8px 32px -12px hsl(var(--primary) / 0.55);
   }
 
   .glow-sm {
-    box-shadow: 0 0 20px -5px hsl(var(--primary) / 0.2);
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.25),
+      0 4px 16px -8px hsl(var(--primary) / 0.4);
   }
 
+  /* ---- Texture ---- */
+
+  /* Faint dot grid for empty states / hero areas. */
   .dot-pattern {
-    background-image: radial-gradient(circle, hsl(var(--muted-foreground) / 0.15) 1px, transparent 1px);
-    background-size: 24px 24px;
+    background-image: radial-gradient(
+      circle,
+      hsl(var(--muted-foreground) / 0.18) 1px,
+      transparent 1px
+    );
+    background-size: 22px 22px;
   }
 
+  /* Subtle diagonal scanline texture, used at very low opacity on the
+   * dashboard background to add "techy" feel without competing with
+   * content. */
+  .scanlines {
+    background-image: repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.012) 0,
+      rgba(255, 255, 255, 0.012) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+  }
+
+  /* Softer mesh-gradient for hero banners. Less rainbow than before. */
   .mesh-gradient {
     background:
-      radial-gradient(at 27% 37%, hsl(215, 98%, 61%, 0.15) 0px, transparent 50%),
-      radial-gradient(at 97% 21%, hsl(210, 100%, 70%, 0.1) 0px, transparent 50%),
-      radial-gradient(at 52% 99%, hsl(354, 98%, 61%, 0.05) 0px, transparent 50%),
-      radial-gradient(at 10% 29%, hsl(256, 96%, 67%, 0.1) 0px, transparent 50%);
+      radial-gradient(at 20% 10%, hsl(152, 76%, 52%, 0.06) 0px, transparent 50%),
+      radial-gradient(at 80% 20%, hsl(180, 70%, 50%, 0.04) 0px, transparent 50%),
+      radial-gradient(at 50% 100%, hsl(220, 80%, 50%, 0.03) 0px, transparent 50%);
+  }
+
+  /* ---- Numerics / data ---- */
+
+  /* Use on any numeric stat. Slightly tighter tracking, tabular figures. */
+  .stat-num {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  /* ---- Keyboard ---- */
+
+  .kbd {
+    @apply inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded
+           border border-border bg-[hsl(var(--surface-3))]
+           text-[10px] font-mono text-muted-foreground;
   }
 }
 
-/* Custom scrollbar */
+/* ---- Scrollbar ---- */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
@@ -115,20 +246,24 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
-  border-radius: 3px;
+  background: hsl(var(--border));
+  border: 2px solid hsl(var(--background));
+  border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
+  background: hsl(220 6% 30%);
 }
 
-/* Smooth page transitions */
-html {
-  scroll-behavior: smooth;
+/* ---- Selection ---- */
+::selection {
+  background: hsl(var(--primary) / 0.35);
+  color: hsl(var(--foreground));
 }
 
-/* Focus ring */
+/* ---- Focus ring ---- */
 *:focus-visible {
-  @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  @apply outline-none ring-2 ring-ring/60 ring-offset-2 ring-offset-background;
 }
+
+/* Numeric / monospace tracking utility, applied via .font-mono Tailwind. */
