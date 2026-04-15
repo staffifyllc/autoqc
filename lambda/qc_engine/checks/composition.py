@@ -163,7 +163,13 @@ STRUCTURED ACTIONS are what the system executes automatically. Rules:
 - Magnitudes are clamped. Stay conservative: exposure +/- 0.5 max, highlights/shadows/contrast/saturation in -20 to +20 range, temperature/tint in -10 to +10. Real RE adjustments rarely need big moves.
 - Only emit an action when the photo actually needs it. An empty array is a valid answer for a clean photo.
 - Every action MUST have a short "reason" (under 80 chars) so the agent knows why it was applied.
-- "fix_actions" is the human-readable version for the UI. "structured_actions" is what the fixer runs. Keep them consistent; every structured action should have a matching fix_actions line when an adjustment is executed."""
+- "fix_actions" is the human-readable version for the UI. "structured_actions" is what the fixer runs. Keep them consistent; every structured action should have a matching fix_actions line when an adjustment is executed.
+
+ABSOLUTE RULE, NO EXCEPTIONS:
+- NEVER suggest cropping, recomposing, changing framing, zooming, or altering the aspect ratio of the photo.
+- NEVER recommend a "slight crop to center the subject" or "trim the edges" or anything that changes what is included in the frame. The photographer composed the shot intentionally. Composition is not something this tool changes.
+- NEVER suggest rotating the image. Vertical alignment and horizon leveling are already handled automatically by the pipeline in another step. Do not mention them in fix_actions at all.
+- If a photo would benefit from a different composition, say so once in the "analysis" field only. Do NOT put it in fix_actions and do NOT put it in structured_actions."""
 
 
 def _call_with_retry(client, args: dict, max_attempts: int = 5) -> anthropic.types.Message:
@@ -258,13 +264,52 @@ def check_composition(image_path: str) -> dict:
             return _empty_result(f"Could not parse Claude response: {text[:200]}")
 
         # Build output matching what the handler expects
+        raw_fix_actions = parsed.get("fix_actions", []) or []
+        raw_structured = parsed.get("structured_actions", []) or []
+
+        # Hard filter. Cropping and composition changes are never allowed
+        # regardless of what Claude returned. Belt and suspenders behind
+        # the prompt instruction. Keywords cover the common phrasings.
+        _banned_keywords = (
+            "crop", "cropping", "cropped",
+            "recompose", "recomposition",
+            "reframe", "reframing",
+            "trim the edge", "trim edges",
+            "aspect ratio",
+            "zoom in", "zoom out",
+            "tighten the frame", "tighter framing", "tighter frame",
+            "straighten", "rotate", "rotation",
+            "level the horizon", "level horizon",
+        )
+
+        def _is_banned(text: str) -> bool:
+            if not isinstance(text, str):
+                return False
+            low = text.lower()
+            return any(kw in low for kw in _banned_keywords)
+
+        fix_actions = [a for a in raw_fix_actions if not _is_banned(a)]
+
+        # Similarly for structured actions: drop any op this pipeline does
+        # not support. The executor already ignores unknown ops, but
+        # filtering here keeps issues._applied_actions accurate.
+        _supported_ops = {
+            "exposure", "highlights", "shadows", "contrast",
+            "saturation_global", "saturation_channel",
+            "temperature", "tint",
+        }
+        structured_actions = [
+            a for a in raw_structured
+            if isinstance(a, dict) and a.get("op") in _supported_ops
+        ]
+
         output = {
             "full_analysis": parsed,
             "analysis": parsed.get("overall", {}).get("summary", ""),
             "room_type": parsed.get("room_type"),
             "confidence": parsed.get("confidence", 0.8),
-            "fix_actions": parsed.get("fix_actions", []),
-            "structured_actions": parsed.get("structured_actions", []),
+            "fix_actions": fix_actions,
+            "structured_actions": structured_actions,
             "privacy": parsed.get("privacy", {"has_personal": False, "regions": []}),
         }
 
