@@ -221,7 +221,7 @@ export default function LandingPage() {
           >
             <div className="p-3 border-b border-border flex items-center justify-between text-[11px] font-mono uppercase tracking-wider">
               <span className="text-muted-foreground">
-                Privacy blur on framed photos
+                Tilt and warm cast, corrected
               </span>
               <span className="flex items-center gap-1.5 text-primary">
                 <span className="w-1.5 h-1.5 rounded-full accent-bg animate-pulse" />
@@ -231,14 +231,14 @@ export default function LandingPage() {
             <ReactCompareSlider
               itemOne={
                 <ReactCompareSliderImage
-                  src="/demos/privacy-before.jpg"
-                  alt="Original interior with visible framed photos"
+                  src="/demos/hero-before.jpg"
+                  alt="Living room with a yellow color cast and slight tilt, raw camera output"
                 />
               }
               itemTwo={
                 <ReactCompareSliderImage
-                  src="/demos/privacy-after.jpg"
-                  alt="Same interior after AutoQC privacy blur"
+                  src="/demos/hero-after.jpg"
+                  alt="Same living room after AutoQC, with verticals straightened and color neutralized"
                 />
               }
               className="max-h-[70vh]"
@@ -320,7 +320,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Verticals demo */}
+      {/* Kitchen color-temperature demo */}
       <section className="py-20 px-6 border-t border-border">
         <div className="max-w-5xl mx-auto">
           <motion.div
@@ -334,14 +334,23 @@ export default function LandingPage() {
               variants={fadeUp}
               className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-3"
             >
-              Mechanical corrections
+              Color temperature
             </motion.p>
             <motion.h2
               variants={fadeUp}
               className="text-3xl md:text-4xl font-semibold tracking-tight"
             >
-              Tilt, cast, and exposure, resolved.
+              Tungsten cast, neutralized.
             </motion.h2>
+            <motion.p
+              variants={fadeUp}
+              className="text-muted-foreground mt-3 max-w-2xl"
+            >
+              Mixed interior lighting gives every kitchen a yellow cast.
+              AutoQC reads the scene, pulls the white balance back to
+              neutral, and delivers the clean white cabinets the agent
+              expects to see.
+            </motion.p>
           </motion.div>
 
           <motion.div
@@ -352,19 +361,19 @@ export default function LandingPage() {
             className="panel overflow-hidden"
           >
             <div className="p-3 border-b border-border text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
-              Straightened verticals on a tilted interior
+              Kitchen interior, yellow cast corrected
             </div>
             <ReactCompareSlider
               itemOne={
                 <ReactCompareSliderImage
-                  src="/demos/verticals-before.jpg"
-                  alt="Original tilted interior"
+                  src="/demos/kitchen-before.jpg"
+                  alt="Kitchen interior with yellow tungsten color cast"
                 />
               }
               itemTwo={
                 <ReactCompareSliderImage
-                  src="/demos/verticals-after.jpg"
-                  alt="Interior with verticals straightened"
+                  src="/demos/kitchen-after.jpg"
+                  alt="Same kitchen with white balance neutralized"
                 />
               }
               className="max-h-[70vh]"

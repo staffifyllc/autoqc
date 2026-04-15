@@ -13,7 +13,7 @@ import os
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
-IN_IMG = os.path.join(ROOT, "public", "demos", "privacy-after.jpg")
+IN_IMG = os.path.join(ROOT, "public", "demos", "hero-after.jpg")
 OUT = os.path.join(ROOT, "public", "og.jpg")
 
 W, H = 1200, 630
