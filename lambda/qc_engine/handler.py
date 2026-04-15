@@ -26,6 +26,7 @@ from checks.chromatic_aberration import check_chromatic_aberration
 from checks.window_blowout import check_window_blowout
 from checks.hdr_artifacts import check_hdr_artifacts
 from checks.sky import check_sky
+from checks.distraction_removal import detect_distractions
 
 from fixes.vertical_fix import fix_verticals
 from fixes.color_fix import fix_color
@@ -33,6 +34,7 @@ from fixes.horizon_fix import fix_horizon
 from fixes.sharpness_fix import fix_sharpness
 from fixes.ai_deblur import ai_deblur
 from fixes.blur_personal import apply_privacy_blur
+from fixes.remove_distractions import remove_distractions
 
 s3 = boto3.client("s3")
 BUCKET = os.environ["AWS_S3_BUCKET"]
@@ -179,6 +181,7 @@ def process_photo(
     thresholds: dict,
     all_photo_data: list = None,
     tier: str = "STANDARD",
+    distraction_categories: list = None,
 ) -> dict:
     """Run all QC checks on a single photo."""
     local_path = download_photo(s3_key)
@@ -404,6 +407,58 @@ def process_photo(
                         "region_count": region_count,
                     }
                     needs_fix = True
+
+        # === DISTRACTION REMOVAL (PREMIUM tier only, opt-in categories) ===
+        # Detects transient clutter (trash bins, hoses, toys, cables) and
+        # inpaints them out with LaMa. Only runs when the property has an
+        # explicit non-empty category list. Risky categories (cars,
+        # satellite dishes, power lines) have to be opted into from the UI.
+        if tier == "PREMIUM" and distraction_categories:
+            dist_result = detect_distractions(local_path, distraction_categories)
+            dist_regions = dist_result.get("regions", [])
+            if dist_result.get("has_distractions") and dist_regions:
+                cleaned_path = remove_distractions(local_path, dist_regions)
+                if cleaned_path:
+                    local_path = cleaned_path
+                    per_type_counts: dict = {}
+                    for r in dist_regions:
+                        t = r.get("type", "distraction")
+                        per_type_counts[t] = per_type_counts.get(t, 0) + 1
+                    count = len(dist_regions)
+                    fixes_applied.append(
+                        f"Removed {count} distraction"
+                        + ("s" if count != 1 else "")
+                    )
+                    issues["distractions_removed"] = {
+                        "severity": 0.1,
+                        "category": "distraction_removal",
+                        "detail": dist_result.get("summary", ""),
+                        "region_count": count,
+                        "per_type": per_type_counts,
+                        # Keep bbox + type so the UI can list them; drop the
+                        # heavy base64 mask payloads so the Photo.issues
+                        # JSONB row stays small.
+                        "regions": [
+                            {
+                                "type": r.get("type"),
+                                "description": r.get("description"),
+                                "bbox": r.get("bbox"),
+                                "confidence": r.get("confidence"),
+                            }
+                            for r in dist_regions
+                        ],
+                    }
+                    needs_fix = True
+            elif dist_result.get("regions") is not None:
+                # Detection ran, found nothing. Leave a small breadcrumb
+                # so the UI can show "checked, nothing to remove" instead
+                # of staying silent. No severity.
+                issues["distractions_checked"] = {
+                    "severity": 0,
+                    "category": "distraction_removal",
+                    "detail": dist_result.get("summary", "No distractions found"),
+                    "region_count": 0,
+                }
 
         # Upload fixed version
         if needs_fix:
@@ -656,6 +711,19 @@ def handler(event, context):
 
             thresholds = get_profile_thresholds(db, agency_id, client_profile_id)
 
+            # Fetch the property's enabled distraction categories (Premium
+            # only). Empty array means skip the distraction step.
+            distraction_categories: list = []
+            cursor = db.cursor()
+            cursor.execute(
+                'SELECT "distractionCategories" FROM "Property" WHERE id = %s',
+                (property_id,),
+            )
+            prop_row = cursor.fetchone()
+            cursor.close()
+            if prop_row and prop_row[0]:
+                distraction_categories = list(prop_row[0])
+
             if mode == "photo":
                 # Single photo processing (parallel mode)
                 photo_id = body["photoId"]
@@ -673,7 +741,13 @@ def handler(event, context):
                     continue
 
                 # Process this photo
-                result = process_photo(row[0], row[1], thresholds, tier=tier)
+                result = process_photo(
+                    row[0],
+                    row[1],
+                    thresholds,
+                    tier=tier,
+                    distraction_categories=distraction_categories,
+                )
                 update_photo_in_db(db, result)
                 db.commit()
 
@@ -732,7 +806,13 @@ def handler(event, context):
                 cursor.close()
 
                 for photo_id, s3_key in photos:
-                    result = process_photo(photo_id, s3_key, thresholds, tier=tier)
+                    result = process_photo(
+                        photo_id,
+                        s3_key,
+                        thresholds,
+                        tier=tier,
+                        distraction_categories=distraction_categories,
+                    )
                     update_photo_in_db(db, result)
 
                 db.commit()
