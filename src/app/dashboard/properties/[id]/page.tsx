@@ -21,6 +21,8 @@ import {
 import { ReactCompareSlider, ReactCompareSliderImage } from "react-compare-slider";
 import { PhotoUploader } from "@/components/upload/PhotoUploader";
 import { downloadPhotoZip, downloadFile } from "@/lib/photoZip";
+import { DistractionCategoriesPanel } from "@/components/dashboard/DistractionCategoriesPanel";
+import { prettyDistractionLabel } from "@/lib/distractionCategories";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -689,6 +691,69 @@ export default function PropertyDetailPage({
         );
       })()}
 
+      {/* Distractions Removed - Premium feature summary */}
+      {(() => {
+        // Aggregate per-type counts across all photos.
+        const perType: Record<string, number> = {};
+        let photosTouched = 0;
+        let totalRegions = 0;
+        property.photos.forEach((p: Photo) => {
+          const d = (p as any).issues?.distractions_removed;
+          if (!d) return;
+          photosTouched += 1;
+          totalRegions += d.region_count || 0;
+          const pt: Record<string, number> = d.per_type || {};
+          Object.entries(pt).forEach(([k, v]) => {
+            perType[k] = (perType[k] || 0) + (v as number);
+          });
+        });
+        if (totalRegions === 0) return null;
+
+        return (
+          <motion.div variants={fadeUp} className="panel hairline-top p-5 mb-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                  Distractions Removed
+                </p>
+                <p className="text-xs text-muted-foreground/80 mt-0.5">
+                  AI detected and inpainted transient clutter from the listing
+                  photos.
+                </p>
+              </div>
+              <span className="text-[10px] font-mono text-muted-foreground/70">
+                {totalRegions} item{totalRegions !== 1 ? "s" : ""} ·{" "}
+                {photosTouched} photo{photosTouched !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(perType).map(([cat, count]) => (
+                <div
+                  key={cat}
+                  className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded border border-emerald-500/25 bg-emerald-500/5"
+                >
+                  <span className="font-mono stat-num text-xs font-semibold text-emerald-300">
+                    {count}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {prettyDistractionLabel(cat)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        );
+      })()}
+
+      {/* Distraction removal settings + Standard-tier upsell */}
+      <DistractionSettings
+        propertyId={params.id}
+        tier={property.tier}
+        initial={(property as any).distractionCategories || []}
+        photos={property.photos}
+        onChanged={fetchProperty}
+      />
+
       {/* Filter tabs */}
       <motion.div variants={fadeUp} className="mb-5">
         <div className="inline-flex items-center gap-1 p-0.5 rounded-md bg-[hsl(var(--surface-2))] border border-border">
@@ -812,6 +877,15 @@ export default function PropertyDetailPage({
                 <div className="absolute bottom-2 right-2 px-2 py-1 rounded-lg bg-purple-500/30 border border-purple-500/40 text-purple-300 text-xs font-bold backdrop-blur-sm flex items-center gap-1">
                   <span>🛡</span>
                   Privacy
+                </div>
+              )}
+
+              {/* Distractions removed badge */}
+              {(photo as any).issues?.distractions_removed?.region_count >
+                0 && (
+                <div className="absolute bottom-2 right-2 px-2 py-1 rounded-lg bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 text-xs font-bold backdrop-blur-sm flex items-center gap-1 font-mono">
+                  {(photo as any).issues.distractions_removed.region_count}{" "}
+                  cleaned
                 </div>
               )}
 
@@ -1317,6 +1391,119 @@ export default function PropertyDetailPage({
           </motion.div>
         )}
       </AnimatePresence>
+    </motion.div>
+  );
+}
+
+function DistractionSettings({
+  propertyId,
+  tier,
+  initial,
+  photos,
+  onChanged,
+}: {
+  propertyId: string;
+  tier: string;
+  initial: string[];
+  photos: any[];
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string[]>(initial || []);
+  const [saving, setSaving] = useState(false);
+
+  const enabled = tier === "PREMIUM";
+
+  // Count distractions the detector found (Standard tier uses this for
+  // the upsell nudge when the property is later upgraded).
+  const detectedCount = photos.reduce((acc, p) => {
+    return acc + ((p?.issues?.distractions_removed?.region_count as number) || 0);
+  }, 0);
+
+  const dirty =
+    JSON.stringify([...selected].sort()) !==
+    JSON.stringify([...(initial || [])].sort());
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ distractionCategories: selected }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to save categories");
+        return;
+      }
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <motion.div variants={fadeUp} className="mb-5">
+      {/* Gentle Standard-tier upsell when distractions would have been found */}
+      {tier !== "PREMIUM" && detectedCount > 0 && (
+        <div className="panel hairline-top p-3 mb-3 border-yellow-500/25 bg-yellow-500/5">
+          <p className="text-xs text-yellow-200/90">
+            <span className="font-mono text-yellow-300 mr-1">★</span>
+            Upgrade this property to Premium to automatically remove{" "}
+            <span className="font-mono stat-num font-semibold text-yellow-200">
+              {detectedCount}
+            </span>{" "}
+            detected distraction{detectedCount !== 1 ? "s" : ""}.
+          </p>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground hover:text-foreground transition"
+      >
+        <span>
+          Distraction Removal
+          <span className="ml-2 text-muted-foreground/60">
+            {selected.length} enabled
+          </span>
+        </span>
+        <ChevronDown
+          className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="mt-3 panel hairline-top p-4 space-y-3">
+          <DistractionCategoriesPanel
+            value={selected}
+            onChange={setSelected}
+            disabled={saving}
+            premiumOnly={!enabled}
+            compact
+          />
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setSelected(initial || [])}
+              disabled={saving || !dirty}
+              className="text-[11px] px-3 py-1.5 rounded border border-border bg-[hsl(var(--surface-2))] hover:bg-[hsl(var(--surface-3))] disabled:opacity-50"
+            >
+              Reset
+            </button>
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving || !dirty}
+              className="text-[11px] px-3 py-1.5 rounded accent-bg hover:opacity-90 font-semibold disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
