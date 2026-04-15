@@ -16,10 +16,36 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+const SITE_URL = "https://www.autoqc.io";
+const OG_TITLE = "AutoQC. Real estate photo QC, automated.";
+const OG_DESCRIPTION =
+  "A full shoot, reviewed and edited, before the photographer leaves the driveway. Verticals, color, exposure, privacy blur, and distraction removal. From $8 per property.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "AutoQC - Real estate photo QC, automated",
-  description:
-    "AI-powered quality control for real estate photography. Auto-detect and fix verticals, color, exposure, and more.",
+  description: OG_DESCRIPTION,
+  openGraph: {
+    type: "website",
+    url: SITE_URL,
+    siteName: "AutoQC",
+    title: OG_TITLE,
+    description: OG_DESCRIPTION,
+    images: [
+      {
+        url: "/og.jpg",
+        width: 1200,
+        height: 630,
+        alt: "AutoQC. A full real estate photo shoot, edited before you leave the driveway.",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: OG_TITLE,
+    description: OG_DESCRIPTION,
+    images: ["/og.jpg"],
+  },
 };
 
 export default function RootLayout({
