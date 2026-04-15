@@ -3,192 +3,285 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import {
+  ReactCompareSlider,
+  ReactCompareSliderImage,
+} from "react-compare-slider";
+import {
+  ArrowRight,
+  Ban,
   Camera,
   CheckCircle2,
-  Zap,
-  Shield,
-  BarChart3,
-  ArrowRight,
-  Upload,
+  Ruler,
+  Palette,
   Sparkles,
+  Shield,
+  Trash2,
+  Sun,
+  Aperture,
+  Wand2,
   Eye,
+  Upload,
   Send,
+  Zap,
+  Building2,
 } from "lucide-react";
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 30 },
+  hidden: { opacity: 0, y: 16 },
   visible: { opacity: 1, y: 0 },
 };
+const stagger = { visible: { transition: { staggerChildren: 0.08 } } };
 
-const stagger = {
-  visible: { transition: { staggerChildren: 0.1 } },
-};
+const features = [
+  {
+    icon: Ruler,
+    title: "Vertical straightening",
+    copy: "Every crooked wall, door frame, and window frame auto-corrected.",
+  },
+  {
+    icon: Ruler,
+    title: "Horizon leveling",
+    copy: "Detects tilted shots and rotates them to true level automatically.",
+  },
+  {
+    icon: Palette,
+    title: "White balance correction",
+    copy: "Tungsten, fluorescent, mixed-light casts neutralized cleanly.",
+  },
+  {
+    icon: Sun,
+    title: "Color temperature tuning",
+    copy: "Warms or cools each shot to match a consistent listing look.",
+  },
+  {
+    icon: Sparkles,
+    title: "Exposure, highlights, shadows",
+    copy: "Ceiling blowout pulled back, dark corners lifted, all within safe ranges.",
+  },
+  {
+    icon: Aperture,
+    title: "HSL saturation by color",
+    copy: "Over-greened grass, sunset-orange ceilings, blown-out blues. Fixed per channel.",
+  },
+  {
+    icon: Wand2,
+    title: "AI deblur for soft focus",
+    copy: "NAFNet rescue pass on slightly-soft images when it would otherwise fail QC.",
+  },
+  {
+    icon: Eye,
+    title: "Composition and sharpness audit",
+    copy: "Claude Vision grades nine categories and flags anything a human reviewer would.",
+  },
+  {
+    icon: Shield,
+    title: "Privacy blur",
+    copy: "Framed family photos, kids, diplomas with names. Subtly blurred. Premium tier.",
+    premium: true,
+  },
+  {
+    icon: Trash2,
+    title: "Distraction removal",
+    copy: "Trash bins, hoses, kid toys, cables, photographer reflections. Inpainted out. Premium.",
+    premium: true,
+  },
+  {
+    icon: CheckCircle2,
+    title: "MLS ethics check",
+    copy: "Flags anything that could misrepresent the property before you deliver.",
+  },
+  {
+    icon: Building2,
+    title: "Style profile matching",
+    copy: "Learns your agency look from reference photos and matches every output to it.",
+  },
+];
+
+const neverDos = [
+  "Crop your photos. Composition is yours.",
+  "Change aspect ratio or reframe the shot.",
+  "Fabricate features that do not exist in the house.",
+];
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background overflow-hidden">
+    <div className="min-h-screen bg-background">
       {/* Nav */}
-      <nav className="fixed top-0 w-full z-50 glass border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <nav className="fixed top-0 w-full z-50 border-b border-border/60 bg-background/75 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center">
-              <Camera className="w-4 h-4 text-white" />
+            <div className="w-7 h-7 rounded-md accent-bg flex items-center justify-center">
+              <Camera className="w-3.5 h-3.5 text-black" strokeWidth={2.5} />
             </div>
-            <span className="font-bold text-lg">AutoQC</span>
+            <span className="font-semibold tracking-tight">AutoQC</span>
           </div>
-          <div className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">
-            <a href="#features" className="hover:text-foreground transition">
-              Features
+          <div className="hidden md:flex items-center gap-7 text-[13px] text-muted-foreground font-mono">
+            <a href="#what-it-does" className="hover:text-foreground transition">
+              What it does
             </a>
-            <a href="#how-it-works" className="hover:text-foreground transition">
-              How It Works
+            <a href="#never" className="hover:text-foreground transition">
+              What we never do
             </a>
-            <a href="#pricing" className="hover:text-foreground transition">
+            <a href="#how" className="hover:text-foreground transition">
+              How it works
+            </a>
+            <Link href="/pricing" className="hover:text-foreground transition">
               Pricing
-            </a>
+            </Link>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <Link
               href="/login"
-              className="text-sm text-muted-foreground hover:text-foreground transition"
+              className="text-sm text-muted-foreground hover:text-foreground transition px-3"
             >
-              Sign In
+              Sign in
             </Link>
             <Link
               href="/login"
-              className="text-sm px-4 py-2 rounded-xl gradient-bg text-white font-medium hover:opacity-90 transition glow-sm"
+              className="text-sm px-3.5 py-1.5 rounded-md accent-bg text-black font-medium hover:opacity-90 transition"
             >
-              Get Started
+              Get started
             </Link>
           </div>
         </div>
       </nav>
 
       {/* Hero */}
-      <section className="relative pt-32 pb-20 px-6">
-        <div className="absolute inset-0 mesh-gradient" />
-        <div className="absolute inset-0 dot-pattern opacity-30" />
-
-        <div className="relative max-w-5xl mx-auto text-center">
+      <section className="pt-28 pb-16 px-6">
+        <div className="max-w-5xl mx-auto">
           <motion.div
             initial="hidden"
             animate="visible"
             variants={stagger}
-            className="space-y-6"
+            className="text-center space-y-6"
           >
             <motion.div
               variants={fadeUp}
-              transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass text-sm text-muted-foreground"
+              className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border text-[11px] font-mono uppercase tracking-wider text-muted-foreground"
             >
-              <Sparkles className="w-4 h-4 text-brand-400" />
-              AI-Powered Quality Control for Real Estate Photography
+              <span className="w-1.5 h-1.5 rounded-full accent-bg" />
+              Built for real estate photo teams
             </motion.div>
 
             <motion.h1
               variants={fadeUp}
-              transition={{ duration: 0.5 }}
-              className="text-5xl md:text-7xl font-bold tracking-tight"
+              className="text-4xl md:text-6xl font-semibold tracking-tight leading-[1.05]"
             >
-              Stop reviewing photos
+              A full shoot, reviewed and edited,
               <br />
-              <span className="gradient-text">manually.</span>
+              <span className="text-primary">
+                before the photographer leaves the driveway.
+              </span>
             </motion.h1>
 
             <motion.p
               variants={fadeUp}
-              transition={{ duration: 0.5 }}
-              className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto"
+              className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed"
             >
-              AutoQC automatically detects crooked verticals, bad color,
-              exposure issues, and more. Fix them instantly. Push to your
-              delivery platform. Done.
+              AutoQC ingests your raw upload, scores every shot across nine
+              categories, fixes the mechanical stuff, blurs the private stuff,
+              and cleans up the distractions. You deliver listing-ready photos
+              without opening Lightroom.
             </motion.p>
 
             <motion.div
               variants={fadeUp}
-              transition={{ duration: 0.5 }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"
+              className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2"
             >
               <Link
                 href="/login"
-                className="group flex items-center gap-2 px-8 py-3.5 rounded-xl gradient-bg text-white font-semibold text-lg hover:opacity-90 transition glow"
+                className="group flex items-center gap-2 px-5 py-2.5 rounded-md accent-bg text-black text-sm font-medium hover:opacity-90 transition"
               >
-                Get Started
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                Get started
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </Link>
-              <Link
-                href="/demo"
-                className="flex items-center gap-2 px-8 py-3.5 rounded-xl glass-card text-foreground font-medium hover:bg-white/10 transition"
+              <a
+                href="#demo"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-md border border-border text-sm font-medium hover:bg-[hsl(var(--surface-2))] transition"
               >
-                <Eye className="w-5 h-5" />
-                Try the Demo
-              </Link>
+                See it work
+              </a>
             </motion.div>
 
             <motion.p
               variants={fadeUp}
-              transition={{ duration: 0.5 }}
-              className="text-sm text-muted-foreground"
+              className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground pt-1"
             >
-              Buy credits from $8/property. No subscriptions.
+              From <span className="stat-num">$8</span>/property. No subscription.
             </motion.p>
           </motion.div>
 
-          {/* Hero image placeholder */}
+          {/* Hero slider */}
           <motion.div
-            initial={{ opacity: 0, y: 50 }}
+            id="demo"
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.4 }}
-            className="mt-16 glass-card p-2 mx-auto max-w-4xl"
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="mt-14 panel overflow-hidden"
           >
-            <div className="aspect-[16/9] rounded-xl bg-gradient-to-br from-brand-950 to-gray-900 flex items-center justify-center overflow-hidden relative">
-              <div className="absolute inset-0 dot-pattern opacity-20" />
-              <div className="relative text-center space-y-4">
-                <div className="flex items-center justify-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-green-500/20 border border-green-500/30 flex items-center justify-center">
-                    <CheckCircle2 className="w-6 h-6 text-green-400" />
-                  </div>
-                  <div className="w-12 h-12 rounded-xl bg-green-500/20 border border-green-500/30 flex items-center justify-center">
-                    <CheckCircle2 className="w-6 h-6 text-green-400" />
-                  </div>
-                  <div className="w-12 h-12 rounded-xl bg-yellow-500/20 border border-yellow-500/30 flex items-center justify-center">
-                    <Zap className="w-6 h-6 text-yellow-400" />
-                  </div>
-                  <div className="w-12 h-12 rounded-xl bg-green-500/20 border border-green-500/30 flex items-center justify-center">
-                    <CheckCircle2 className="w-6 h-6 text-green-400" />
-                  </div>
-                </div>
-                <p className="text-muted-foreground text-sm">
-                  24 of 25 photos passed QC. 1 auto-fixed.
-                </p>
-              </div>
+            <div className="p-3 border-b border-border flex items-center justify-between text-[11px] font-mono uppercase tracking-wider">
+              <span className="text-muted-foreground">
+                Privacy blur on framed photos
+              </span>
+              <span className="flex items-center gap-1.5 text-primary">
+                <span className="w-1.5 h-1.5 rounded-full accent-bg animate-pulse" />
+                LIVE RESULT
+              </span>
+            </div>
+            <ReactCompareSlider
+              itemOne={
+                <ReactCompareSliderImage
+                  src="/demos/privacy-before.jpg"
+                  alt="Original interior with visible framed photos"
+                />
+              }
+              itemTwo={
+                <ReactCompareSliderImage
+                  src="/demos/privacy-after.jpg"
+                  alt="Same interior after AutoQC privacy blur"
+                />
+              }
+              className="max-h-[70vh]"
+            />
+            <div className="px-3 py-2 border-t border-border flex items-center justify-between text-[11px] font-mono text-muted-foreground">
+              <span>← Raw upload</span>
+              <span>Drag to compare</span>
+              <span className="text-primary">AutoQC output →</span>
             </div>
           </motion.div>
         </div>
       </section>
 
-      {/* How it works */}
-      <section id="how-it-works" className="py-24 px-6">
+      {/* What it does */}
+      <section id="what-it-does" className="py-20 px-6 border-t border-border">
         <div className="max-w-6xl mx-auto">
           <motion.div
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true }}
             variants={stagger}
-            className="text-center mb-16"
+            className="max-w-2xl mb-12"
           >
+            <motion.p
+              variants={fadeUp}
+              className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-3"
+            >
+              What it does
+            </motion.p>
             <motion.h2
               variants={fadeUp}
-              className="text-3xl md:text-4xl font-bold"
+              className="text-3xl md:text-4xl font-semibold tracking-tight"
             >
-              Four steps. Zero headaches.
+              Twelve corrections. One upload.
             </motion.h2>
             <motion.p
               variants={fadeUp}
-              className="text-muted-foreground mt-3 max-w-lg mx-auto"
+              className="text-muted-foreground mt-3"
             >
-              Upload your shoot, let AI handle the rest.
+              The checks and fixes below run on every property. Premium-only
+              features are flagged. Nothing is a suggestion. Every recommended
+              adjustment is executed automatically, within safe magnitude caps,
+              before you see the photo.
             </motion.p>
           </motion.div>
 
@@ -197,78 +290,167 @@ export default function LandingPage() {
             whileInView="visible"
             viewport={{ once: true }}
             variants={stagger}
-            className="grid md:grid-cols-4 gap-6"
+            className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"
           >
-            {[
-              {
-                icon: Upload,
-                title: "Upload",
-                desc: "Drag and drop your property photos. We accept RAW, JPEG, TIFF, PNG.",
-                color: "text-blue-400",
-                bg: "bg-blue-500/10 border-blue-500/20",
-              },
-              {
-                icon: Eye,
-                title: "QC Scan",
-                desc: "AI checks verticals, color, exposure, sharpness, and composition in seconds.",
-                color: "text-purple-400",
-                bg: "bg-purple-500/10 border-purple-500/20",
-              },
-              {
-                icon: Sparkles,
-                title: "Auto-Fix",
-                desc: "Crooked verticals get straightened. Bad white balance gets corrected. Automatically.",
-                color: "text-amber-400",
-                bg: "bg-amber-500/10 border-amber-500/20",
-              },
-              {
-                icon: Send,
-                title: "Deliver",
-                desc: "Push approved photos straight to Aryeo, HDPhotoHub, Spiro, or Tonomo.",
-                color: "text-green-400",
-                bg: "bg-green-500/10 border-green-500/20",
-              },
-            ].map((step, i) => (
+            {features.map((f) => (
               <motion.div
-                key={step.title}
+                key={f.title}
                 variants={fadeUp}
-                transition={{ duration: 0.5 }}
-                className="glass-card-hover p-6 text-center space-y-4"
+                className="panel p-5 space-y-3 hover:border-[hsl(var(--accent))]/30 transition-colors"
               >
-                <div className="flex items-center justify-center">
-                  <div
-                    className={`w-14 h-14 rounded-2xl ${step.bg} border flex items-center justify-center`}
-                  >
-                    <step.icon className={`w-6 h-6 ${step.color}`} />
+                <div className="flex items-center justify-between">
+                  <div className="w-9 h-9 rounded-md border border-border bg-[hsl(var(--surface-1))] flex items-center justify-center">
+                    <f.icon className="w-4 h-4 text-primary" strokeWidth={2} />
                   </div>
+                  {f.premium && (
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-yellow-300/80 border border-yellow-300/30 rounded-full px-2 py-0.5">
+                      ★ Premium
+                    </span>
+                  )}
                 </div>
-                <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  Step {i + 1}
+                <div>
+                  <h3 className="font-medium text-sm">{f.title}</h3>
+                  <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+                    {f.copy}
+                  </p>
                 </div>
-                <h3 className="text-xl font-semibold">{step.title}</h3>
-                <p className="text-sm text-muted-foreground">{step.desc}</p>
               </motion.div>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* Features */}
-      <section id="features" className="py-24 px-6 relative">
-        <div className="absolute inset-0 mesh-gradient opacity-50" />
-        <div className="relative max-w-6xl mx-auto">
+      {/* Verticals demo */}
+      <section className="py-20 px-6 border-t border-border">
+        <div className="max-w-5xl mx-auto">
           <motion.div
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true }}
             variants={stagger}
-            className="text-center mb-16"
+            className="mb-8"
           >
+            <motion.p
+              variants={fadeUp}
+              className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-3"
+            >
+              Mechanical corrections
+            </motion.p>
             <motion.h2
               variants={fadeUp}
-              className="text-3xl md:text-4xl font-bold"
+              className="text-3xl md:text-4xl font-semibold tracking-tight"
             >
-              Built for real estate photo teams
+              Tilt, cast, and exposure, resolved.
+            </motion.h2>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="panel overflow-hidden"
+          >
+            <div className="p-3 border-b border-border text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
+              Straightened verticals on a tilted interior
+            </div>
+            <ReactCompareSlider
+              itemOne={
+                <ReactCompareSliderImage
+                  src="/demos/verticals-before.jpg"
+                  alt="Original tilted interior"
+                />
+              }
+              itemTwo={
+                <ReactCompareSliderImage
+                  src="/demos/verticals-after.jpg"
+                  alt="Interior with verticals straightened"
+                />
+              }
+              className="max-h-[70vh]"
+            />
+            <div className="px-3 py-2 border-t border-border flex items-center justify-between text-[11px] font-mono text-muted-foreground">
+              <span>← Raw upload</span>
+              <span>Drag to compare</span>
+              <span className="text-primary">AutoQC output →</span>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* What we never do */}
+      <section id="never" className="py-20 px-6 border-t border-border">
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={stagger}
+            className="text-center mb-10"
+          >
+            <motion.p
+              variants={fadeUp}
+              className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-3"
+            >
+              What we never do
+            </motion.p>
+            <motion.h2
+              variants={fadeUp}
+              className="text-3xl md:text-4xl font-semibold tracking-tight"
+            >
+              The property is the property.
+            </motion.h2>
+            <motion.p
+              variants={fadeUp}
+              className="text-muted-foreground mt-3 max-w-xl mx-auto"
+            >
+              Hard product rules. No exceptions. If we could not do it honestly
+              in the darkroom, we do not do it here.
+            </motion.p>
+          </motion.div>
+
+          <motion.ul
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={stagger}
+            className="space-y-2 max-w-2xl mx-auto"
+          >
+            {neverDos.map((item) => (
+              <motion.li
+                key={item}
+                variants={fadeUp}
+                className="flex items-start gap-3 panel p-4"
+              >
+                <Ban className="w-4 h-4 text-red-400 shrink-0 mt-0.5" strokeWidth={2.5} />
+                <span className="text-sm">{item}</span>
+              </motion.li>
+            ))}
+          </motion.ul>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section id="how" className="py-20 px-6 border-t border-border">
+        <div className="max-w-5xl mx-auto">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={stagger}
+            className="mb-12"
+          >
+            <motion.p
+              variants={fadeUp}
+              className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-3"
+            >
+              How it works
+            </motion.p>
+            <motion.h2
+              variants={fadeUp}
+              className="text-3xl md:text-4xl font-semibold tracking-tight"
+            >
+              Four steps. No manual labor.
             </motion.h2>
           </motion.div>
 
@@ -277,50 +459,48 @@ export default function LandingPage() {
             whileInView="visible"
             viewport={{ once: true }}
             variants={stagger}
-            className="grid md:grid-cols-3 gap-6"
+            className="grid md:grid-cols-4 gap-3"
           >
             {[
               {
-                icon: Shield,
-                title: "Style Profiles",
-                desc: "Upload reference photos. We learn your look. Every shoot is checked against YOUR standard, not a generic one.",
-              },
-              {
-                icon: BarChart3,
-                title: "Client Preferences",
-                desc: "Realtor A wants warm and bright. Realtor B wants moody. Set per-client profiles that override your defaults.",
-              },
-              {
-                icon: Zap,
-                title: "Auto-Corrections",
-                desc: "Verticals straightened. White balance fixed. Exposure normalized. All automatic, all reversible.",
+                icon: Upload,
+                step: "01",
+                title: "Upload",
+                copy: "Drag a shoot in. JPEG, PNG, TIFF.",
               },
               {
                 icon: Eye,
-                title: "AI Composition Check",
-                desc: "Spots visible toilets, photographer reflections, clutter, and cropped fixtures. Things humans miss on photo #47.",
+                step: "02",
+                title: "Scan",
+                copy: "Nine-category QC audit runs on every shot in parallel.",
               },
               {
-                icon: CheckCircle2,
-                title: "Set Consistency",
-                desc: "Detects when one room's color temperature drifts from the rest. Keeps the whole set cohesive.",
+                icon: Zap,
+                step: "03",
+                title: "Fix",
+                copy: "Corrections applied automatically. Recommendations executed, not suggested.",
               },
               {
                 icon: Send,
-                title: "Platform Push",
-                desc: "Connect Aryeo, HDPhotoHub, Spiro, or Tonomo. Approved photos push straight to your delivery platform.",
+                step: "04",
+                title: "Deliver",
+                copy: "Push to Aryeo, HDPhotoHub, Spiro, or Tonomo. Or download the ZIP.",
               },
-            ].map((feature) => (
+            ].map((s) => (
               <motion.div
-                key={feature.title}
+                key={s.step}
                 variants={fadeUp}
-                transition={{ duration: 0.5 }}
-                className="glass-card-hover p-6 space-y-3"
+                className="panel p-5"
               >
-                <feature.icon className="w-6 h-6 text-brand-400" />
-                <h3 className="text-lg font-semibold">{feature.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {feature.desc}
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-mono text-[11px] text-muted-foreground stat-num">
+                    {s.step}
+                  </span>
+                  <s.icon className="w-4 h-4 text-primary" strokeWidth={2} />
+                </div>
+                <h3 className="font-medium text-sm">{s.title}</h3>
+                <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+                  {s.copy}
                 </p>
               </motion.div>
             ))}
@@ -328,28 +508,28 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Pricing */}
-      <section id="pricing" className="py-24 px-6">
+      {/* Pricing tease */}
+      <section className="py-20 px-6 border-t border-border">
         <div className="max-w-4xl mx-auto">
           <motion.div
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true }}
             variants={stagger}
-            className="text-center mb-16"
+            className="mb-10"
           >
-            <motion.h2
-              variants={fadeUp}
-              className="text-3xl md:text-4xl font-bold"
-            >
-              Buy credits. Save more. Use them anytime.
-            </motion.h2>
             <motion.p
               variants={fadeUp}
-              className="text-muted-foreground mt-3"
+              className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-3"
             >
-              1 credit = 1 property. Credits never expire. Or use pay-as-you-go at $12/property.
+              Pricing
             </motion.p>
+            <motion.h2
+              variants={fadeUp}
+              className="text-3xl md:text-4xl font-semibold tracking-tight"
+            >
+              Per property. No subscription.
+            </motion.h2>
           </motion.div>
 
           <motion.div
@@ -357,133 +537,114 @@ export default function LandingPage() {
             whileInView="visible"
             viewport={{ once: true }}
             variants={stagger}
-            className="grid md:grid-cols-4 gap-4"
+            className="grid md:grid-cols-2 gap-3"
           >
-            {[
-              {
-                tier: "Starter",
-                credits: 10,
-                price: 100,
-                perCredit: 10,
-                savings: 0,
-              },
-              {
-                tier: "Professional",
-                credits: 25,
-                price: 225,
-                perCredit: 9,
-                savings: 10,
-              },
-              {
-                tier: "Agency",
-                credits: 50,
-                price: 425,
-                perCredit: 8.5,
-                savings: 15,
-                popular: true,
-              },
-              {
-                tier: "Scale",
-                credits: 100,
-                price: 800,
-                perCredit: 8,
-                savings: 20,
-              },
-            ].map((plan) => (
-              <motion.div
-                key={plan.tier}
-                variants={fadeUp}
-                transition={{ duration: 0.5 }}
-                className={`glass-card-hover p-6 space-y-4 relative ${
-                  plan.popular ? "ring-2 ring-brand-500 glow" : ""
-                }`}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full gradient-bg text-white text-xs font-bold">
-                    Most Popular
-                  </div>
-                )}
-                <div>
-                  <h3 className="font-semibold">{plan.tier}</h3>
-                  {plan.savings > 0 && (
-                    <span className="inline-block mt-1 px-2 py-0.5 rounded-md bg-green-500/20 text-green-400 text-xs font-bold">
-                      Save {plan.savings}%
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-bold">{plan.credits}</span>
-                    <span className="text-xs text-muted-foreground">
-                      credits
-                    </span>
-                  </div>
-                  <p className="text-2xl font-bold mt-2">${plan.price}</p>
-                  <p className="text-xs text-muted-foreground">
-                    ${plan.perCredit.toFixed(2)} per credit
-                  </p>
-                </div>
-                <Link
-                  href="/login"
-                  className={`block text-center py-2.5 rounded-xl font-medium text-sm transition ${
-                    plan.popular
-                      ? "gradient-bg text-white hover:opacity-90"
-                      : "glass hover:bg-white/10"
-                  }`}
-                >
-                  Get Started
-                </Link>
-              </motion.div>
-            ))}
+            <motion.div variants={fadeUp} className="panel p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Standard</h3>
+                <span className="font-mono text-sm stat-num">
+                  $8 to $10<span className="text-muted-foreground">/property</span>
+                </span>
+              </div>
+              <p className="text-[13px] text-muted-foreground leading-relaxed">
+                Color correction, color temperature, vertical straightening,
+                horizon leveling, exposure, sharpness, composition audit, MLS
+                ethics check, style profile matching.
+              </p>
+            </motion.div>
+
+            <motion.div
+              variants={fadeUp}
+              className="panel p-6 border-yellow-300/30"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <span className="text-yellow-300">★</span> Premium
+                </h3>
+                <span className="font-mono text-sm stat-num">
+                  $16 to $20<span className="text-muted-foreground">/property</span>
+                </span>
+              </div>
+              <p className="text-[13px] text-muted-foreground leading-relaxed">
+                Everything in Standard, plus privacy blur on personal photos
+                and AI distraction removal for trash bins, hoses, toys, cables,
+                and photographer reflections.
+              </p>
+            </motion.div>
           </motion.div>
 
-          <p className="text-center text-sm text-muted-foreground mt-8">
-            Or pay-as-you-go at $12/property with a card on file. No subscriptions, no commitments.
-          </p>
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="mt-6 text-center"
+          >
+            <Link
+              href="/pricing"
+              className="text-sm font-medium text-muted-foreground hover:text-primary transition"
+            >
+              See full pricing →
+            </Link>
+          </motion.div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="py-24 px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="max-w-3xl mx-auto text-center glass-card p-12 relative overflow-hidden"
-        >
-          <div className="absolute inset-0 mesh-gradient" />
-          <div className="relative space-y-6">
-            <h2 className="text-3xl md:text-4xl font-bold">
-              Ready to automate your QC?
-            </h2>
-            <p className="text-muted-foreground max-w-lg mx-auto">
-              Join real estate photography agencies that are saving hours per
-              week on quality control.
-            </p>
+      {/* Final CTA */}
+      <section className="py-20 px-6 border-t border-border">
+        <div className="max-w-3xl mx-auto text-center">
+          <motion.h2
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-3xl md:text-4xl font-semibold tracking-tight"
+          >
+            Ship the shoot before you drive back.
+          </motion.h2>
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.1 }}
+            className="text-muted-foreground mt-3"
+          >
+            Create an account in a minute. Upload your first property. See what
+            every listing could look like.
+          </motion.p>
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.15 }}
+            className="mt-7"
+          >
             <Link
               href="/login"
-              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl gradient-bg text-white font-semibold text-lg hover:opacity-90 transition glow"
+              className="group inline-flex items-center gap-2 px-6 py-3 rounded-md accent-bg text-black font-medium hover:opacity-90 transition"
             >
-              Get Started
-              <ArrowRight className="w-5 h-5" />
+              Get started
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </Link>
-          </div>
-        </motion.div>
+          </motion.div>
+        </div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border py-12 px-6">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+      <footer className="py-10 px-6 border-t border-border">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-[11px] font-mono text-muted-foreground">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md gradient-bg flex items-center justify-center">
-              <Camera className="w-3 h-3 text-white" />
+            <div className="w-5 h-5 rounded accent-bg flex items-center justify-center">
+              <Camera className="w-3 h-3 text-black" strokeWidth={2.5} />
             </div>
-            <span className="font-semibold text-sm">AutoQC</span>
+            <span>AUTOQC</span>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Built for real estate photography teams.
-          </p>
+          <div className="flex items-center gap-6">
+            <Link href="/pricing" className="hover:text-foreground transition">
+              Pricing
+            </Link>
+            <Link href="/login" className="hover:text-foreground transition">
+              Sign in
+            </Link>
+          </div>
         </div>
       </footer>
     </div>
