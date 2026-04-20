@@ -1,102 +1,107 @@
-# PhotoQC Setup Guide
+# AutoQC Setup Guide
 
-## Prerequisites
+This is the local development guide. If you're joining the project for the first time, this gets you from `git clone` to a running `localhost:3000` with the same stack production uses.
 
-1. **Node.js** (v18+) - Install via Homebrew:
-   ```bash
-   brew install node
-   ```
+> **Already collaborating?** Read [CONTRIBUTING.md](./CONTRIBUTING.md) for the branch + Pull Request flow before writing any code.
 
-2. **AWS Account** with:
-   - S3 bucket created
-   - SQS queue created
-   - Lambda functions deployed
-   - RDS PostgreSQL database
+## Production at a glance
 
-3. **Stripe Account** for billing
-
-4. **Anthropic API Key** for Claude Vision QC checks
+- **Live URL:** https://www.autoqc.io
+- **Hosting:** Vercel (project `staffifyllcs-projects/autoqc`). Any push to `main` auto-deploys.
+- **Repo:** https://github.com/staffifyllc/autoqc
+- **Backend:** AWS (RDS PostgreSQL, S3, SQS, Lambda)
+- **AI:** Anthropic Claude (composition vision), Replicate (deblur, distraction removal)
 
 ---
 
-## Quick Start
+## Prerequisites
 
-### 1. Install dependencies
+1. **Node.js 18+**
+   ```bash
+   brew install node
+   node --version   # should be v18 or higher
+   ```
+
+2. **Git + a GitHub account with access to this repo**
+   Ask Paul to add you as a collaborator at https://github.com/staffifyllc/autoqc/settings/access
+
+3. **A Vercel account invited to the team**
+   Ask Paul to invite you to `staffifyllcs-projects` so you can see deployments and preview URLs.
+
+4. **`.env.local` secrets** — Paul will share these privately. Never commit them.
+
+5. **Optional:** AWS credentials if you'll be touching Lambda or S3 directly. Not needed for frontend work.
+
+---
+
+## First-time setup
+
+### 1. Clone and install
+
 ```bash
-cd photoqc
+git clone https://github.com/staffifyllc/autoqc.git
+cd autoqc
 npm install
 ```
 
 ### 2. Set up environment
+
 ```bash
-cp .env.example .env
-# Edit .env with your actual values
+cp .env.example .env.local
+# Edit .env.local with the real values Paul sent you
 ```
 
-### 3. Set up database
-```bash
-# Push schema to your PostgreSQL database
-npx prisma db push
+See `.env.example` for the full list of required variables. Minimum to run locally:
+- `DATABASE_URL` — points to the prod RDS (read-only use preferred) or a local Postgres
+- `NEXTAUTH_SECRET` — generate with `openssl rand -base64 32`
+- `NEXTAUTH_URL` — `http://localhost:3000` for local dev
+- `AWS_*` — S3 + SQS credentials
+- `ANTHROPIC_API_KEY` — Claude vision
+- `STRIPE_*` — billing
 
-# Generate Prisma client
+### 3. Generate the Prisma client
+
+```bash
 npx prisma generate
 ```
 
+If you're using a local Postgres instead of the prod RDS:
+
+```bash
+npx prisma db push
+```
+
 ### 4. Run locally
+
 ```bash
 npm run dev
-# Open http://localhost:3000
 ```
+
+Open http://localhost:3000.
 
 ---
 
-## AWS Setup
+## How production is set up (reference, not setup steps)
 
-### S3 Bucket
-```bash
-aws s3 mb s3://photoqc-uploads --region us-east-1
-```
+You don't need to set any of this up — it's already live. This section documents what exists so you don't get confused reading the code.
 
-CORS config for the bucket (needed for direct browser uploads):
-```json
-[
-  {
-    "AllowedHeaders": ["*"],
-    "AllowedMethods": ["PUT", "GET"],
-    "AllowedOrigins": ["http://localhost:3000", "https://yourdomain.com"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3000
-  }
-]
-```
+### Vercel (frontend)
 
-### SQS Queue
-```bash
-aws sqs create-queue --queue-name photoqc-jobs.fifo --attributes FifoQueue=true,ContentBasedDeduplication=true
-```
+- Project: `staffifyllcs-projects/autoqc`, linked to this repo.
+- Every push to `main` triggers a production deploy to autoqc.io.
+- Every branch push triggers a preview deploy at `autoqc-<branch>-staffifyllcs-projects.vercel.app`.
+- Env vars live in the Vercel dashboard, not in any file here.
 
-### RDS PostgreSQL
-- Create a db.t3.micro instance
-- Database name: photoqc
-- Save the connection string for DATABASE_URL
+### AWS
 
-### Lambda Functions
-Two Lambda functions needed:
+- **S3 bucket** `photoqc-uploads` — raw uploads, fixed outputs, reference photos
+- **SQS FIFO queue** `photoqc-jobs.fifo` — QC job queue
+- **Lambda `photoqc-engine`** (Python 3.12, 1024 MB, 300s timeout) — consumes SQS, runs QC, writes fixed outputs to S3
+- **Lambda `photoqc-profile-learner`** — analyzes style profile reference photos
+- **RDS PostgreSQL** `photoqc-db` in us-east-1 — all app data
 
-1. **photoqc-engine** - Main QC processor
-   - Runtime: Python 3.12
-   - Memory: 1024 MB
-   - Timeout: 300 seconds
-   - Trigger: SQS queue
-   - Code: `lambda/qc_engine/`
+### Lambda deploy (only do this when you've changed `lambda/`)
 
-2. **photoqc-profile-learner** - Style profile learning
-   - Runtime: Python 3.12
-   - Memory: 512 MB
-   - Timeout: 300 seconds
-   - Code: `lambda/qc_engine/profile_learning.py`
-
-Deploy Lambda:
 ```bash
 cd lambda/qc_engine
 pip install -r requirements.txt -t .
@@ -104,35 +109,31 @@ zip -r function.zip .
 aws lambda update-function-code --function-name photoqc-engine --zip-file fileb://function.zip
 ```
 
-### Frontend Deployment (AWS Amplify)
-```bash
-# Connect your git repo to Amplify
-# Build command: npm run build
-# Output directory: .next
-```
+> **Heads up:** Only one person should push Lambda updates at a time. Coordinate with your teammate before deploying.
 
 ---
 
-## Environment Variables
+## Environment variables
 
 | Variable | Description |
 |----------|-------------|
-| DATABASE_URL | PostgreSQL connection string |
-| NEXTAUTH_URL | Your app URL (http://localhost:3000 for dev) |
-| NEXTAUTH_SECRET | Random secret (generate with: openssl rand -base64 32) |
-| AWS_REGION | AWS region (us-east-1) |
-| AWS_ACCESS_KEY_ID | AWS credentials |
-| AWS_SECRET_ACCESS_KEY | AWS credentials |
-| AWS_S3_BUCKET | S3 bucket name |
-| AWS_SQS_QUEUE_URL | SQS queue URL |
-| ANTHROPIC_API_KEY | For Claude Vision composition checks |
-| STRIPE_SECRET_KEY | Stripe secret key |
-| STRIPE_PUBLISHABLE_KEY | Stripe publishable key |
-| STRIPE_WEBHOOK_SECRET | Stripe webhook signing secret |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `NEXTAUTH_URL` | App URL (`http://localhost:3000` for dev) |
+| `NEXTAUTH_SECRET` | Random secret (`openssl rand -base64 32`) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth (optional) |
+| `AWS_REGION` | `us-east-1` |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | AWS credentials |
+| `AWS_S3_BUCKET` | S3 bucket name |
+| `AWS_SQS_QUEUE_URL` | SQS queue URL |
+| `ANTHROPIC_API_KEY` | Claude Vision composition checks |
+| `REPLICATE_API_TOKEN` | AI deblur + distraction removal (optional) |
+| `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY` / `STRIPE_WEBHOOK_SECRET` | Billing |
+| `STRIPE_PRICE_ID_BASE` / `_MEDIUM` / `_LARGE` | Pricing tier IDs |
+| `ARYEO_API_KEY` / `HDPHOTOHUB_API_KEY` / `DROPBOX_APP_KEY` / `DROPBOX_APP_SECRET` | Platform integrations |
 
 ---
 
-## Project Structure
+## Project structure
 
 ```
 photoqc/
@@ -147,13 +148,15 @@ photoqc/
 │   │   │   ├── properties/     # Property management + QC review
 │   │   │   ├── profiles/       # Style profiles + clients
 │   │   │   ├── integrations/   # Platform connections
-│   │   │   └── billing/        # Usage and payment
+│   │   │   ├── billing/        # Usage and payment
+│   │   │   └── admin/          # Internal admin dashboard
 │   │   └── api/                # API routes
 │   │       ├── auth/           # NextAuth
 │   │       ├── upload/         # S3 presigned URLs
 │   │       ├── properties/     # CRUD + QC triggers
 │   │       ├── profiles/       # Style + client profiles
 │   │       ├── integrations/   # Connect + push
+│   │       ├── onboarding/     # Onboarding flow + welcome-bonus credits
 │   │       └── webhooks/       # Stripe webhooks
 │   ├── components/             # React components
 │   │   ├── upload/             # Photo uploader
@@ -164,6 +167,7 @@ photoqc/
 │       ├── s3.ts               # S3 operations
 │       ├── sqs.ts              # Job queue
 │       ├── stripe.ts           # Billing
+│       ├── credits.ts          # Credit model
 │       └── integrations/       # Platform push clients
 │           ├── aryeo.ts
 │           ├── hdphotohub.ts
@@ -178,7 +182,7 @@ photoqc/
 │       │   ├── color.py        # Color temp + white balance
 │       │   ├── exposure.py     # Over/under exposure
 │       │   ├── sharpness.py    # Focus quality
-│       │   ├── composition.py  # AI (Claude Vision) semantic check
+│       │   ├── composition.py  # AI (Claude Vision) semantic check + room type
 │       │   ├── consistency.py  # Set-wide style drift
 │       │   ├── lens_distortion.py
 │       │   ├── chromatic_aberration.py
@@ -189,8 +193,12 @@ photoqc/
 │           ├── vertical_fix.py
 │           ├── color_fix.py
 │           └── horizon_fix.py
-└── prisma/
-    └── schema.prisma           # Database schema
+├── prisma/
+│   └── schema.prisma           # Database schema
+└── scripts/
+    ├── grant-credits.sh        # Grant test credits to a user's agency
+    ├── deploy-lambda.sh        # Lambda deploy helper
+    └── ...
 ```
 
 ---
@@ -209,5 +217,40 @@ photoqc/
 | 8 | HDR artifacts | Halo + flat tonemap detection | No |
 | 9 | Sky quality | HSV sky analysis + edge artifacts | No |
 | 10 | Lens distortion | Edge line curvature | No |
-| 11 | Composition (AI) | Claude Vision semantic analysis | No |
+| 11 | Composition (AI) | Claude Vision semantic analysis + room type | No |
 | 12 | Set consistency | Cross-photo metric comparison | No |
+
+---
+
+## Common commands
+
+```bash
+# Dev server
+npm run dev
+
+# Build (what Vercel runs)
+npm run build
+
+# TypeScript check (no build)
+./node_modules/.bin/next build   # full build, surfaces type errors
+npx tsc --noEmit                  # type-check only
+
+# Prisma
+npx prisma generate               # regenerate client after schema change
+npx prisma db push                # push schema to your DATABASE_URL
+npx prisma studio                 # visual DB browser at localhost:5555
+
+# Lambda deploy (coordinate first)
+./scripts/deploy-lambda.sh
+
+# Grant test credits
+./scripts/grant-credits.sh <email> <credit_count>
+```
+
+---
+
+## Getting help
+
+- Check `NIGHT_NOTES.md` and `NIGHT_CHANGES.md` for recent session summaries.
+- See `CONTRIBUTING.md` for the branch + PR workflow.
+- If you're stuck, open a draft PR early and ask for feedback.
