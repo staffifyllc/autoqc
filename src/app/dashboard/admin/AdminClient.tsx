@@ -6,12 +6,12 @@ import Link from "next/link";
 import {
   Users,
   Home,
-  Image as ImageIcon,
   DollarSign,
   TrendingUp,
   Clock,
   ShieldAlert,
 } from "lucide-react";
+import OrdersTab from "./OrdersTab";
 
 type Row = {
   id: string;
@@ -54,6 +54,8 @@ type Data = {
   events: Event[];
   generatedAt: string;
 };
+
+type Tab = "usage" | "orders";
 
 function relTime(iso: string | null): string {
   if (!iso) return "never";
@@ -100,7 +102,63 @@ function status(r: Row): { label: string; tone: string } {
   };
 }
 
-export default function AdminUsagePage() {
+export default function AdminClient() {
+  const [tab, setTab] = useState<Tab>("usage");
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-1">
+          WORKSPACE · ADMIN
+        </p>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {tab === "usage" ? "Platform usage" : "Orders"}
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          {tab === "usage"
+            ? "Who has signed up and who is actually using AutoQC. Live, refreshes every 20 seconds."
+            : "Every property ever submitted for QC, newest first."}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-1 border-b border-border">
+        <TabButton active={tab === "usage"} onClick={() => setTab("usage")}>
+          Platform usage
+        </TabButton>
+        <TabButton active={tab === "orders"} onClick={() => setTab("orders")}>
+          Orders
+        </TabButton>
+      </div>
+
+      {tab === "usage" ? <UsagePanel /> : <OrdersTab />}
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${
+        active
+          ? "border-primary text-foreground"
+          : "border-transparent text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function UsagePanel() {
   const [data, setData] = useState<Data | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -156,24 +214,10 @@ export default function AdminUsagePage() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-8"
     >
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-1">
-            WORKSPACE · ADMIN
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Platform usage
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Who has signed up and who is actually using AutoQC. Live, refreshes
-            every 20 seconds.
-          </p>
-        </div>
-        <p className="text-[11px] font-mono text-muted-foreground">
-          <Clock className="w-3 h-3 inline mr-1" />
-          Updated {relTime(data.generatedAt)}
-        </p>
-      </div>
+      <p className="text-[11px] font-mono text-muted-foreground text-right">
+        <Clock className="w-3 h-3 inline mr-1" />
+        Updated {relTime(data.generatedAt)}
+      </p>
 
       {/* Top stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
