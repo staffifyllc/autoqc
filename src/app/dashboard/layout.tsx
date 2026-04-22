@@ -43,6 +43,7 @@ const navSections: Array<{
     items: [
       { href: "/dashboard/credits", label: "Credits", icon: Coins },
       { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
+      { href: "/dashboard/account", label: "Password", icon: Settings },
     ],
   },
 ];

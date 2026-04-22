@@ -3,77 +3,66 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import GoogleProvider from "next-auth/providers/google";
 import EmailProvider from "next-auth/providers/email";
 import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
 import { prisma } from "./db";
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
   providers: [
-    // Email + shared access code. Temporary gate until real password auth
-    // ships. Without the env var AUTOQC_LOGIN_ACCESS_CODE set, this provider
-    // refuses all logins (fail-closed) so misconfiguration can't silently
-    // revert to the prior no-auth behavior.
+    // Email + password. Rejects the login if the user has no passwordHash
+    // on file. Existing users without a password must have one assigned
+    // via scripts/set-user-password.ts (admin action) before they can log
+    // in. Self-service password reset via email will be added in a
+    // follow-up PR once SMTP is configured.
     CredentialsProvider({
       id: "dev-login",
-      name: "Access Code Login",
+      name: "Email and Password",
       credentials: {
         email: { label: "Email", type: "email" },
-        accessCode: { label: "Access code", type: "password" },
-        name: { label: "Name", type: "text" },
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email) return null;
-
-        const required = process.env.AUTOQC_LOGIN_ACCESS_CODE;
-        if (!required) {
-          console.error(
-            "[auth] AUTOQC_LOGIN_ACCESS_CODE is not set. Refusing all logins."
-          );
-          return null;
-        }
-        if (credentials.accessCode !== required) {
-          console.warn(
-            "[auth] Rejected login for %s: wrong or missing access code",
-            credentials.email
-          );
-          return null;
-        }
+        if (!credentials?.email || !credentials.password) return null;
 
         const email = credentials.email.toLowerCase().trim();
-        const name = credentials.name || email.split("@")[0];
 
-        // Find or create user
-        let user = await prisma.user.findUnique({
+        const user = await prisma.user.findUnique({
           where: { email },
-          include: { agencies: { include: { agency: true } } },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            passwordHash: true,
+          },
         });
 
         if (!user) {
-          user = await prisma.user.create({
-            data: { email, name },
-            include: { agencies: { include: { agency: true } } },
-          });
+          // Timing-equalize against the hash-compare path so attackers
+          // cannot distinguish "no such user" from "wrong password".
+          await bcrypt.compare(
+            credentials.password,
+            "$2a$10$abcdefghijklmnopqrstuu.abcdefghijklmnopqrstuvwxyzabcd"
+          );
+          console.warn("[auth] Rejected login for %s: no such user", email);
+          return null;
         }
 
-        // Create agency if none exists
-        if (user.agencies.length === 0) {
-          const agency = await prisma.agency.create({
-            data: {
-              name: `${name}'s Agency`,
-              members: {
-                create: { userId: user.id, role: "owner" },
-              },
-            },
-          });
+        if (!user.passwordHash) {
+          console.warn(
+            "[auth] Rejected login for %s: no password set. Run scripts/set-user-password.ts to assign one.",
+            email
+          );
+          return null;
+        }
 
-          // Create default style profile
-          await prisma.styleProfile.create({
-            data: {
-              agencyId: agency.id,
-              name: "Default Style",
-              isDefault: true,
-            },
-          });
+        const valid = await bcrypt.compare(
+          credentials.password,
+          user.passwordHash
+        );
+        if (!valid) {
+          console.warn("[auth] Rejected login for %s: wrong password", email);
+          return null;
         }
 
         return {

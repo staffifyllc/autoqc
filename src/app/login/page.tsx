@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Camera, Mail, ArrowRight, Loader2, Lock } from "lucide-react";
+import { Camera, ArrowRight, Loader2, Lock } from "lucide-react";
 import { signIn } from "next-auth/react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
-  const [accessCode, setAccessCode] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,26 +17,25 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      // Check if this user already has an agency (returning user vs new)
-      const checkRes = await fetch(
-        `/api/auth/check-user?email=${encodeURIComponent(email)}`
-      );
-      const { hasAgency } = await checkRes.json();
-
       const res = await signIn("dev-login", {
         email,
-        accessCode,
-        name: email.split("@")[0],
+        password,
         redirect: false,
-        callbackUrl: hasAgency ? "/dashboard" : "/onboarding",
       });
+
       if (res?.error || !res?.ok) {
         setError(
-          "Wrong email or access code. Contact your agency admin if you need the access code."
+          "Wrong email or password. If you never set one, contact your agency admin."
         );
         setLoading(false);
         return;
       }
+
+      // Figure out where to go after login
+      const checkRes = await fetch(
+        `/api/auth/check-user?email=${encodeURIComponent(email)}`
+      );
+      const { hasAgency } = await checkRes.json();
       window.location.href = hasAgency ? "/dashboard" : "/onboarding";
     } catch (err) {
       setError("Sign in failed. Try again.");
@@ -60,9 +59,9 @@ export default function LoginPage() {
             <span className="font-bold text-lg">AutoQC</span>
           </Link>
 
-          <h1 className="text-2xl font-bold mb-2">Welcome</h1>
+          <h1 className="text-2xl font-bold mb-2">Welcome back</h1>
           <p className="text-muted-foreground text-sm mb-8">
-            Sign in or create an account to continue.
+            Sign in to your account to continue.
           </p>
 
           <form onSubmit={handleSignIn} className="space-y-4">
@@ -74,6 +73,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition"
                 autoFocus
               />
@@ -82,21 +82,17 @@ export default function LoginPage() {
             <div>
               <label className="text-sm font-medium mb-1.5 block flex items-center gap-1.5">
                 <Lock className="w-3.5 h-3.5" />
-                Access code
+                Password
               </label>
               <input
                 type="password"
-                placeholder="Shared access code"
-                value={accessCode}
-                onChange={(e) => setAccessCode(e.target.value)}
+                placeholder="Your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 required
                 autoComplete="current-password"
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition"
               />
-              <p className="text-xs text-muted-foreground mt-1.5">
-                AutoQC is in private beta. If you do not have an access code,
-                contact your agency admin.
-              </p>
             </div>
 
             {error && (
@@ -107,7 +103,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={loading || !email || !accessCode}
+              disabled={loading || !email || !password}
               className="w-full py-3 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading ? (
@@ -115,15 +111,15 @@ export default function LoginPage() {
               ) : (
                 <>
                   <ArrowRight className="w-4 h-4" />
-                  Continue
+                  Sign in
                 </>
               )}
             </button>
           </form>
 
           <p className="text-xs text-muted-foreground text-center mt-6">
-            New to AutoQC? We&apos;ll walk you through a quick setup after you
-            continue.
+            AutoQC is in private beta. New accounts are created by your agency
+            admin.
           </p>
         </motion.div>
       </div>

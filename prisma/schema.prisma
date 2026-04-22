@@ -17,6 +17,11 @@ model User {
   role            UserRole  @default(OWNER)
   image           String?
   emailVerified   DateTime?
+  // Password auth. Nullable so existing users still exist without a
+  // password; they are blocked from logging in until an admin runs
+  // scripts/set-user-password.ts or they go through a reset flow.
+  passwordHash    String?
+  passwordSetAt   DateTime?
   stripeCustomerId String?
   referralSource  String?   // How they heard about us
   marketingOptIn  Boolean   @default(true)
