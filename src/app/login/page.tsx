@@ -3,15 +3,18 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Camera, Mail, ArrowRight, Loader2 } from "lucide-react";
+import { Camera, Mail, ArrowRight, Loader2, Lock } from "lucide-react";
 import { signIn } from "next-auth/react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
+  const [accessCode, setAccessCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
     try {
       // Check if this user already has an agency (returning user vs new)
@@ -22,15 +25,21 @@ export default function LoginPage() {
 
       const res = await signIn("dev-login", {
         email,
+        accessCode,
         name: email.split("@")[0],
+        redirect: false,
         callbackUrl: hasAgency ? "/dashboard" : "/onboarding",
       });
-      if (res?.error) {
-        alert("Sign in failed: " + res.error);
+      if (res?.error || !res?.ok) {
+        setError(
+          "Wrong email or access code. Contact your agency admin if you need the access code."
+        );
         setLoading(false);
+        return;
       }
+      window.location.href = hasAgency ? "/dashboard" : "/onboarding";
     } catch (err) {
-      alert("Sign in failed");
+      setError("Sign in failed. Try again.");
       setLoading(false);
     }
   };
@@ -70,9 +79,35 @@ export default function LoginPage() {
               />
             </div>
 
+            <div>
+              <label className="text-sm font-medium mb-1.5 block flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5" />
+                Access code
+              </label>
+              <input
+                type="password"
+                placeholder="Shared access code"
+                value={accessCode}
+                onChange={(e) => setAccessCode(e.target.value)}
+                required
+                autoComplete="current-password"
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition"
+              />
+              <p className="text-xs text-muted-foreground mt-1.5">
+                AutoQC is in private beta. If you do not have an access code,
+                contact your agency admin.
+              </p>
+            </div>
+
+            {error && (
+              <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-200 text-xs">
+                {error}
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={loading || !email}
+              disabled={loading || !email || !accessCode}
               className="w-full py-3 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading ? (
