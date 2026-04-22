@@ -90,6 +90,17 @@ def _apply_contrast(img_f32: np.ndarray, amount: float) -> np.ndarray:
 
 
 def _apply_saturation_global(img_f32: np.ndarray, amount: float) -> np.ndarray:
+    # Guard: positive global saturation boosts produce fake-looking skies on
+    # overcast exteriors (a subtle blue tint at the pixel level gets pumped
+    # into aggressive cyan) and violate MLS ethics guidance against
+    # sky replacement / oversaturation. Negative values (pulling overprocessed
+    # photos back toward neutral) are the legitimate use case and still run.
+    if amount > 0:
+        print(
+            f"INFO skipping saturation_global +{amount}: "
+            "positive boosts are blocked to prevent fake-sky artifacts."
+        )
+        return img_f32
     hsv = cv2.cvtColor(img_f32.astype(np.uint8), cv2.COLOR_BGR2HSV).astype(np.float32)
     hsv[..., 1] = hsv[..., 1] * (1.0 + amount / 100.0)
     hsv[..., 1] = np.clip(hsv[..., 1], 0, 255)

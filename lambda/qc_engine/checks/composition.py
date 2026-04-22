@@ -165,6 +165,11 @@ STRUCTURED ACTIONS are what the system executes automatically. Rules:
 - Every action MUST have a short "reason" (under 80 chars) so the agent knows why it was applied.
 - "fix_actions" is the human-readable version for the UI. "structured_actions" is what the fixer runs. Keep them consistent; every structured action should have a matching fix_actions line when an adjustment is executed.
 
+HARD RULES on saturation:
+- NEVER emit a positive saturation_global action. Flat or desaturated looks (common on overcast winter exteriors) are truthful. Pumping global saturation turns subtle blue sky tints into fake cyan skies, which violates MLS sky-replacement ethics and looks amateur. If a scene truly reads as undersaturated, leave it. The system will ignore positive saturation_global values anyway.
+- saturation_global may only be NEGATIVE, and only when the photo is genuinely oversaturated (over-processed look, HDR fantasy, neon greens / cyans).
+- For channel-specific tweaks (e.g. grass that reads too green, hardwood floor that reads too orange), use saturation_channel with a NEGATIVE amount. Keep positive channel saturation off the table for skies, greens, and exteriors in general.
+
 ABSOLUTE RULE, NO EXCEPTIONS:
 - NEVER suggest cropping, recomposing, changing framing, zooming, or altering the aspect ratio of the photo.
 - NEVER recommend a "slight crop to center the subject" or "trim the edges" or anything that changes what is included in the frame. The photographer composed the shot intentionally. Composition is not something this tool changes.
