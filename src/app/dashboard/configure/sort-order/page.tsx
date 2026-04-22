@@ -3,12 +3,28 @@
 import { useEffect, useState } from "react";
 import {
   ArrowDownUp,
-  ChevronUp,
-  ChevronDown,
+  GripVertical,
   Loader2,
   RotateCcw,
   CheckCircle2,
 } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   DEFAULT_PHOTO_SORT_ORDER,
   ROOM_TYPE_LABELS,
@@ -21,6 +37,16 @@ export default function SortOrderPage() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      // Short delay so a casual click on the row does not trigger a drag.
+      activationConstraint: { distance: 4 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     fetch("/api/agency/sort-order")
@@ -59,18 +85,18 @@ export default function SortOrderPage() {
 
   const toggleEnabled = async () => {
     const next = !enabled;
-    setEnabled(next); // optimistic
+    setEnabled(next);
     await save({ autoSortEnabled: next });
   };
 
-  const moveItem = (index: number, delta: -1 | 1) => {
-    const target = index + delta;
-    if (target < 0 || target >= order.length) return;
-    const next = [...order];
-    const tmp = next[index];
-    next[index] = next[target];
-    next[target] = tmp;
-    setOrder(next);
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = order.indexOf(String(active.id));
+    const newIndex = order.indexOf(String(over.id));
+    if (oldIndex < 0 || newIndex < 0) return;
+    const next = arrayMove(order, oldIndex, newIndex);
+    setOrder(next); // optimistic
     save({ photoSortOrder: next });
   };
 
@@ -107,7 +133,6 @@ export default function SortOrderPage() {
         </div>
       )}
 
-      {/* Enable toggle */}
       <section className="panel rounded-xl p-5 border border-white/10 flex items-center justify-between">
         <div>
           <div className="font-medium text-sm">Auto-sort photos</div>
@@ -121,9 +146,7 @@ export default function SortOrderPage() {
           onClick={toggleEnabled}
           disabled={saving}
           className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${
-            enabled
-              ? "bg-brand-500"
-              : "bg-white/10 border border-white/10"
+            enabled ? "bg-brand-500" : "bg-white/10 border border-white/10"
           }`}
           aria-pressed={enabled}
         >
@@ -135,13 +158,12 @@ export default function SortOrderPage() {
         </button>
       </section>
 
-      {/* Order list */}
       <section className="panel rounded-xl border border-white/10 overflow-hidden">
         <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
           <div>
             <div className="font-medium text-sm">Room order</div>
             <div className="text-xs text-muted-foreground mt-0.5">
-              Use the arrows to reorder. Saves automatically.
+              Drag rows to reorder. Saves automatically.
             </div>
           </div>
           <button
@@ -155,44 +177,21 @@ export default function SortOrderPage() {
           </button>
         </div>
 
-        <ol className="divide-y divide-white/5">
-          {order.map((rt, i) => (
-            <li
-              key={rt}
-              className={`px-5 py-3 flex items-center gap-3 ${
-                !enabled ? "opacity-60" : ""
-              }`}
-            >
-              <div className="w-8 text-xs font-mono text-muted-foreground tabular-nums">
-                {String(i + 1).padStart(2, "0")}
-              </div>
-              <div className="flex-1 text-sm">
-                {ROOM_TYPE_LABELS[rt] ?? rt}
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => moveItem(i, -1)}
-                  disabled={i === 0 || saving}
-                  className="p-1.5 rounded-md bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition"
-                  title="Move up"
-                >
-                  <ChevronUp className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => moveItem(i, 1)}
-                  disabled={i === order.length - 1 || saving}
-                  className="p-1.5 rounded-md bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition"
-                  title="Move down"
-                >
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </li>
-          ))}
-        </ol>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext items={order} strategy={verticalListSortingStrategy}>
+            <ol className={`divide-y divide-white/5 ${!enabled ? "opacity-60" : ""}`}>
+              {order.map((rt, i) => (
+                <SortableRow key={rt} id={rt} index={i} disabled={saving} />
+              ))}
+            </ol>
+          </SortableContext>
+        </DndContext>
       </section>
 
-      {/* Save indicator */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground h-6">
         {saving ? (
           <>
@@ -207,5 +206,59 @@ export default function SortOrderPage() {
         ) : null}
       </div>
     </div>
+  );
+}
+
+function SortableRow({
+  id,
+  index,
+  disabled,
+}: {
+  id: string;
+  index: number;
+  disabled: boolean;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id, disabled });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : "auto",
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`px-5 py-3 flex items-center gap-3 bg-[hsl(var(--surface-1))] ${
+        isDragging ? "shadow-lg shadow-black/50 ring-1 ring-brand-500/40" : ""
+      }`}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        disabled={disabled}
+        aria-label={`Drag to reorder ${ROOM_TYPE_LABELS[id] ?? id}`}
+        className={`shrink-0 p-1.5 rounded-md text-muted-foreground hover:bg-white/5 hover:text-foreground transition ${
+          isDragging ? "cursor-grabbing" : "cursor-grab"
+        } disabled:opacity-30 disabled:cursor-not-allowed`}
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+      <div className="w-8 text-xs font-mono text-muted-foreground tabular-nums">
+        {String(index + 1).padStart(2, "0")}
+      </div>
+      <div className="flex-1 text-sm select-none">
+        {ROOM_TYPE_LABELS[id] ?? id}
+      </div>
+    </li>
   );
 }
