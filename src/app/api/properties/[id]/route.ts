@@ -41,12 +41,18 @@ export async function GET(
             ? getDownloadUrl(photo.s3KeyFixed).catch(() => null)
             : Promise.resolve(null),
         ]);
+        // thumbnailUrl prefers the fixed version UNLESS the user has
+        // flipped useOriginal on. Respect that everywhere downstream so
+        // thumbnails and grid preview match what export / push will
+        // deliver.
+        const thumbnailUrl = photo.useOriginal
+          ? originalUrl
+          : fixedUrl || originalUrl;
         return {
           ...photo,
           originalUrl,
           fixedUrl,
-          // thumbnailUrl picks fixed if available, else original
-          thumbnailUrl: fixedUrl || originalUrl,
+          thumbnailUrl,
         };
       })
     );

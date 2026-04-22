@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PhotoStatus, Prisma } from "@prisma/client";
 import { requireAgency } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getDownloadUrl } from "@/lib/s3";
@@ -49,18 +50,34 @@ export async function GET(
   }
 }
 
-// PATCH - update photo status (approve/reject)
+// PATCH - update photo status, or toggle useOriginal flag
+// Body may include one or both of:
+//   status: "APPROVED" | "REJECTED"
+//   useOriginal: boolean  (true = serve original bytes, false = serve fixed)
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string; photoId: string } }
 ) {
   try {
     const session = await requireAgency();
-    const { status } = await req.json();
+    const body = await req.json();
+    const { status, useOriginal } = body;
 
-    if (!["APPROVED", "REJECTED"].includes(status)) {
+    if (status !== undefined && !["APPROVED", "REJECTED"].includes(status)) {
       return NextResponse.json(
         { error: "Invalid status" },
+        { status: 400 }
+      );
+    }
+    if (useOriginal !== undefined && typeof useOriginal !== "boolean") {
+      return NextResponse.json(
+        { error: "useOriginal must be boolean" },
+        { status: 400 }
+      );
+    }
+    if (status === undefined && useOriginal === undefined) {
+      return NextResponse.json(
+        { error: "Pass status or useOriginal" },
         { status: 400 }
       );
     }
@@ -82,24 +99,31 @@ export async function PATCH(
       );
     }
 
+    const data: Prisma.PhotoUpdateInput = {};
+    if (status !== undefined) data.status = status as PhotoStatus;
+    if (useOriginal !== undefined) data.useOriginal = useOriginal;
+
     const updated = await prisma.photo.update({
       where: { id: params.photoId },
-      data: { status },
+      data,
     });
 
-    // Check if all photos in property are now resolved
-    const unresolved = await prisma.photo.count({
-      where: {
-        propertyId: params.id,
-        status: { in: ["PENDING", "PROCESSING", "FLAGGED"] },
-      },
-    });
-
-    if (unresolved === 0) {
-      await prisma.property.update({
-        where: { id: params.id },
-        data: { status: "APPROVED" },
+    // Check if all photos in property are now resolved (only when we
+    // touched the status field).
+    if (status !== undefined) {
+      const unresolved = await prisma.photo.count({
+        where: {
+          propertyId: params.id,
+          status: { in: ["PENDING", "PROCESSING", "FLAGGED"] },
+        },
       });
+
+      if (unresolved === 0) {
+        await prisma.property.update({
+          where: { id: params.id },
+          data: { status: "APPROVED" },
+        });
+      }
     }
 
     return NextResponse.json({ photo: updated });

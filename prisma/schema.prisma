@@ -267,6 +267,12 @@ model Photo {
   fixesApplied  String[] // list of auto-fixes applied
   fixedAt       DateTime?
 
+  // When true, exports, pushes, and the UI all serve the original bytes
+  // instead of s3KeyFixed. User-driven override for cases where the
+  // auto-fix made things worse. The fixed artifact is kept on S3 so the
+  // user can flip back without re-queueing QC.
+  useOriginal   Boolean   @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

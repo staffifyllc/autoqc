@@ -91,6 +91,7 @@ interface Photo {
   issues: Record<string, any> | null;
   aiNotes: string | null;
   fixesApplied: string[];
+  useOriginal: boolean;
   originalUrl?: string;
   fixedUrl?: string | null;
 }
@@ -196,6 +197,29 @@ export default function PropertyDetailPage({
       setSelectedPhoto(null);
     } catch (err) {
       console.error("Failed to update photo:", err);
+    }
+  };
+
+  // Flip the useOriginal flag so exports / pushes / the grid all serve
+  // the original bytes instead of s3KeyFixed. Keeps the fixed artifact
+  // around so the user can flip back without re-queueing QC.
+  const handleToggleUseOriginal = async (
+    photoId: string,
+    nextValue: boolean
+  ) => {
+    try {
+      await fetch(`/api/properties/${params.id}/photos/${photoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ useOriginal: nextValue }),
+      });
+      // Optimistic update so the button state flips instantly in the modal.
+      if (selectedPhoto?.id === photoId) {
+        setSelectedPhoto({ ...selectedPhoto, useOriginal: nextValue });
+      }
+      fetchProperty();
+    } catch (err) {
+      console.error("Failed to toggle useOriginal:", err);
     }
   };
 
@@ -1052,6 +1076,12 @@ export default function PropertyDetailPage({
                             No changes applied
                           </div>
                         )}
+                        {hasFix && selectedPhoto.useOriginal && (
+                          <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-amber-500/80 border border-amber-400/60 text-[10px] font-mono uppercase tracking-wider text-white backdrop-blur-sm flex items-center gap-1">
+                            <RotateCcw className="w-2.5 h-2.5" />
+                            Exporting original
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center justify-between w-full max-w-md text-xs">
@@ -1078,8 +1108,8 @@ export default function PropertyDetailPage({
                         </div>
                       </div>
 
-                      {/* Download buttons */}
-                      <div className="flex items-center gap-2">
+                      {/* Download + revert buttons */}
+                      <div className="flex flex-wrap items-center gap-2 justify-center">
                         <button
                           onClick={() =>
                             downloadFile(
@@ -1104,6 +1134,31 @@ export default function PropertyDetailPage({
                           >
                             <Download className="w-3 h-3" />
                             Fixed Version
+                          </button>
+                        )}
+                        {hasFix && (
+                          <button
+                            onClick={() =>
+                              handleToggleUseOriginal(
+                                selectedPhoto.id,
+                                !selectedPhoto.useOriginal
+                              )
+                            }
+                            title={
+                              selectedPhoto.useOriginal
+                                ? "Use the auto-fixed version again for export and push"
+                                : "Don't use the auto-fix. Keep the original for export and push."
+                            }
+                            className={`text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 border ${
+                              selectedPhoto.useOriginal
+                                ? "bg-amber-500/10 border-amber-500/30 text-amber-200 hover:bg-amber-500/20"
+                                : "glass border-white/10 hover:bg-white/10"
+                            }`}
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            {selectedPhoto.useOriginal
+                              ? "Restore auto-fix"
+                              : "Revert to original"}
                           </button>
                         )}
                       </div>

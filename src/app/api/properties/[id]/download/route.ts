@@ -42,13 +42,16 @@ export async function GET(
 
     const downloads = await Promise.all(
       photos.map(async (p) => {
-        // Use fixed version when available, otherwise original
-        const key = p.s3KeyFixed || p.s3KeyOriginal;
+        // Use fixed version when available UNLESS the user reverted this
+        // photo to original. Fall back to original if no fix exists.
+        const preferOriginal = p.useOriginal || !p.s3KeyFixed;
+        const key = preferOriginal ? p.s3KeyOriginal : p.s3KeyFixed!;
         const url = await getDownloadUrl(key);
         return {
           fileName: p.fileName,
           status: p.status,
-          isFixed: !!p.s3KeyFixed,
+          isFixed: !preferOriginal,
+          useOriginal: p.useOriginal,
           url,
         };
       })

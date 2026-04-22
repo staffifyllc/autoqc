@@ -51,10 +51,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get signed URLs for all approved photos (use fixed version if available)
+    // Get signed URLs for all approved photos. Respect the per-photo
+    // useOriginal override so a reverted photo pushes the original bytes,
+    // not the rejected auto-fix.
     const photoUrls = await Promise.all(
       property.photos.map(async (photo) => {
-        const key = photo.s3KeyFixed || photo.s3KeyOriginal;
+        const preferOriginal = photo.useOriginal || !photo.s3KeyFixed;
+        const key = preferOriginal ? photo.s3KeyOriginal : photo.s3KeyFixed!;
         const url = await getDownloadUrl(key);
         return { fileName: photo.fileName, url, key };
       })
