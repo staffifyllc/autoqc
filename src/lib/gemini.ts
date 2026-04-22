@@ -1,20 +1,18 @@
-// Gemini 2.5 Flash Image ("Nano Banana") wrapper for virtual-twilight
-// and future AI add-ons. Speaks the v1beta generateContent API directly
-// over fetch to avoid pulling the whole google-genai SDK.
+// Virtual Twilight provider. Despite the filename, this now routes
+// through Replicate because Google's Gemini API does not have a free
+// tier for image generation (both 2.5 Flash Image and 3 Pro Image
+// require billing enabled on a Google Cloud project).
 //
-// Cost: $0.039 per image on the paid tier. Free tier caps at 1,500
-// requests per day which covers all preview traffic for the beta.
+// Replicate is already wired up for AI deblur + distraction removal
+// in the QC engine, so the REPLICATE_API_TOKEN is already present in
+// every env. Same pay-as-you-go billing, no new credit card.
+//
+// Model: google-deepmind/nano-banana. Same Gemini 2.5 Flash Image
+// weights, hosted on Replicate infra. ~$0.04 per image. At $1 retail
+// that is still a 96% margin.
 
-// Nano Banana (Gemini 2.5 Flash Image, stable). Has a free tier
-// (1500/day) so beta testing does not cost anything. Upgrade path:
-// flip to `gemini-3-pro-image-preview` once billing is enabled on the
-// Google Cloud project. Pro is better quality but paid-only (no free
-// tier at all).
-const MODEL = "gemini-2.5-flash-image";
-const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+const REPLICATE_MODEL = "google-deepmind/nano-banana";
 
-// Base prompt for virtual twilight. Tuned to preserve geometry and
-// avoid the "AI added a gazebo" class of edits. Paul can iterate.
 export const TWILIGHT_PROMPT = `Transform this daytime real estate exterior photo into a photorealistic twilight scene, as if the photographer returned at dusk and shot the exact same frame:
 
 - Deep blue-to-purple sky with a warm amber/orange glow low on the horizon
@@ -36,85 +34,102 @@ type GeneratedImage = {
   mimeType: string;
 };
 
-async function fetchImageAsBase64(
-  url: string
-): Promise<{ data: string; mimeType: string }> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch source image: HTTP ${res.status}`);
+async function replicatePredict(args: {
+  model: string;
+  input: Record<string, unknown>;
+}): Promise<string[]> {
+  const token = process.env.REPLICATE_API_TOKEN;
+  if (!token) {
+    throw new Error("REPLICATE_API_TOKEN is not set");
   }
-  const mimeType = res.headers.get("content-type") || "image/jpeg";
-  const buf = Buffer.from(await res.arrayBuffer());
-  return { data: buf.toString("base64"), mimeType };
+
+  // Synchronous prediction via the sync endpoint. `Prefer: wait` makes
+  // Replicate hold the HTTP connection until the prediction completes
+  // (up to 60s). For longer runs it falls back to async + polling.
+  const res = await fetch(
+    `https://api.replicate.com/v1/models/${args.model}/predictions`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Prefer: "wait=60",
+      },
+      body: JSON.stringify({ input: args.input }),
+    }
+  );
+
+  const raw = await res.text();
+  let parsed: any;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`Replicate returned non-JSON: ${raw.slice(0, 300)}`);
+  }
+
+  if (!res.ok) {
+    throw new Error(
+      `Replicate ${res.status}: ${parsed?.detail ?? parsed?.title ?? raw.slice(0, 300)}`
+    );
+  }
+
+  // If still running after 60s, poll.
+  if (parsed.status === "starting" || parsed.status === "processing") {
+    const pollUrl = parsed.urls?.get;
+    if (!pollUrl) throw new Error("Replicate did not return a poll URL");
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const p = await fetch(pollUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const pj = await p.json();
+      if (pj.status === "succeeded") {
+        parsed = pj;
+        break;
+      }
+      if (pj.status === "failed" || pj.status === "canceled") {
+        throw new Error(`Replicate prediction ${pj.status}: ${pj.error ?? ""}`);
+      }
+    }
+  }
+
+  if (parsed.status !== "succeeded") {
+    throw new Error(
+      `Replicate prediction did not complete: status=${parsed.status}`
+    );
+  }
+
+  // Output shape: string URL or array of URLs depending on the model.
+  const out = parsed.output;
+  if (typeof out === "string") return [out];
+  if (Array.isArray(out)) return out.filter((v) => typeof v === "string");
+  throw new Error(`Unexpected Replicate output shape: ${JSON.stringify(out).slice(0, 200)}`);
 }
 
-// Run a Gemini image edit. Takes a source image URL and a text prompt,
-// returns the generated image bytes + mime type. Caller is responsible
-// for uploading to S3 and persisting.
 export async function geminiEditImage(args: {
   sourceUrl: string;
   prompt: string;
 }): Promise<GeneratedImage> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) {
-    throw new Error("GEMINI_API_KEY is not set");
-  }
-
-  const { data, mimeType } = await fetchImageAsBase64(args.sourceUrl);
-
-  const body = {
-    contents: [
-      {
-        parts: [
-          { text: args.prompt },
-          { inline_data: { mime_type: mimeType, data } },
-        ],
-      },
-    ],
-    generationConfig: {
-      responseModalities: ["IMAGE"],
+  // Nano Banana on Replicate takes an image_input (array of URLs) plus
+  // prompt. Output is an image URL (or array).
+  const urls = await replicatePredict({
+    model: REPLICATE_MODEL,
+    input: {
+      prompt: args.prompt,
+      image_input: [args.sourceUrl],
+      output_format: "jpg",
     },
-  };
-
-  const res = await fetch(`${ENDPOINT}?key=${key}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
   });
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Gemini ${res.status}: ${err.slice(0, 500)}`);
+  if (urls.length === 0) {
+    throw new Error("Replicate returned no image URL");
   }
 
-  const json = (await res.json()) as {
-    candidates?: Array<{
-      content?: {
-        parts?: Array<{
-          inline_data?: { mime_type?: string; data?: string };
-          inlineData?: { mimeType?: string; data?: string };
-        }>;
-      };
-    }>;
-    promptFeedback?: { blockReason?: string };
-  };
-
-  if (json.promptFeedback?.blockReason) {
-    throw new Error(
-      `Gemini blocked the request: ${json.promptFeedback.blockReason}`
-    );
+  const imgRes = await fetch(urls[0]);
+  if (!imgRes.ok) {
+    throw new Error(`Failed to fetch generated image: HTTP ${imgRes.status}`);
   }
-
-  const parts = json.candidates?.[0]?.content?.parts ?? [];
-  for (const part of parts) {
-    const inline: any = part.inline_data || part.inlineData;
-    if (inline?.data) {
-      return {
-        bytes: Buffer.from(inline.data, "base64"),
-        mimeType: inline.mime_type || inline.mimeType || "image/png",
-      };
-    }
-  }
-
-  throw new Error("Gemini returned no image in the response");
+  const mimeType = imgRes.headers.get("content-type") || "image/jpeg";
+  const bytes = Buffer.from(await imgRes.arrayBuffer());
+  return { bytes, mimeType };
 }
