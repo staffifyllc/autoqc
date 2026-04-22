@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     const session = await requireAgency();
     const { propertyId, platform } = await req.json();
 
-    // Get property with approved photos
+    // Get property with approved photos + their purchased twilight variants
     const property = await prisma.property.findFirst({
       where: {
         id: propertyId,
@@ -27,6 +27,13 @@ export async function POST(req: NextRequest) {
         photos: {
           where: {
             status: { in: ["PASSED", "FIXED", "APPROVED"] },
+          },
+          include: {
+            variants: {
+              where: { type: "TWILIGHT_FINAL", status: "READY" },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
           },
         },
       },
@@ -69,15 +76,35 @@ export async function POST(req: NextRequest) {
 
     // Get signed URLs for all approved photos. Respect the per-photo
     // useOriginal override so a reverted photo pushes the original bytes,
-    // not the rejected auto-fix.
-    const photoUrls = await Promise.all(
-      orderedPhotos.map(async (photo) => {
-        const preferOriginal = photo.useOriginal || !photo.s3KeyFixed;
-        const key = preferOriginal ? photo.s3KeyOriginal : photo.s3KeyFixed!;
-        const url = await getDownloadUrl(key);
-        return { fileName: photo.fileName, url, key };
-      })
-    );
+    // not the rejected auto-fix. Purchased twilight variants are pushed
+    // alongside with a _twilight suffix so the MLS platform lists them
+    // as a separate image.
+    const photoUrls = (
+      await Promise.all(
+        orderedPhotos.map(async (photo) => {
+          const preferOriginal = photo.useOriginal || !photo.s3KeyFixed;
+          const key = preferOriginal ? photo.s3KeyOriginal : photo.s3KeyFixed!;
+          const url = await getDownloadUrl(key);
+          const out = [{ fileName: photo.fileName, url, key }];
+
+          const twilight = (photo as any).variants?.[0];
+          if (twilight) {
+            const twilightUrl = await getDownloadUrl(twilight.s3Key);
+            const dot = photo.fileName.lastIndexOf(".");
+            const base =
+              dot > 0 ? photo.fileName.slice(0, dot) : photo.fileName;
+            const ext =
+              dot > 0 ? photo.fileName.slice(dot) : ".jpg";
+            out.push({
+              fileName: `${base}_twilight${ext}`,
+              url: twilightUrl,
+              key: twilight.s3Key,
+            });
+          }
+          return out;
+        })
+      )
+    ).flat();
 
     const credentials = integration.credentials as Record<string, string>;
 

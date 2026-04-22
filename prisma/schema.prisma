@@ -280,6 +280,10 @@ model Photo {
   // user can flip back without re-queueing QC.
   useOriginal   Boolean   @default(false)
 
+  // Add-on variants (Virtual Twilight so far). When TWILIGHT_FINAL
+  // exists, downloads and pushes include it alongside the main output.
+  variants      PhotoVariant[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -370,6 +374,38 @@ model CreditPackage {
 // widget and triaged from the admin dashboard. Fixes land on main via a
 // normal PR; the PR URL is stored here so the admin view can link out.
 // When status flips to FIXED, the reporter gets notified via Resend.
+// Derived versions of a Photo: right now this is Virtual Twilight
+// variants (preview at 1 credit of the free tier, final at 1 paid
+// credit). Leaves room for future AI add-ons (virtual staging, sky
+// replacement, etc.) without another table.
+model PhotoVariant {
+  id          String              @id @default(cuid())
+  photoId     String
+  type        PhotoVariantType
+  s3Key       String
+  provider    String?             // "gemini" | "leonardo" | ...
+  prompt      String?             @db.Text
+  status      PhotoVariantStatus  @default(READY)
+  creditCost  Int                 @default(0)  // credits charged for this variant, 0 = preview
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  photo       Photo               @relation(fields: [photoId], references: [id], onDelete: Cascade)
+
+  @@index([photoId, type])
+}
+
+enum PhotoVariantType {
+  TWILIGHT_PREVIEW
+  TWILIGHT_FINAL
+}
+
+enum PhotoVariantStatus {
+  GENERATING
+  READY
+  FAILED
+}
+
 model BugReport {
   id              String       @id @default(cuid())
   reporterUserId  String

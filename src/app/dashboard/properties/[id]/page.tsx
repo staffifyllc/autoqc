@@ -23,6 +23,7 @@ import { PhotoUploader } from "@/components/upload/PhotoUploader";
 import { downloadPhotoZip, downloadFile } from "@/lib/photoZip";
 import { DistractionCategoriesPanel } from "@/components/dashboard/DistractionCategoriesPanel";
 import { prettyDistractionLabel } from "@/lib/distractionCategories";
+import { TwilightButton } from "@/components/dashboard/TwilightButton";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -94,6 +95,8 @@ interface Photo {
   useOriginal: boolean;
   originalUrl?: string;
   fixedUrl?: string | null;
+  twilightUrl?: string | null;
+  hasTwilight?: boolean;
 }
 
 export default function PropertyDetailPage({
@@ -1161,6 +1164,16 @@ export default function PropertyDetailPage({
                               : "Revert to original"}
                           </button>
                         )}
+                        <TwilightButton
+                          photoId={selectedPhoto.id}
+                          fileName={selectedPhoto.fileName}
+                          roomType={
+                            (selectedPhoto.issues as any)?._room_type ?? null
+                          }
+                          hasTwilight={!!selectedPhoto.hasTwilight}
+                          twilightUrl={selectedPhoto.twilightUrl ?? null}
+                          onPurchased={() => fetchProperty()}
+                        />
                       </div>
                     </>
                   );

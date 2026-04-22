@@ -22,7 +22,16 @@ export async function GET(
       where: { id: params.id, agencyId: session.user.agencyId },
       include: {
         client: true,
-        photos: { orderBy: { createdAt: "asc" } },
+        photos: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            variants: {
+              where: { type: "TWILIGHT_FINAL", status: "READY" },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
+          },
+        },
       },
     });
 
@@ -53,7 +62,7 @@ export async function GET(
     // Generate signed URLs for all photos (both original and fixed)
     // These are valid for 1 hour so the grid can display actual thumbnails
     const photosWithUrls = await Promise.all(
-      orderedPhotos.map(async (photo) => {
+      orderedPhotos.map(async (photo: any) => {
         const [originalUrl, fixedUrl] = await Promise.all([
           photo.s3KeyOriginal
             ? getDownloadUrl(photo.s3KeyOriginal).catch(() => null)
@@ -69,11 +78,19 @@ export async function GET(
         const thumbnailUrl = photo.useOriginal
           ? originalUrl
           : fixedUrl || originalUrl;
+
+        const twilight = photo.variants?.[0];
+        const twilightUrl = twilight
+          ? await getDownloadUrl(twilight.s3Key).catch(() => null)
+          : null;
+
         return {
           ...photo,
           originalUrl,
           fixedUrl,
           thumbnailUrl,
+          twilightUrl,
+          hasTwilight: !!twilight,
         };
       })
     );

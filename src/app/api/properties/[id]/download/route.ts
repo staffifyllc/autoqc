@@ -24,6 +24,13 @@ export async function GET(
       include: {
         photos: {
           orderBy: { createdAt: "asc" },
+          include: {
+            variants: {
+              where: { type: "TWILIGHT_FINAL", status: "READY" },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
+          },
         },
       },
     });
@@ -56,22 +63,48 @@ export async function GET(
       );
     }
 
-    const downloads = await Promise.all(
-      photos.map(async (p) => {
-        // Use fixed version when available UNLESS the user reverted this
-        // photo to original. Fall back to original if no fix exists.
-        const preferOriginal = p.useOriginal || !p.s3KeyFixed;
-        const key = preferOriginal ? p.s3KeyOriginal : p.s3KeyFixed!;
-        const url = await getDownloadUrl(key);
-        return {
-          fileName: p.fileName,
+    const downloads: Array<{
+      fileName: string;
+      status: string;
+      isFixed: boolean;
+      useOriginal: boolean;
+      url: string;
+      kind?: "twilight";
+    }> = [];
+
+    for (const p of photos) {
+      const preferOriginal = p.useOriginal || !p.s3KeyFixed;
+      const key = preferOriginal ? p.s3KeyOriginal : p.s3KeyFixed!;
+      const url = await getDownloadUrl(key);
+      downloads.push({
+        fileName: p.fileName,
+        status: p.status,
+        isFixed: !preferOriginal,
+        useOriginal: p.useOriginal,
+        url,
+      });
+
+      // If this photo has a purchased twilight, append it with a
+      // _twilight suffix so it lands right next to the original in the
+      // downloaded folder and is obvious at a glance.
+      const twilight = p.variants?.[0];
+      if (twilight) {
+        const twilightUrl = await getDownloadUrl(twilight.s3Key);
+        const dot = p.fileName.lastIndexOf(".");
+        const base =
+          dot > 0 ? p.fileName.slice(0, dot) : p.fileName;
+        const ext =
+          dot > 0 ? p.fileName.slice(dot) : ".jpg";
+        downloads.push({
+          fileName: `${base}_twilight${ext}`,
           status: p.status,
-          isFixed: !preferOriginal,
-          useOriginal: p.useOriginal,
-          url,
-        };
-      })
-    );
+          isFixed: true,
+          useOriginal: false,
+          url: twilightUrl,
+          kind: "twilight",
+        });
+      }
+    }
 
     return NextResponse.json({
       propertyAddress: property.address,
