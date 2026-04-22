@@ -9,16 +9,35 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
   providers: [
-    // Dev login - no email verification needed
+    // Email + shared access code. Temporary gate until real password auth
+    // ships. Without the env var AUTOQC_LOGIN_ACCESS_CODE set, this provider
+    // refuses all logins (fail-closed) so misconfiguration can't silently
+    // revert to the prior no-auth behavior.
     CredentialsProvider({
       id: "dev-login",
-      name: "Dev Login",
+      name: "Access Code Login",
       credentials: {
         email: { label: "Email", type: "email" },
+        accessCode: { label: "Access code", type: "password" },
         name: { label: "Name", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email) return null;
+
+        const required = process.env.AUTOQC_LOGIN_ACCESS_CODE;
+        if (!required) {
+          console.error(
+            "[auth] AUTOQC_LOGIN_ACCESS_CODE is not set. Refusing all logins."
+          );
+          return null;
+        }
+        if (credentials.accessCode !== required) {
+          console.warn(
+            "[auth] Rejected login for %s: wrong or missing access code",
+            credentials.email
+          );
+          return null;
+        }
 
         const email = credentials.email.toLowerCase().trim();
         const name = credentials.name || email.split("@")[0];
