@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAgency } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getDownloadUrl } from "@/lib/s3";
+import {
+  sanitizePhotoSortOrder,
+  sortPhotosByRoomType,
+} from "@/lib/photoSort";
 
 // GET /api/properties/[id]/download?which=approved|all|fixed
 // Returns a list of signed URLs for bulk download.
@@ -38,6 +42,18 @@ export async function GET(
       );
     } else if (which === "fixed") {
       photos = photos.filter((p) => !!p.s3KeyFixed);
+    }
+
+    // Apply agency-level auto-sort so the ZIP ships photos in MLS order.
+    const agency = await prisma.agency.findUnique({
+      where: { id: session.user.agencyId! },
+      select: { autoSortEnabled: true, photoSortOrder: true },
+    });
+    if (agency?.autoSortEnabled) {
+      photos = sortPhotosByRoomType(
+        photos,
+        sanitizePhotoSortOrder(agency.photoSortOrder)
+      );
     }
 
     const downloads = await Promise.all(

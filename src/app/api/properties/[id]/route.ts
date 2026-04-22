@@ -5,6 +5,10 @@ import { enqueueQCJob } from "@/lib/sqs";
 import { chargeForProperty, checkPaymentCapability } from "@/lib/credits";
 import { getDownloadUrl } from "@/lib/s3";
 import { filterValidDistractionCategories } from "@/lib/distractionCategories";
+import {
+  sanitizePhotoSortOrder,
+  sortPhotosByRoomType,
+} from "@/lib/photoSort";
 
 // GET /api/properties/[id] - get property with photos
 export async function GET(
@@ -29,10 +33,27 @@ export async function GET(
       );
     }
 
+    // Agency-level auto-sort. When enabled, photos render grouped by the
+    // configured room-type sequence everywhere downstream (grid, zip,
+    // platform push). Unknown / unclassified fall to the end in upload
+    // order.
+    const agency = await prisma.agency.findUnique({
+      where: { id: session.user.agencyId! },
+      select: { autoSortEnabled: true, photoSortOrder: true },
+    });
+
+    const orderedPhotos =
+      agency?.autoSortEnabled
+        ? sortPhotosByRoomType(
+            property.photos,
+            sanitizePhotoSortOrder(agency.photoSortOrder)
+          )
+        : property.photos;
+
     // Generate signed URLs for all photos (both original and fixed)
     // These are valid for 1 hour so the grid can display actual thumbnails
     const photosWithUrls = await Promise.all(
-      property.photos.map(async (photo) => {
+      orderedPhotos.map(async (photo) => {
         const [originalUrl, fixedUrl] = await Promise.all([
           photo.s3KeyOriginal
             ? getDownloadUrl(photo.s3KeyOriginal).catch(() => null)

@@ -5,6 +5,10 @@ import { pushToAryeo } from "@/lib/integrations/aryeo";
 import { pushToHDPhotoHub } from "@/lib/integrations/hdphotohub";
 import { pushToDropbox } from "@/lib/integrations/dropbox";
 import { getDownloadUrl } from "@/lib/s3";
+import {
+  sanitizePhotoSortOrder,
+  sortPhotosByRoomType,
+} from "@/lib/photoSort";
 
 // POST /api/integrations/push - push approved photos to delivery platform
 export async function POST(req: NextRequest) {
@@ -51,11 +55,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Apply agency-level auto-sort so photos go to MLS in the right order.
+    const agency = await prisma.agency.findUnique({
+      where: { id: session.user.agencyId! },
+      select: { autoSortEnabled: true, photoSortOrder: true },
+    });
+    const orderedPhotos = agency?.autoSortEnabled
+      ? sortPhotosByRoomType(
+          property.photos,
+          sanitizePhotoSortOrder(agency.photoSortOrder)
+        )
+      : property.photos;
+
     // Get signed URLs for all approved photos. Respect the per-photo
     // useOriginal override so a reverted photo pushes the original bytes,
     // not the rejected auto-fix.
     const photoUrls = await Promise.all(
-      property.photos.map(async (photo) => {
+      orderedPhotos.map(async (photo) => {
         const preferOriginal = photo.useOriginal || !photo.s3KeyFixed;
         const key = preferOriginal ? photo.s3KeyOriginal : photo.s3KeyFixed!;
         const url = await getDownloadUrl(key);

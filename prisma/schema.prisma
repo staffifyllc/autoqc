@@ -116,6 +116,13 @@ model Agency {
   // (parked_car, satellite_dish, power_line) require explicit opt-in.
   distractionCategoriesDefault String[] @default([])
 
+  // Auto-sort photos by room type on QC review, downloads, and pushes.
+  // When autoSortEnabled is true the UI and export flows order photos
+  // by the room-type sequence in photoSortOrder. Unknown / unclassified
+  // photos fall to the end in upload order.
+  autoSortEnabled Boolean @default(false)
+  photoSortOrder  String[] @default(["exterior_front", "exterior_back", "exterior_pool", "living_room", "dining_room", "kitchen", "bedroom", "bathroom", "office", "hallway", "basement", "other"])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

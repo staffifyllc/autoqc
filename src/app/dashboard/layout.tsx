@@ -15,7 +15,7 @@ import {
   LogOut,
   ShieldCheck,
 } from "lucide-react";
-import { Bug } from "lucide-react";
+import { Bug, ArrowDownUp } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
 import { BugReportWidget } from "@/components/dashboard/BugReportWidget";
 import { motion } from "framer-motion";
@@ -37,6 +37,7 @@ const navSections: Array<{
     items: [
       { href: "/dashboard/profiles", label: "Style Profiles", icon: Palette },
       { href: "/dashboard/profiles/clients", label: "Clients", icon: Users },
+      { href: "/dashboard/configure/sort-order", label: "Photo Order", icon: ArrowDownUp },
       { href: "/dashboard/integrations", label: "Integrations", icon: Plug },
     ],
   },
