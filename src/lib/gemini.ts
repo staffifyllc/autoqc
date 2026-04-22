@@ -5,10 +5,10 @@
 // Cost: $0.039 per image on the paid tier. Free tier caps at 1,500
 // requests per day which covers all preview traffic for the beta.
 
-// Nano Banana stable. `-preview` variant was renamed when it left preview.
-// For higher quality at slower speed, switch to `gemini-3-pro-image-preview`
-// (still the newer image model, in preview as of 2026-04).
-const MODEL = "gemini-2.5-flash-image";
+// Nano Banana Pro. Google's highest-quality image model. A few seconds
+// slower than gemini-2.5-flash-image, but noticeably better on
+// architecture and realistic lighting — worth it for MLS-grade output.
+const MODEL = "gemini-3-pro-image-preview";
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 // Base prompt for virtual twilight. Tuned to preserve geometry and
