@@ -358,3 +358,43 @@ model CreditPackage {
   stripePriceId String?
   displayOrder Int @default(0)
 }
+
+// Customer-submitted bug reports. Logged via the in-app "Report a bug"
+// widget and triaged from the admin dashboard. Fixes land on main via a
+// normal PR; the PR URL is stored here so the admin view can link out.
+// When status flips to FIXED, the reporter gets notified via Resend.
+model BugReport {
+  id              String       @id @default(cuid())
+  reporterUserId  String
+  agencyId        String?
+  title           String
+  description     String       @db.Text
+  severity        BugSeverity  @default(NORMAL)
+  status          BugStatus    @default(NEW)
+  screenshotKey   String?      // S3 key for optional screenshot
+  pageUrl         String?      // where the user was when they reported
+  userAgent       String?      @db.Text
+  prUrl           String?      // link to the PR fixing this
+  fixedCommitSha  String?
+  internalNotes   String?      @db.Text
+  resolvedAt      DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([status])
+  @@index([reporterUserId])
+}
+
+enum BugSeverity {
+  MINOR
+  NORMAL
+  CRITICAL
+}
+
+enum BugStatus {
+  NEW
+  TRIAGED
+  IN_PROGRESS
+  FIXED
+  WONT_FIX
+}

@@ -15,7 +15,9 @@ import {
   LogOut,
   ShieldCheck,
 } from "lucide-react";
+import { Bug } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
+import { BugReportWidget } from "@/components/dashboard/BugReportWidget";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
@@ -44,6 +46,7 @@ const navSections: Array<{
       { href: "/dashboard/credits", label: "Credits", icon: Coins },
       { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
       { href: "/dashboard/account", label: "Password", icon: Settings },
+      { href: "/dashboard/account/bugs", label: "My Reports", icon: Bug },
     ],
   },
 ];
@@ -75,6 +78,7 @@ export default function DashboardLayout({
           label: "Admin",
           items: [
             { href: "/dashboard/admin", label: "Platform usage", icon: ShieldCheck },
+            { href: "/dashboard/admin/bugs", label: "Bug reports", icon: Bug },
           ],
         },
       ]
@@ -192,6 +196,9 @@ export default function DashboardLayout({
 
       {/* Floating upload status - persists across all dashboard pages */}
       <UploadStatusPanel />
+
+      {/* Floating "report a bug" widget - persists across dashboard */}
+      <BugReportWidget />
     </div>
   );
 }
