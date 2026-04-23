@@ -15,11 +15,15 @@ import {
   LogOut,
   ShieldCheck,
 } from "lucide-react";
-import { Bug, ArrowDownUp } from "lucide-react";
+import { Bug, ArrowDownUp, Rocket } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
 import { BugReportWidget } from "@/components/dashboard/BugReportWidget";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { updates } from "@/lib/updates";
+
+const UPDATES_HREF = "/dashboard/updates";
+const UPDATES_LAST_SEEN_KEY = "autoqc_updates_last_seen_version";
 
 const navSections: Array<{
   label: string;
@@ -30,6 +34,7 @@ const navSections: Array<{
     items: [
       { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
       { href: "/dashboard/properties", label: "Properties", icon: Home },
+      { href: UPDATES_HREF, label: "What's New", icon: Rocket },
     ],
   },
   {
@@ -60,6 +65,9 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [credits, setCredits] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [hasUnseenUpdates, setHasUnseenUpdates] = useState(false);
+
+  const latestUpdateVersion = updates[0]?.version;
 
   useEffect(() => {
     fetch("/api/credits")
@@ -71,6 +79,20 @@ export default function DashboardLayout({
       .then((r) => setIsAdmin(r.status === 200))
       .catch(() => setIsAdmin(false));
   }, [pathname]);
+
+  // Unread-updates indicator: compare the latest version in the changelog
+  // to whatever this browser has already seen. Clears when the user opens
+  // the updates page (which emits "autoqc:updates-seen").
+  useEffect(() => {
+    const check = () => {
+      if (!latestUpdateVersion) return setHasUnseenUpdates(false);
+      const seen = localStorage.getItem(UPDATES_LAST_SEEN_KEY);
+      setHasUnseenUpdates(seen !== latestUpdateVersion);
+    };
+    check();
+    window.addEventListener("autoqc:updates-seen", check);
+    return () => window.removeEventListener("autoqc:updates-seen", check);
+  }, [latestUpdateVersion, pathname]);
 
   const sections = isAdmin
     ? [
@@ -150,6 +172,15 @@ export default function DashboardLayout({
                         strokeWidth={isActive ? 2.25 : 1.75}
                       />
                       <span className="relative z-10">{item.label}</span>
+                      {item.href === UPDATES_HREF && hasUnseenUpdates && (
+                        <span
+                          className="relative z-10 ml-auto flex items-center"
+                          title="New updates"
+                          aria-label="New updates"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-[hsl(var(--accent))] shadow-[0_0_8px_hsl(var(--accent))] animate-pulse" />
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
