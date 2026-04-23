@@ -52,16 +52,16 @@ async function sendViaResend(args: {
 }
 
 async function main() {
-  const args = new Set(process.argv.slice(2));
-  const modeArg = [...args].find((a) => a.startsWith("--mode="));
-  const mode = modeArg?.split("=")[1] ?? (args.has("--count") ? "count" : "");
+  const args = process.argv.slice(2);
+  const modeArg = args.find((a) => a.startsWith("--mode="));
+  const mode = modeArg?.split("=")[1] ?? (args.includes("--count") ? "count" : "");
   if (!mode) {
     console.error(
       "Pick one: --count, --mode=test, or --mode=all. --mode=test optionally takes --to=you@example.com"
     );
     process.exit(1);
   }
-  const toArg = [...args].find((a) => a.startsWith("--to="));
+  const toArg = args.find((a) => a.startsWith("--to="));
   const testTo = toArg?.split("=")[1];
 
   const prisma = new PrismaClient();
