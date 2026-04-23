@@ -11,6 +11,7 @@ import {
   Coins,
   CreditCard,
   Sparkles,
+  Moon,
 } from "lucide-react";
 
 const fadeUp = {
@@ -168,6 +169,48 @@ export default function PricingPage() {
               can always upgrade a property to Premium by running QC again in
               Premium mode.
             </p>
+          </motion.div>
+
+          {/* Virtual Twilight add-on */}
+          <motion.div variants={fadeUp} className="mb-16">
+            <div className="relative overflow-hidden glass-card p-8 border border-indigo-500/30 bg-gradient-to-br from-indigo-500/5 via-background to-purple-500/5">
+              <div className="absolute top-0 right-0 px-3 py-1 rounded-bl-lg bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-xs font-bold uppercase tracking-wider">
+                New
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="shrink-0 w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center">
+                  <Moon className="w-6 h-6 text-indigo-300" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <h3 className="text-xl font-bold">Virtual Twilight</h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-indigo-500/15 text-indigo-200 border border-indigo-500/30">
+                      Add-on
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4 max-w-lg">
+                    Turn any daytime exterior into a dramatic dusk shot.
+                    Preview free, pay <span className="font-semibold text-foreground">$1 per photo</span> only
+                    for the ones you keep. Architecture is preserved exactly.
+                    No fake skies, no added elements, MLS-ethical.
+                  </p>
+                  <div className="grid sm:grid-cols-3 gap-3 text-xs">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-indigo-300" />
+                      Previews are free
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-indigo-300" />
+                      Ships with the download ZIP
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-indigo-300" />
+                      Exterior photos only
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </motion.div>
 
           {/* Two pricing modes */}

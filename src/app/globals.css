@@ -267,3 +267,51 @@
 }
 
 /* Numeric / monospace tracking utility, applied via .font-mono Tailwind. */
+
+/* ---- Shimmer for NEW badges on the landing feature grid ---- */
+@keyframes shimmer-sweep {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer-badge {
+  background-image: linear-gradient(
+    100deg,
+    transparent 0%,
+    transparent 35%,
+    hsl(var(--accent) / 0.25) 50%,
+    transparent 65%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: shimmer-sweep 2.5s ease-in-out infinite;
+}
+
+/* ---- Magnetic button hover glow (used on CTAs) ---- */
+.btn-glow {
+  position: relative;
+  isolation: isolate;
+}
+.btn-glow::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: radial-gradient(
+    80px circle at var(--mx, 50%) var(--my, 50%),
+    hsl(var(--accent) / 0.4),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: -1;
+  pointer-events: none;
+}
+.btn-glow:hover::before {
+  opacity: 1;
+}

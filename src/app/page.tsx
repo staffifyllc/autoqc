@@ -24,7 +24,11 @@ import {
   Send,
   Zap,
   Building2,
+  Moon,
+  ArrowDownUp,
+  RotateCcw,
 } from "lucide-react";
+import { SpotlightCard } from "@/components/landing/SpotlightCard";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -32,7 +36,31 @@ const fadeUp = {
 };
 const stagger = { visible: { transition: { staggerChildren: 0.08 } } };
 
-const features = [
+const features: Array<{
+  icon: any;
+  title: string;
+  copy: string;
+  premium?: boolean;
+  isNew?: boolean;
+}> = [
+  {
+    icon: Moon,
+    title: "Virtual Twilight",
+    copy: "Any exterior photo transformed into a dusk scene. Preview free, keep it for $1. MLS-ethical, architecture preserved.",
+    isNew: true,
+  },
+  {
+    icon: ArrowDownUp,
+    title: "Auto-sort by room type",
+    copy: "Photos grouped into your agency's MLS order automatically. Galleries flow cleanly, no dragging needed.",
+    isNew: true,
+  },
+  {
+    icon: RotateCcw,
+    title: "One-click revert",
+    copy: "Disagree with an auto-fix? Revert to the untouched original in one click. AI proposes, you approve.",
+    isNew: true,
+  },
   {
     icon: Ruler,
     title: "Vertical straightening",
@@ -272,16 +300,16 @@ export default function LandingPage() {
               variants={fadeUp}
               className="text-3xl md:text-4xl font-semibold tracking-tight"
             >
-              Twelve checks. Every photo. Every property.
+              Everything AutoQC does, on every property.
             </motion.h2>
             <motion.p
               variants={fadeUp}
               className="text-muted-foreground mt-3"
             >
-              The checks below run on every single photo before it reaches
-              your agent. Premium-only features are flagged. Nothing is just
-              a suggestion. When a fix is safe to apply automatically, we
-              apply it. When it needs your eyes, we flag it clearly.
+              Quality checks run on every photo before it reaches your
+              agent. Auto-fixes apply when safe, get flagged when your
+              eyes are needed. Premium features are tagged. Nothing is
+              cosmetic. Nothing is a guess.
             </motion.p>
           </motion.div>
 
@@ -291,30 +319,18 @@ export default function LandingPage() {
             viewport={{ once: true }}
             variants={stagger}
             className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"
+            style={{ perspective: "1200px" }}
           >
             {features.map((f) => (
-              <motion.div
+              <SpotlightCard
                 key={f.title}
+                icon={f.icon}
+                title={f.title}
+                copy={f.copy}
+                premium={f.premium}
+                isNew={f.isNew}
                 variants={fadeUp}
-                className="panel p-5 space-y-3 hover:border-[hsl(var(--accent))]/30 transition-colors"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-9 h-9 rounded-md border border-border bg-[hsl(var(--surface-1))] flex items-center justify-center">
-                    <f.icon className="w-4 h-4 text-primary" strokeWidth={2} />
-                  </div>
-                  {f.premium && (
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-yellow-300/80 border border-yellow-300/30 rounded-full px-2 py-0.5">
-                      ★ Premium
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <h3 className="font-medium text-sm">{f.title}</h3>
-                  <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
-                    {f.copy}
-                  </p>
-                </div>
-              </motion.div>
+              />
             ))}
           </motion.div>
         </div>
