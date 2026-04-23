@@ -235,6 +235,33 @@ export default function LandingPage() {
               </span>
             </motion.div>
 
+            {/* Stats bar */}
+            <motion.div
+              variants={fadeUp}
+              className="flex items-center justify-center gap-x-5 gap-y-2 flex-wrap text-[11px] font-mono uppercase tracking-[0.15em] text-muted-foreground pt-3"
+            >
+              <span className="flex items-center gap-1.5">
+                <span className="stat-num text-foreground">14</span>
+                <span>QC checks</span>
+              </span>
+              <span className="text-border">·</span>
+              <span className="flex items-center gap-1.5">
+                <span className="stat-num text-foreground">45</span>
+                <span>photos in under 2 min</span>
+              </span>
+              <span className="text-border">·</span>
+              <span className="flex items-center gap-1.5">
+                <span>From</span>
+                <span className="stat-num text-foreground">$8</span>
+                <span>/ property</span>
+              </span>
+              <span className="text-border">·</span>
+              <span className="flex items-center gap-1.5">
+                <span className="stat-num text-foreground">0</span>
+                <span>subscriptions</span>
+              </span>
+            </motion.div>
+
             <motion.div
               variants={fadeUp}
               className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2"
@@ -323,7 +350,11 @@ export default function LandingPage() {
               variants={fadeUp}
               className="text-3xl md:text-4xl font-semibold tracking-tight"
             >
-              Everything AutoQC does, on every property.
+              <span className="stat-num">14</span> checks.{" "}
+              <span className="stat-num">9</span> auto-fixes.{" "}
+              <span className="stat-num">3</span> AI rescues.
+              <br />
+              On every property. Before your agent sees it.
             </motion.h2>
             <motion.p
               variants={fadeUp}
@@ -483,7 +514,7 @@ export default function LandingPage() {
                 With AutoQC
               </p>
               <p className="text-sm leading-relaxed">
-                Every shot runs through an automated twelve-point audit
+                Every shot runs through an automated fourteen-point audit
                 before delivery. Mistakes get caught and fixed or flagged
                 for your eyes only.
               </p>
@@ -573,7 +604,7 @@ export default function LandingPage() {
               variants={fadeUp}
               className="text-3xl md:text-4xl font-semibold tracking-tight"
             >
-              Four steps. No manual labor.
+              Four steps. Under two minutes. No manual labor.
             </motion.h2>
           </motion.div>
 
@@ -589,25 +620,29 @@ export default function LandingPage() {
                 icon: Upload,
                 step: "01",
                 title: "Upload",
-                copy: "Drag a shoot in. JPEG, PNG, TIFF.",
+                timing: "~30 seconds",
+                copy: "Drag a shoot in. JPEG, PNG, TIFF. Direct to S3, no round-trip through a server.",
               },
               {
                 icon: Eye,
                 step: "02",
                 title: "Scan",
-                copy: "Nine-category QC audit runs on every shot in parallel.",
+                timing: "~90 seconds",
+                copy: "14 QC checks run in parallel Lambdas on every shot. Claude Vision grades composition. Faster than your coffee cools.",
               },
               {
                 icon: Zap,
                 step: "03",
                 title: "Fix",
-                copy: "Corrections applied automatically. Recommendations executed, not suggested.",
+                timing: "Zero manual labor",
+                copy: "Auto-fixes apply when safe. AI rescues deblur soft focus. Distractions inpainted out. Recommendations executed, not suggested.",
               },
               {
                 icon: Send,
                 step: "04",
                 title: "Deliver",
-                copy: "Push to Aryeo, HDPhotoHub, Spiro, or Tonomo. Or download the ZIP.",
+                timing: "One click",
+                copy: "Push to Aryeo, HDPhotoHub, Spiro, or Tonomo. Or download the ZIP. Lightroom-compatible bundle available.",
               },
             ].map((s) => (
               <motion.div
@@ -622,7 +657,10 @@ export default function LandingPage() {
                   <s.icon className="w-4 h-4 text-primary" strokeWidth={2} />
                 </div>
                 <h3 className="font-medium text-sm">{s.title}</h3>
-                <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+                <span className="inline-block mt-1.5 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-[0.1em] border border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-primary">
+                  {s.timing}
+                </span>
+                <p className="text-[13px] text-muted-foreground mt-2.5 leading-relaxed">
                   {s.copy}
                 </p>
               </motion.div>
