@@ -52,10 +52,9 @@ export async function POST(req: NextRequest) {
       });
       agencyId = existingMembership.agencyId;
     } else {
-      // Create new agency with 10 free welcome credits so every signup
-      // can run a real property end to end without paying first. Logged
-      // as a PROMO transaction so it shows up in the audit trail.
-      const WELCOME_CREDITS = 10;
+      // Create new agency with a zero credit balance. No welcome bonus.
+      // Volume discounts on bulk packs (see src/lib/credits.ts) are the
+      // incentive to buy, not a free-grant on signup.
       const agency = await prisma.agency.create({
         data: {
           name: body.agencyName,
@@ -69,7 +68,7 @@ export async function POST(req: NextRequest) {
           serviceTypes: body.serviceTypes || [],
           currentPlatforms: body.currentPlatforms || [],
           onboardingComplete: true,
-          creditBalance: WELCOME_CREDITS,
+          creditBalance: 0,
           members: {
             create: { userId: session.user.id, role: "owner" },
           },
@@ -77,13 +76,6 @@ export async function POST(req: NextRequest) {
             create: {
               name: body.styleProfileName || "Default Style",
               isDefault: true,
-            },
-          },
-          creditTransactions: {
-            create: {
-              type: "PROMO",
-              amount: WELCOME_CREDITS,
-              description: "Welcome bonus: 10 free credits",
             },
           },
         },

@@ -31,12 +31,12 @@ export const updates: UpdateEntry[] = [
     version: "1.5.0",
     date: "2026-04-23",
     title: "Self-serve signup",
-    tagline: "Create your own AutoQC account. Ten free credits on signup.",
+    tagline: "Create your own AutoQC account. Pay as you go, save on volume.",
     changes: [
       {
         category: "Feature",
         title: "Create an account in 30 seconds",
-        body: "Brand-new visitors can sign up directly at autoqc.io/signup. Email, password (10+ characters), and you are in. First run lands in Onboarding where we set up your agency and grant ten free credits so you can run a real property end to end without paying first.",
+        body: "Brand-new visitors can sign up directly at autoqc.io/signup. Email, password (10+ characters), and you are in. First run lands in Onboarding where we set up your agency. Credits are pay as you go with volume discounts up to 20% on bulk packs.",
         href: "/signup",
       },
       {

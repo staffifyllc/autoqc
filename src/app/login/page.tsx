@@ -122,7 +122,7 @@ export default function LoginPage() {
             <Link href="/signup" className="text-foreground hover:underline">
               Create an account
             </Link>
-            . Ten free credits on signup.
+            .
           </p>
         </motion.div>
       </div>

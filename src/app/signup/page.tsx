@@ -90,7 +90,7 @@ export default function SignupPage() {
 
           <h1 className="text-2xl font-bold mb-2">Create your account</h1>
           <p className="text-muted-foreground text-sm mb-8">
-            Ten free credits on signup. No credit card required.
+            Pay as you go. Volume discounts up to 20% on bulk credit packs.
           </p>
 
           <form onSubmit={handleSignup} className="space-y-4">
