@@ -14,6 +14,7 @@ import {
   Settings,
   LogOut,
   ShieldCheck,
+  Mail,
 } from "lucide-react";
 import { Bug, ArrowDownUp, Rocket } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
@@ -102,6 +103,7 @@ export default function DashboardLayout({
           items: [
             { href: "/dashboard/admin", label: "Platform usage", icon: ShieldCheck },
             { href: "/dashboard/admin/bugs", label: "Bug reports", icon: Bug },
+            { href: "/dashboard/admin/announce", label: "Announcements", icon: Mail },
           ],
         },
       ]
