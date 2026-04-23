@@ -3,18 +3,22 @@
 import { useEffect, useState } from "react";
 import {
   Bug,
+  Lightbulb,
   Loader2,
   CheckCircle2,
   XCircle,
   ExternalLink,
   Clock,
   AlertTriangle,
+  MessageSquarePlus,
 } from "lucide-react";
 
 type Reporter = { id: string; name: string | null; email: string } | null;
+type FeedbackType = "BUG" | "FEATURE_REQUEST";
 
 type BugReport = {
   id: string;
+  type: FeedbackType;
   title: string;
   description: string;
   severity: "MINOR" | "NORMAL" | "CRITICAL";
@@ -27,6 +31,8 @@ type BugReport = {
   resolvedAt: string | null;
   reporter: Reporter;
 };
+
+type Filter = "ALL" | FeedbackType;
 
 const STATUSES = ["NEW", "TRIAGED", "IN_PROGRESS", "FIXED", "WONT_FIX"] as const;
 
@@ -50,6 +56,7 @@ export default function AdminBugsPage() {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>("ALL");
 
   const load = async () => {
     try {
@@ -68,6 +75,11 @@ export default function AdminBugsPage() {
   useEffect(() => {
     load();
   }, []);
+
+  const filteredBugs =
+    filter === "ALL" ? bugs : bugs.filter((b) => b.type === filter);
+  const bugCount = bugs.filter((b) => b.type === "BUG").length;
+  const featureCount = bugs.filter((b) => b.type === "FEATURE_REQUEST").length;
 
   const update = async (id: string, patch: Partial<BugReport>) => {
     setSaving(id);
@@ -101,8 +113,8 @@ export default function AdminBugsPage() {
     );
   }
 
-  const newCount = bugs.filter((b) => b.status === "NEW").length;
-  const openCount = bugs.filter(
+  const newCount = filteredBugs.filter((b) => b.status === "NEW").length;
+  const openCount = filteredBugs.filter(
     (b) => !["FIXED", "WONT_FIX"].includes(b.status)
   ).length;
 
@@ -111,11 +123,11 @@ export default function AdminBugsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Bug className="w-5 h-5 text-amber-300" />
-            Bug reports
+            <MessageSquarePlus className="w-5 h-5 text-[hsl(var(--primary))]" />
+            Feedback
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {newCount} new &middot; {openCount} open &middot; {bugs.length} total
+            {newCount} new &middot; {openCount} open &middot; {filteredBugs.length} shown
           </p>
         </div>
         <button
@@ -126,13 +138,47 @@ export default function AdminBugsPage() {
         </button>
       </div>
 
-      {bugs.length === 0 ? (
+      {/* Filter pills */}
+      <div className="flex items-center gap-2">
+        {([
+          { key: "ALL", label: "All", count: bugs.length, icon: null },
+          { key: "BUG", label: "Bugs", count: bugCount, icon: Bug },
+          {
+            key: "FEATURE_REQUEST",
+            label: "Feature requests",
+            count: featureCount,
+            icon: Lightbulb,
+          },
+        ] as const).map((p) => {
+          const active = filter === p.key;
+          const Icon = p.icon;
+          return (
+            <button
+              key={p.key}
+              onClick={() => setFilter(p.key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition ${
+                active
+                  ? "bg-[hsl(var(--primary))]/15 border-[hsl(var(--primary))]/40 text-[hsl(var(--primary))]"
+                  : "bg-white/5 border-white/10 text-muted-foreground hover:bg-white/10"
+              }`}
+            >
+              {Icon && <Icon className="w-3 h-3" />}
+              {p.label}
+              <span className="opacity-60">{p.count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {filteredBugs.length === 0 ? (
         <div className="p-12 text-center border border-dashed border-white/10 rounded-xl text-muted-foreground text-sm">
-          No bug reports yet. When a user submits one, it will show up here.
+          {bugs.length === 0
+            ? "No feedback yet. When a user submits a bug report or feature request, it shows up here."
+            : "No items in this view."}
         </div>
       ) : (
         <div className="space-y-3">
-          {bugs.map((bug) => {
+          {filteredBugs.map((bug) => {
             const isExpanded = expanded === bug.id;
             const age = new Date(bug.createdAt).toLocaleString();
             return (
@@ -144,12 +190,31 @@ export default function AdminBugsPage() {
                   className="w-full text-left p-4 hover:bg-white/5 transition"
                   onClick={() => setExpanded(isExpanded ? null : bug.id)}
                 >
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-3 flex-wrap">
                     <div
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider border ${SEVERITY_COLOR[bug.severity]}`}
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider border ${
+                        bug.type === "FEATURE_REQUEST"
+                          ? "bg-[hsl(var(--primary))]/15 border-[hsl(var(--primary))]/40 text-[hsl(var(--primary))]"
+                          : "bg-amber-500/10 border-amber-500/30 text-amber-200"
+                      }`}
                     >
-                      {bug.severity}
+                      {bug.type === "FEATURE_REQUEST" ? (
+                        <>
+                          <Lightbulb className="w-3 h-3" /> Feature
+                        </>
+                      ) : (
+                        <>
+                          <Bug className="w-3 h-3" /> Bug
+                        </>
+                      )}
                     </div>
+                    {bug.type === "BUG" && (
+                      <div
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider border ${SEVERITY_COLOR[bug.severity]}`}
+                      >
+                        {bug.severity}
+                      </div>
+                    )}
                     <div
                       className={`px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider border ${STATUS_COLOR[bug.status]}`}
                     >

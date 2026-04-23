@@ -15,7 +15,7 @@ import {
   LogOut,
   ShieldCheck,
 } from "lucide-react";
-import { Bug, ArrowDownUp, Rocket } from "lucide-react";
+import { Bug, ArrowDownUp, Rocket, MessageSquarePlus } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
 import { BugReportWidget } from "@/components/dashboard/BugReportWidget";
 import { motion } from "framer-motion";
@@ -52,7 +52,7 @@ const navSections: Array<{
       { href: "/dashboard/credits", label: "Credits", icon: Coins },
       { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
       { href: "/dashboard/account", label: "Password", icon: Settings },
-      { href: "/dashboard/account/bugs", label: "My Reports", icon: Bug },
+      { href: "/dashboard/account/bugs", label: "My feedback", icon: MessageSquarePlus },
     ],
   },
 ];
@@ -101,7 +101,7 @@ export default function DashboardLayout({
           label: "Admin",
           items: [
             { href: "/dashboard/admin", label: "Platform usage", icon: ShieldCheck },
-            { href: "/dashboard/admin/bugs", label: "Bug reports", icon: Bug },
+            { href: "/dashboard/admin/bugs", label: "Feedback", icon: MessageSquarePlus },
           ],
         },
       ]

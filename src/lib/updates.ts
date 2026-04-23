@@ -28,6 +28,25 @@ export type UpdateEntry = {
 
 export const updates: UpdateEntry[] = [
   {
+    version: "1.6.0",
+    date: "2026-04-23",
+    title: "Suggest a feature",
+    tagline: "The floating widget now reports bugs and collects feature ideas.",
+    changes: [
+      {
+        category: "Feature",
+        title: "Send feedback button, bugs or ideas",
+        body: "The floating button at the bottom-right of every dashboard page now opens a two-tab widget. Report a bug as before, or switch to Suggest a feature and tell us what is missing. Feature requests land in the same admin inbox as bugs. When we ship the feature, you get an email.",
+        href: "/dashboard/account/bugs",
+      },
+      {
+        category: "Polish",
+        title: "Admin triage separates bugs from ideas",
+        body: "Admins get filter pills (All, Bugs, Feature requests) and a type badge on every item. Severity only shows for bugs, since features do not block anything.",
+      },
+    ],
+  },
+  {
     version: "1.5.0",
     date: "2026-04-23",
     title: "Self-serve signup",

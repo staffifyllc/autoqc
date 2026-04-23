@@ -410,6 +410,7 @@ model BugReport {
   id              String       @id @default(cuid())
   reporterUserId  String
   agencyId        String?
+  type            FeedbackType @default(BUG)
   title           String
   description     String       @db.Text
   severity        BugSeverity  @default(NORMAL)
@@ -417,7 +418,7 @@ model BugReport {
   screenshotKey   String?      // S3 key for optional screenshot
   pageUrl         String?      // where the user was when they reported
   userAgent       String?      @db.Text
-  prUrl           String?      // link to the PR fixing this
+  prUrl           String?      // link to the PR fixing this / shipping the feature
   fixedCommitSha  String?
   internalNotes   String?      @db.Text
   resolvedAt      DateTime?
@@ -426,6 +427,12 @@ model BugReport {
 
   @@index([status])
   @@index([reporterUserId])
+  @@index([type])
+}
+
+enum FeedbackType {
+  BUG
+  FEATURE_REQUEST
 }
 
 enum BugSeverity {
