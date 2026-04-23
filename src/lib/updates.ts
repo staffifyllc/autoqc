@@ -28,6 +28,25 @@ export type UpdateEntry = {
 
 export const updates: UpdateEntry[] = [
   {
+    version: "1.5.0",
+    date: "2026-04-23",
+    title: "Self-serve signup",
+    tagline: "Create your own AutoQC account. Ten free credits on signup.",
+    changes: [
+      {
+        category: "Feature",
+        title: "Create an account in 30 seconds",
+        body: "Brand-new visitors can sign up directly at autoqc.io/signup. Email, password (10+ characters), and you are in. First run lands in Onboarding where we set up your agency and grant ten free credits so you can run a real property end to end without paying first.",
+        href: "/signup",
+      },
+      {
+        category: "Feature",
+        title: "Sign-in page now links to signup",
+        body: "The login page no longer dead-ends with 'ask your agency admin.' If you do not have an account, the link right under the form walks you into signup.",
+      },
+    ],
+  },
+  {
     version: "1.4.0",
     date: "2026-04-22",
     title: "Homepage refresh + Updates tab",
