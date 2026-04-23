@@ -11,7 +11,7 @@
 // weights, hosted on Replicate infra. ~$0.04 per image. At $1 retail
 // that is still a 96% margin.
 
-const REPLICATE_MODEL = "google-deepmind/nano-banana";
+const REPLICATE_MODEL = "google/nano-banana";
 
 export const TWILIGHT_PROMPT = `Transform this daytime real estate exterior photo into a photorealistic twilight scene, as if the photographer returned at dusk and shot the exact same frame:
 
