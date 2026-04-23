@@ -166,7 +166,7 @@ export default function LandingPage() {
               Sign in
             </Link>
             <Link
-              href="/login"
+              href="/signup"
               className="text-sm px-3.5 py-1.5 rounded-md accent-bg text-black font-medium hover:opacity-90 transition"
             >
               Get started
@@ -267,7 +267,7 @@ export default function LandingPage() {
               className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2"
             >
               <Link
-                href="/login"
+                href="/signup"
                 className="group flex items-center gap-2 px-5 py-2.5 rounded-md accent-bg text-black text-sm font-medium hover:opacity-90 transition"
               >
                 Get started
@@ -779,7 +779,7 @@ export default function LandingPage() {
             className="mt-7"
           >
             <Link
-              href="/login"
+              href="/signup"
               className="group inline-flex items-center gap-2 px-6 py-3 rounded-md accent-bg text-black font-medium hover:opacity-90 transition"
             >
               Get started
