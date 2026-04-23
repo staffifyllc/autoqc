@@ -29,6 +29,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { SpotlightCard } from "@/components/landing/SpotlightCard";
+import { TwilightHero } from "@/components/landing/TwilightHero";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -188,7 +189,7 @@ export default function LandingPage() {
               className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border text-[11px] font-mono uppercase tracking-wider text-muted-foreground"
             >
               <span className="w-1.5 h-1.5 rounded-full accent-bg" />
-              The final checkpoint before delivery
+              The last stop between your editor and your agent
             </motion.div>
 
             <motion.h1
@@ -204,13 +205,35 @@ export default function LandingPage() {
               variants={fadeUp}
               className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed"
             >
-              Overseas editing teams and auto-editing tools both miss things.
-              A blown window. A crooked wall. A family photo left unblurred.
-              By the time the agent spots it, it is already a revision request
-              or a lost contract. AutoQC reviews every property against a
-              twelve-point checklist before you deliver. One final pass, built
-              on trust, so the mistakes never reach your client.
+              AutoQC is <span className="text-foreground font-medium">not an editing service</span>.
+              Your editor (overseas team, in-house, Imagen, AutoHDR, whoever)
+              still edits. AutoQC is the pass that runs after, catching the
+              crooked wall, the blown window, the unblurred family photo. Plugs
+              in between your editor and the realtor, ships the final set to
+              Aryeo, HDPhotoHub, or Dropbox when you are done.
             </motion.p>
+
+            {/* Workflow strip */}
+            <motion.div
+              variants={fadeUp}
+              className="flex items-center justify-center gap-2 flex-wrap text-[11px] font-mono uppercase tracking-[0.15em] text-muted-foreground pt-1"
+            >
+              <span className="px-2.5 py-1 rounded-md border border-border bg-[hsl(var(--surface-1))]">
+                Shoot
+              </span>
+              <span className="text-border">→</span>
+              <span className="px-2.5 py-1 rounded-md border border-border bg-[hsl(var(--surface-1))]">
+                Your editor
+              </span>
+              <span className="text-border">→</span>
+              <span className="px-2.5 py-1 rounded-md border border-[hsl(var(--accent))]/50 bg-[hsl(var(--accent))]/10 text-[hsl(var(--accent))]">
+                AutoQC
+              </span>
+              <span className="text-border">→</span>
+              <span className="px-2.5 py-1 rounded-md border border-border bg-[hsl(var(--surface-1))]">
+                Agent / MLS
+              </span>
+            </motion.div>
 
             <motion.div
               variants={fadeUp}
@@ -335,6 +358,9 @@ export default function LandingPage() {
           </motion.div>
         </div>
       </section>
+
+      {/* Virtual Twilight — prominent new-feature spotlight */}
+      <TwilightHero />
 
       {/* Kitchen color-temperature demo */}
       <section className="py-20 px-6 border-t border-border">

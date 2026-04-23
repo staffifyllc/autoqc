@@ -58,11 +58,13 @@ export function SpotlightCard({
           ? "transform 0.1s ease-out, border-color 0.3s"
           : "transform 0.5s cubic-bezier(0.2, 0.9, 0.3, 1), border-color 0.3s",
       }}
-      className={`relative overflow-hidden panel p-5 space-y-3 ${
+      className={`relative overflow-hidden panel p-5 space-y-3 transition-[box-shadow] ${
         hovered
           ? "border-[hsl(var(--accent))]/60 shadow-[0_0_30px_-5px_hsl(var(--accent)/0.25)]"
+          : isNew
+          ? "border-[hsl(var(--accent))]/35 new-card-pulse"
           : "border-border"
-      } transition-[box-shadow]`}
+      }`}
     >
       {/* Cursor-following spotlight */}
       <div
