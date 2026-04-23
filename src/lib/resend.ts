@@ -4,7 +4,7 @@
 // We call the REST API directly via fetch to avoid pulling the whole
 // resend SDK for what is a one-endpoint operation.
 
-const FROM = "AutoQC <autoqc@recruiting.gostaffify.com>";
+const FROM = "AutoQC <hello@autoqc.io>";
 const REPLY_TO = "pchareth@gmail.com";
 
 type SendArgs = {
