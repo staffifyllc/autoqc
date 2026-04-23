@@ -28,6 +28,34 @@ export type UpdateEntry = {
 
 export const updates: UpdateEntry[] = [
   {
+    version: "1.4.1",
+    date: "2026-04-23",
+    title: "Landing page: speed and scale, up front",
+    tagline: "New visitors see exactly what AutoQC does and how fast it does it.",
+    changes: [
+      {
+        category: "Polish",
+        title: "Stats bar in the hero",
+        body: "14 QC checks, 45 photos in under two minutes, from $8 per property, zero subscriptions. The capability and the price now register in the first two seconds of the page.",
+      },
+      {
+        category: "Polish",
+        title: "What it does, counted",
+        body: "The features headline now leads with the numbers: 14 checks, 9 auto-fixes, 3 AI rescues. Readers skim, numbers anchor.",
+      },
+      {
+        category: "Polish",
+        title: "How it works, timed",
+        body: "Each of the four steps now shows exactly how long it takes. Upload ~30s. Scan ~90s. Fix is zero manual labor. Deliver is one click. No more vague 'fast'.",
+      },
+      {
+        category: "Fix",
+        title: "Outdated check count",
+        body: "The Why section was still calling it a twelve-point audit. Updated to the current fourteen.",
+      },
+    ],
+  },
+  {
     version: "1.4.0",
     date: "2026-04-22",
     title: "Homepage refresh + Updates tab",
