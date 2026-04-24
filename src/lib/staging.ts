@@ -147,6 +147,7 @@ Beyond those two rules: virtually stage this real estate photo by adding realist
 export function buildStagingPrompt(opts: {
   roomType: string;
   style: StagingStyleId;
+  hasInspiration?: boolean;
 }): string {
   const manifest = ROOM_MANIFEST[opts.roomType];
   const style = styleById(opts.style);
@@ -157,6 +158,16 @@ export function buildStagingPrompt(opts: {
     throw new Error(`Unknown staging style: ${opts.style}`);
   }
 
+  // When the user provides a style reference image, tell the model to
+  // pull aesthetic cues from it — but explicitly forbid copying the
+  // reference's room layout or architecture. The room being staged is
+  // ALWAYS the first image; the reference is for tone/palette only.
+  const inspirationClause = opts.hasInspiration
+    ? `
+
+A second reference image is attached as visual inspiration for the furniture style, color palette, textures, and overall mood. Use it for aesthetic cues only. Do not copy the reference image's room layout, window count, door positions, ceiling shape, or any architectural element. The room you are staging is the first image; the reference is the second image. Architecture of the first image is absolute.`
+    : "";
+
   // Preservation-first. Room-specific furniture guidance and style
   // modifier come AFTER so the model has already committed to
   // preserving the architecture before picking what to add.
@@ -164,7 +175,7 @@ export function buildStagingPrompt(opts: {
   // because diffusion models weight both ends of the prompt and
   // re-stating the window/door rule right before generation starts
   // measurably cuts violations vs. stating it only at the top.
-  return `${PRESERVATION_CORE}
+  return `${PRESERVATION_CORE}${inspirationClause}
 
 Furniture and decor to add:
 ${manifest.add}

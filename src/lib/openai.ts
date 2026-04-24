@@ -44,6 +44,11 @@ export async function openaiEditImage(args: {
   prompt: string;
   quality?: Quality;
   size?: Size;
+  // Optional reference image(s) that guide the style/aesthetic of the
+  // output. gpt-image-1 /v1/images/edits accepts multiple images via
+  // repeated `image[]` form fields. The first image is the primary one
+  // being edited; subsequent ones are visual style references.
+  inspirationUrl?: string;
 }): Promise<GeneratedImage> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -56,7 +61,17 @@ export async function openaiEditImage(args: {
 
   const form = new FormData();
   form.append("model", "gpt-image-1");
-  form.append("image", sourceBlob, "source.jpg");
+  // OpenAI's /v1/images/edits accepts a single image under the `image`
+  // field OR multiple images under `image[]`. We already verified
+  // `image` works for the single-source path — don't break it. Only
+  // switch to array form when an inspiration reference is also present.
+  if (args.inspirationUrl) {
+    const inspirationBlob = await fetchAsBlob(args.inspirationUrl);
+    form.append("image[]", sourceBlob, "source.jpg");
+    form.append("image[]", inspirationBlob, "inspiration.jpg");
+  } else {
+    form.append("image", sourceBlob, "source.jpg");
+  }
   form.append("prompt", args.prompt);
   form.append("size", args.size ?? "1536x1024");
   form.append("n", "1");

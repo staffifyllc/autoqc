@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Download,
+  ImagePlus,
+  ImageIcon,
 } from "lucide-react";
 import {
   ELIGIBLE_STAGING_ROOM_TYPES,
@@ -43,6 +45,12 @@ export function StagingButton({
   // Closed-beta gate. Same pattern the sidebar uses to hide admin nav.
   // While we validate render quality, only admin agencies see the button.
   const [eligible, setEligible] = useState<boolean | null>(null);
+  // Optional inspiration image. When set, gets passed to OpenAI as a
+  // second image[] entry and the prompt gains a "use this for style
+  // cues only, not architecture" clause.
+  const [inspirationKey, setInspirationKey] = useState<string | null>(null);
+  const [inspirationPreview, setInspirationPreview] = useState<string | null>(null);
+  const [uploadingInspiration, setUploadingInspiration] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +79,44 @@ export function StagingButton({
     setError(null);
   };
 
+  const uploadInspiration = async (file: File) => {
+    setUploadingInspiration(true);
+    setError(null);
+    try {
+      const r1 = await fetch("/api/staging/inspiration-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, contentType: file.type }),
+      });
+      const d1 = await r1.json();
+      if (!r1.ok) throw new Error(d1?.error ?? "Upload URL failed");
+      const put = await fetch(d1.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+      setInspirationKey(d1.s3Key);
+      setInspirationPreview(URL.createObjectURL(file));
+      // Throw away any existing preview - the inspiration changes the
+      // output so the old preview is stale.
+      setPreviewUrl(null);
+      setFinalUrl(null);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setUploadingInspiration(false);
+    }
+  };
+
+  const clearInspiration = () => {
+    setInspirationKey(null);
+    if (inspirationPreview) URL.revokeObjectURL(inspirationPreview);
+    setInspirationPreview(null);
+    setPreviewUrl(null);
+    setFinalUrl(null);
+  };
+
   const generate = async (s: StagingStyleId) => {
     setStyle(s);
     setGenerating(true);
@@ -81,7 +127,10 @@ export function StagingButton({
       const res = await fetch(`/api/photos/${photoId}/staging/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ style: s }),
+        body: JSON.stringify({
+          style: s,
+          inspirationKey: inspirationKey ?? undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Preview failed");
@@ -101,7 +150,10 @@ export function StagingButton({
       const res = await fetch(`/api/photos/${photoId}/staging/purchase`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ style }),
+        body: JSON.stringify({
+          style,
+          inspirationKey: inspirationKey ?? undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -187,6 +239,65 @@ export function StagingButton({
                   {s.label}
                 </button>
               ))}
+            </div>
+
+            {/* Inspiration upload */}
+            <div className="px-5 py-3 border-b border-white/10 flex items-center gap-3">
+              {inspirationKey && inspirationPreview ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={inspirationPreview}
+                    alt="Inspiration reference"
+                    className="w-14 h-14 rounded-lg object-cover border border-amber-500/40"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-amber-200 flex items-center gap-1.5">
+                      <ImageIcon className="w-3 h-3" />
+                      Inspiration attached
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Style cues will be pulled from your reference image.
+                    </div>
+                  </div>
+                  <button
+                    onClick={clearInspiration}
+                    disabled={generating || purchasing || uploadingInspiration}
+                    className="text-[11px] px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                </>
+              ) : (
+                <label
+                  className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-dashed border-white/20 hover:border-amber-500/40 hover:bg-amber-500/5 cursor-pointer transition ${
+                    uploadingInspiration ? "opacity-60 pointer-events-none" : ""
+                  }`}
+                  title="Upload a reference image to guide the furniture style"
+                >
+                  {uploadingInspiration ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <ImagePlus className="w-3.5 h-3.5" />
+                  )}
+                  <span>
+                    {uploadingInspiration
+                      ? "Uploading..."
+                      : "Upload inspiration (optional)"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={generating || purchasing || uploadingInspiration}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadInspiration(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
             </div>
 
             <div className="flex-1 overflow-hidden bg-black relative flex items-center justify-center min-h-[320px]">

@@ -30,6 +30,7 @@ export async function POST(
     const body = (await req.json().catch(() => ({}))) as {
       style?: string;
       overrideRoomType?: string;
+      inspirationKey?: string;
     };
     const style = body.style as StagingStyleId | undefined;
     if (!style || !styleById(style)) {
@@ -102,13 +103,19 @@ export async function POST(
     const sourceKey = preferOriginal ? photo.s3KeyOriginal : photo.s3KeyFixed!;
     const sourceUrl = await getDownloadUrl(sourceKey);
 
-    const prompt = buildStagingPrompt({ roomType, style });
+    const hasInspiration = !!body.inspirationKey;
+    const inspirationUrl = hasInspiration
+      ? await getDownloadUrl(body.inspirationKey!)
+      : undefined;
+
+    const prompt = buildStagingPrompt({ roomType, style, hasInspiration });
 
     const { bytes, mimeType } = await openaiEditImage({
       sourceUrl,
       prompt,
       quality: "high",
       size: "1536x1024",
+      inspirationUrl,
     });
 
     const ext = mimeType.includes("png") ? "png" : "jpg";
