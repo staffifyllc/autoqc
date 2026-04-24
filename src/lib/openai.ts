@@ -29,14 +29,26 @@ type Size = "1024x1024" | "1536x1024" | "1024x1536" | "auto";
 // multipart form can accept. Real estate photos are usually landscape
 // JPEGs so we default to letting OpenAI infer the size when possible
 // but force landscape for staging where the room orientation matters.
+// Fetch an image URL and return a Blob with an explicitly-set MIME
+// type. Do NOT trust S3's Content-Type header here — when it comes back
+// as "application/octet-stream" (or even with a charset suffix),
+// OpenAI's /v1/images/edits endpoint silently falls back to dall-e-2
+// and then rejects model=gpt-image-1 with a confusing
+// "Value must be 'dall-e-2'" error. Forcing a clean image/jpeg or
+// image/png on the Blob fixes that.
 async function fetchAsBlob(url: string): Promise<Blob> {
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Could not fetch source image: HTTP ${res.status}`);
   }
-  const contentType = res.headers.get("content-type") || "image/jpeg";
+  const raw = res.headers.get("content-type") || "";
+  // Accept only the three shapes gpt-image-1 understands, strip any
+  // charset or extra params, and default to jpeg.
+  let mime: "image/jpeg" | "image/png" | "image/webp" = "image/jpeg";
+  if (raw.startsWith("image/png")) mime = "image/png";
+  else if (raw.startsWith("image/webp")) mime = "image/webp";
   const buf = await res.arrayBuffer();
-  return new Blob([buf], { type: contentType });
+  return new Blob([buf], { type: mime });
 }
 
 export async function openaiEditImage(args: {
