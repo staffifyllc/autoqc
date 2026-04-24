@@ -39,7 +39,7 @@ const navSections: Array<{
       { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
       { href: "/dashboard/properties", label: "Properties", icon: Home },
       { href: "/dashboard/staging", label: "Virtual Staging", icon: Sofa },
-      { href: "/dashboard/dropbox-automation", label: "Dropbox Automation", icon: FolderSync },
+      { href: "/dashboard/dropbox-automation", label: "AutoHDR Automation", icon: FolderSync },
       { href: UPDATES_HREF, label: "What's New", icon: Rocket },
     ],
   },

@@ -125,9 +125,9 @@ export default function DropboxAutomationPage() {
           <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center">
             <FolderSync className="w-4 h-4 text-blue-300" />
           </div>
-          <h1 className="text-2xl font-bold">Dropbox Automation</h1>
+          <h1 className="text-2xl font-bold">AutoHDR Automation</h1>
           <span className="text-[10px] font-mono uppercase tracking-wider text-blue-300 bg-blue-500/10 border border-blue-500/30 px-2 py-0.5 rounded">
-            AutoHDR
+            via Dropbox
           </span>
         </div>
         <p className="text-sm text-muted-foreground max-w-2xl">
@@ -338,40 +338,110 @@ export default function DropboxAutomationPage() {
         </div>
       </div>
 
-      {/* Setup notes */}
+      {/* Full setup walkthrough */}
       <div className="panel p-6 rounded-2xl border border-white/5">
-        <h2 className="text-sm font-semibold mb-3">How to get a Dropbox access token</h2>
-        <ol className="text-[13px] text-muted-foreground space-y-3 list-decimal list-inside">
-          <li>
-            Open the{" "}
-            <Link
-              href="https://www.dropbox.com/developers/apps"
-              target="_blank"
-              className="text-foreground underline"
-            >
-              Dropbox App Console
-            </Link>{" "}
-            in a new tab.
-          </li>
-          <li>
-            Click <strong>Create app</strong>. Pick <strong>Scoped access</strong>, <strong>Full Dropbox</strong>, name it something like "AutoQC AutoHDR Link."
-          </li>
-          <li>
-            On the app page, open the <strong>Permissions</strong> tab and enable:
-            <code className="block bg-white/5 border border-white/10 rounded px-2 py-1 mt-1 text-[11px] font-mono">
-              files.content.read · files.content.write · files.metadata.read · files.metadata.write · account_info.read
-            </code>
-          </li>
-          <li>
-            Back on the <strong>Settings</strong> tab, scroll to <strong>OAuth 2</strong> and generate an <strong>access token</strong>. Paste it above.
-          </li>
-          <li>
-            Create the folder <code className="bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-[11px] font-mono">/AutoQC Inbox</code> in your Dropbox. Point AutoHDR at subfolders inside it (one per property) and you are done.
-          </li>
-        </ol>
-        <p className="text-[11px] text-muted-foreground mt-4">
-          For real-time processing, ask your account manager to wire a webhook into your Dropbox app. Without it, AutoQC falls back to a 30-minute polling cron, which is still hands-off.
+        <h2 className="text-sm font-semibold mb-1">Full setup walkthrough</h2>
+        <p className="text-[12px] text-muted-foreground mb-5">
+          First-time setup takes about 10 minutes. You only need to do this once per AutoQC agency.
         </p>
+
+        <div className="space-y-5">
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-wider text-blue-300 mb-1.5">
+              Step 1 · Create a Dropbox app
+            </div>
+            <div className="text-[13px] text-muted-foreground leading-relaxed">
+              Open the{" "}
+              <Link
+                href="https://www.dropbox.com/developers/apps"
+                target="_blank"
+                className="text-foreground underline"
+              >
+                Dropbox App Console
+              </Link>
+              {" "}in a new tab. Click <strong>Create app</strong>. Pick{" "}
+              <strong>Scoped access</strong>, then <strong>Full Dropbox</strong>, then name it something like "AutoQC AutoHDR Link."
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-wider text-blue-300 mb-1.5">
+              Step 2 · Enable the right permissions
+            </div>
+            <div className="text-[13px] text-muted-foreground leading-relaxed">
+              On the app page, open the <strong>Permissions</strong> tab and check these five scopes:
+              <code className="block bg-white/5 border border-white/10 rounded px-2 py-1.5 mt-1.5 text-[11px] font-mono leading-relaxed">
+                files.content.read<br />
+                files.content.write<br />
+                files.metadata.read<br />
+                files.metadata.write<br />
+                account_info.read
+              </code>
+              Click <strong>Submit</strong> at the bottom of the Permissions tab.
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-wider text-blue-300 mb-1.5">
+              Step 3 · Wire up the webhook (for real-time ingest)
+            </div>
+            <div className="text-[13px] text-muted-foreground leading-relaxed">
+              Back on the app page, scroll to the <strong>Webhooks</strong> section near the bottom and add this URL:
+              <code className="block bg-white/5 border border-white/10 rounded px-2 py-1.5 mt-1.5 text-[11px] font-mono">
+                https://www.autoqc.io/api/webhooks/dropbox
+              </code>
+              Dropbox will ping that URL with a <code className="text-[11px]">?challenge=...</code> verification. Our endpoint responds correctly and the webhook becomes active.
+              <br />
+              <span className="text-[11px] italic opacity-70">
+                If you skip this step, AutoQC still catches drops on the 30-minute safety-net cron. Real-time is the only difference.
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-wider text-blue-300 mb-1.5">
+              Step 4 · Copy the App secret
+            </div>
+            <div className="text-[13px] text-muted-foreground leading-relaxed">
+              On the <strong>Settings</strong> tab, find <strong>App secret</strong> and click <strong>Show</strong>. Copy it somewhere safe.
+              <br />
+              This secret is what AutoQC uses to verify webhook signatures (it proves the webhook really came from Dropbox, not some random caller). Send it to your AutoQC account rep or email it to{" "}
+              <a href="mailto:hello@autoqc.io" className="text-foreground underline">
+                hello@autoqc.io
+              </a>{" "}
+              so we can drop it into the production env as <code className="text-[11px]">DROPBOX_APP_SECRET</code>. Without it, the webhook endpoint rejects every request by design.
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-wider text-blue-300 mb-1.5">
+              Step 5 · Generate the access token
+            </div>
+            <div className="text-[13px] text-muted-foreground leading-relaxed">
+              Still on the <strong>Settings</strong> tab, scroll to <strong>OAuth 2</strong>. Under <strong>Generated access token</strong> click <strong>Generate</strong> and copy the token. Paste it into the connect form above.
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-wider text-blue-300 mb-1.5">
+              Step 6 · Make your inbox folder
+            </div>
+            <div className="text-[13px] text-muted-foreground leading-relaxed">
+              In your Dropbox, create the folder you picked above (default is{" "}
+              <code className="text-[11px] font-mono">/AutoQC Inbox</code>). Point AutoHDR at it. For each property, create a subfolder inside the inbox (e.g.{" "}
+              <code className="text-[11px] font-mono">/AutoQC Inbox/123 Main St/</code>) and have AutoHDR write finished JPEGs there. AutoQC treats each subfolder as one property.
+            </div>
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-white/5">
+            <div className="text-[11px] font-mono uppercase tracking-wider text-green-300 mb-1.5">
+              Done. What to expect
+            </div>
+            <div className="text-[13px] text-muted-foreground leading-relaxed">
+              With the webhook active, a drop into your inbox starts processing within seconds. Without it, the safety-net cron catches drops within 30 minutes. Either way, finished files come back to <strong>/Processed</strong> (or your configured outbox) automatically.
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
