@@ -11,6 +11,7 @@ import {
   Clock,
   AlertTriangle,
   MessageSquarePlus,
+  ThumbsUp,
 } from "lucide-react";
 
 type Reporter = { id: string; name: string | null; email: string } | null;
@@ -329,6 +330,21 @@ export default function AdminBugsPage() {
                           Review PR on GitHub
                         </a>
                       )}
+                      {bug.type === "FEATURE_REQUEST" &&
+                        bug.status !== "TRIAGED" &&
+                        bug.status !== "FIXED" &&
+                        bug.status !== "WONT_FIX" && (
+                          <button
+                            onClick={() =>
+                              update(bug.id, { status: "TRIAGED" } as any)
+                            }
+                            disabled={saving === bug.id}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30 transition flex items-center gap-1.5 disabled:opacity-50"
+                          >
+                            <ThumbsUp className="w-3 h-3" />
+                            Approve (notify reporter)
+                          </button>
+                        )}
                       {bug.status !== "FIXED" && (
                         <button
                           onClick={() => update(bug.id, { status: "FIXED" } as any)}
@@ -336,7 +352,9 @@ export default function AdminBugsPage() {
                           className="text-xs px-3 py-1.5 rounded-lg bg-green-500/20 border border-green-500/40 text-green-200 hover:bg-green-500/30 transition flex items-center gap-1.5 disabled:opacity-50"
                         >
                           <CheckCircle2 className="w-3 h-3" />
-                          Mark fixed (notify reporter)
+                          {bug.type === "FEATURE_REQUEST"
+                            ? "Mark shipped (notify reporter)"
+                            : "Mark fixed (notify reporter)"}
                         </button>
                       )}
                       {bug.status !== "WONT_FIX" && bug.status !== "FIXED" && (
@@ -348,7 +366,9 @@ export default function AdminBugsPage() {
                           className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition flex items-center gap-1.5 disabled:opacity-50"
                         >
                           <XCircle className="w-3 h-3" />
-                          Won't fix
+                          {bug.type === "FEATURE_REQUEST"
+                            ? "Deny (notify reporter)"
+                            : "Won't fix"}
                         </button>
                       )}
                     </div>

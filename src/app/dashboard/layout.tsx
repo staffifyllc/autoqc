@@ -18,6 +18,7 @@ import {
   Sofa,
   FolderSync,
   BarChart3,
+  Users,
 } from "lucide-react";
 import { Bug, ArrowDownUp, Rocket, MessageSquarePlus } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
@@ -56,6 +57,7 @@ const navSections: Array<{
     items: [
       { href: "/dashboard/credits", label: "Credits", icon: Coins },
       { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
+      { href: "/dashboard/team", label: "Team", icon: Users },
       { href: "/dashboard/account/bugs", label: "My feedback", icon: MessageSquarePlus },
     ],
   },
