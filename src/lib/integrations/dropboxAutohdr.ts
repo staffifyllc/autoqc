@@ -118,6 +118,26 @@ async function getDropbox(creds: DropboxAutohdrCredentials) {
   return new Dropbox({ accessToken: creds.accessToken, fetch: fetch as any });
 }
 
+// Extract the most useful human-readable line from a Dropbox SDK error.
+// The SDK attaches structured errors on .error.error_summary and falls
+// back to .message on transport failures.
+function describeDropboxError(err: any): string {
+  const summary =
+    err?.error?.error_summary ??
+    err?.error?.error?.[".tag"] ??
+    err?.error ??
+    err?.message ??
+    "unknown";
+  if (typeof summary === "object") {
+    try {
+      return JSON.stringify(summary).slice(0, 200);
+    } catch {
+      return "unknown";
+    }
+  }
+  return String(summary).slice(0, 200);
+}
+
 // Capture a cursor at the current moment so future list_folder/continue
 // calls only return things that change after this point. Stored on the
 // Integration credentials.
@@ -134,17 +154,37 @@ export async function initializeCursor(integrationId: string): Promise<{
   const creds = integration.credentials as DropboxAutohdrCredentials;
   const dbx = await getDropbox(creds);
 
-  const accountResult = await dbx.usersGetCurrentAccount();
-  const accountId = (accountResult.result as any).account_id as string;
+  // Step 1: validate the token. If this fails, tell the user the token is bad.
+  let accountId: string;
+  try {
+    const accountResult = await dbx.usersGetCurrentAccount();
+    accountId = (accountResult.result as any).account_id as string;
+  } catch (err: any) {
+    throw new Error(
+      `Dropbox rejected the access token. Generate a new one in the app console (Settings → OAuth 2 → Generate) and make sure the token was created AFTER you submitted the permissions tab. (${describeDropboxError(err)})`
+    );
+  }
 
-  const latest = await dbx.filesListFolderGetLatestCursor({
-    path: creds.watchFolder,
-    recursive: true,
-    include_media_info: false,
-    include_deleted: false,
-    include_has_explicit_shared_members: false,
-  });
-  const cursor = (latest.result as any).cursor as string;
+  // Step 2: capture the watch-folder cursor. If this fails, the path is the problem.
+  let cursor: string;
+  try {
+    const latest = await dbx.filesListFolderGetLatestCursor({
+      path: creds.watchFolder,
+      recursive: true,
+      include_media_info: false,
+      include_deleted: false,
+      include_has_explicit_shared_members: false,
+    });
+    cursor = (latest.result as any).cursor as string;
+  } catch (err: any) {
+    const summary = describeDropboxError(err);
+    const pathHint = summary.includes("path/not_found")
+      ? `The folder "${creds.watchFolder}" does not exist in this Dropbox. Check spelling, capitalization, and that the token user can see it (team-space folders may need to be shared with them).`
+      : summary.includes("missing_scope") || summary.includes("no_permission")
+        ? `The token is missing scopes. In the Permissions tab, enable files.content.read, files.content.write, files.metadata.read, files.metadata.write, account_info.read. Click Submit, then regenerate the access token.`
+        : `Check that the watch folder path "${creds.watchFolder}" exactly matches a folder in this Dropbox.`;
+    throw new Error(`${pathHint} (${summary})`);
+  }
 
   const updated: DropboxAutohdrCredentials = {
     ...creds,
