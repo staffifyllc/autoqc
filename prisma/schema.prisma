@@ -313,6 +313,11 @@ model Photo {
   updatedAt DateTime @updatedAt
 
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // Prevents duplicate rows when parallel ingest runs (webhook + cron,
+  // or Dropbox retries) land on the same file simultaneously. The
+  // ingest code also catches the P2002 from this constraint and skips.
+  @@unique([propertyId, fileName])
 }
 
 enum PhotoStatus {

@@ -426,15 +426,29 @@ export async function ingestAgencyDropbox(args: {
         })
       );
 
-      const photo = await prisma.photo.create({
-        data: {
-          propertyId: property.id,
-          fileName: f.fileName,
-          s3KeyOriginal: s3Key,
-          fileSize,
-        },
-      });
-      newPhotoIds.push(photo.id);
+      // If a parallel ingest run beat us to this filename (webhook +
+      // cron racing), the unique constraint on (propertyId, fileName)
+      // will throw P2002. Treat that as "already handled elsewhere" —
+      // the other run did the S3 upload too, so no cleanup needed.
+      let photoId: string | null = null;
+      try {
+        const photo = await prisma.photo.create({
+          data: {
+            propertyId: property.id,
+            fileName: f.fileName,
+            s3KeyOriginal: s3Key,
+            fileSize,
+          },
+        });
+        photoId = photo.id;
+      } catch (err: any) {
+        if (err?.code === "P2002") {
+          skipped++;
+          continue;
+        }
+        throw err;
+      }
+      newPhotoIds.push(photoId);
       totalIngested++;
     }
 
