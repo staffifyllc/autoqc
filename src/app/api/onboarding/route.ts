@@ -52,9 +52,10 @@ export async function POST(req: NextRequest) {
       });
       agencyId = existingMembership.agencyId;
     } else {
-      // Create new agency with a zero credit balance. No welcome bonus.
-      // Volume discounts on bulk packs (see src/lib/credits.ts) are the
-      // incentive to buy, not a free-grant on signup.
+      // New agency gets a 5-credit welcome bonus so they can try the
+      // product before pulling out a card. Bonus is PROMO type so it
+      // does NOT inflate totalCreditsPurchased / the paying pill.
+      const WELCOME_CREDITS = 5;
       const agency = await prisma.agency.create({
         data: {
           name: body.agencyName,
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest) {
           serviceTypes: body.serviceTypes || [],
           currentPlatforms: body.currentPlatforms || [],
           onboardingComplete: true,
-          creditBalance: 0,
+          creditBalance: WELCOME_CREDITS,
           members: {
             create: { userId: session.user.id, role: "owner" },
           },
@@ -76,6 +77,13 @@ export async function POST(req: NextRequest) {
             create: {
               name: body.styleProfileName || "Default Style",
               isDefault: true,
+            },
+          },
+          creditTransactions: {
+            create: {
+              type: "PROMO",
+              amount: WELCOME_CREDITS,
+              description: `Welcome bonus: ${WELCOME_CREDITS} free credits`,
             },
           },
         },
