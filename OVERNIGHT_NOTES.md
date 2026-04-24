@@ -92,3 +92,32 @@ Recommend **B** as default-on. Would take ~30 min to add via `sharp` overlay in 
 Sign into autoqc.io as the admin account. Open any property with classified room types (living_room, bedroom, dining_room, or office). In the photo detail modal you'll see a new amber **"Stage room"** button next to "Preview Twilight." Click it, pick a style, wait 3-6 seconds. Preview shows watermarked. Click "Keep for 3 credits" if you want the clean render.
 
 If it looks awful on your first photo, that's data — tell me which style, which room, and what specifically is wrong. The prompts are tunable per-style in `src/lib/staging.ts`.
+
+---
+
+## End-to-end smoke test I already ran
+
+Tested the full prompt pipeline on a real photo from your admin agency before wrapping for the night:
+
+- **Source:** `19 Havlina Ln 10.jpg`, classified as `living_room`
+- **Latency:** 8.5-9.5 seconds per render (Replicate sync endpoint + nano-banana)
+- **Cost:** ~$0.04 per render × 6 styles = ~$0.24 total spent on your Replicate account
+- **Output size:** 128-160 KB per jpg (healthy, not overcompressed)
+- **All 6 styles succeeded:** no timeouts, no model errors
+
+**Review the renders side-by-side when you wake:**
+
+```
+open /tmp/autoqc-staging-test/
+```
+
+Files in that folder:
+- `_source.jpg` — the original empty room
+- `staging-test-modern.jpg`
+- `staging-test-traditional.jpg`
+- `staging-test-scandinavian.jpg`
+- `staging-test-farmhouse.jpg`
+- `staging-test-midcentury.jpg`
+- `staging-test-coastal.jpg`
+
+If the source room has furniture already (it's the original upload, not guaranteed empty), that's expected — the prompt will stage over / replace as best it can. The real test is on a true empty room, which you can drop in tomorrow. But the architectural preservation on this test is the key signal: look for invented fireplaces / windows / doorways, which is the v1 risk.
