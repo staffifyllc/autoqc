@@ -18,6 +18,10 @@ type GeneratedImage = {
   mimeType: string;
 };
 
+// `quality` isn't accepted on /v1/images/edits — it's a generate-only
+// param. gpt-image-1 edit renders at its default quality (roughly
+// equivalent to "high" on generate). Kept in the signature as a no-op
+// hint in case OpenAI adds it later.
 type Quality = "low" | "medium" | "high" | "auto";
 type Size = "1024x1024" | "1536x1024" | "1024x1536" | "auto";
 
@@ -54,7 +58,6 @@ export async function openaiEditImage(args: {
   form.append("model", "gpt-image-1");
   form.append("image", sourceBlob, "source.jpg");
   form.append("prompt", args.prompt);
-  form.append("quality", args.quality ?? "high");
   form.append("size", args.size ?? "1536x1024");
   form.append("n", "1");
 
