@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Mail,
   Sofa,
+  FolderSync,
 } from "lucide-react";
 import { Bug, ArrowDownUp, Rocket, MessageSquarePlus } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
@@ -38,6 +39,7 @@ const navSections: Array<{
       { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
       { href: "/dashboard/properties", label: "Properties", icon: Home },
       { href: "/dashboard/staging", label: "Virtual Staging", icon: Sofa },
+      { href: "/dashboard/dropbox-automation", label: "Dropbox Automation", icon: FolderSync },
       { href: UPDATES_HREF, label: "What's New", icon: Rocket },
     ],
   },

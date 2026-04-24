@@ -235,6 +235,16 @@ model Property {
   // eligible rooms once classification completes.
   isStandaloneStaging Boolean @default(false)
 
+  // AutoHDR-via-Dropbox ingest tracking. When a property is auto-created
+  // by the Dropbox watcher we record the source folder path and the
+  // integration id here. After QC finishes we use these to push the
+  // finished files back to the source folder's "/Processed" subfolder.
+  // dropboxPushedAt is set after a successful push-back so the cron
+  // does not push the same property twice.
+  dropboxSourceFolder String?
+  dropboxIntegrationId String?
+  dropboxPushedAt     DateTime?
+
   photoCount      Int      @default(0)
   qcPassCount     Int      @default(0)
   qcFailCount     Int      @default(0)
@@ -337,6 +347,7 @@ enum IntegrationPlatform {
   HDPHOTOHUB
   SPIRO
   TONOMO
+  DROPBOX_AUTOHDR
 }
 
 model UsageRecord {
