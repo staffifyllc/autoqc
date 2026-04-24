@@ -29,6 +29,13 @@ export type DropboxAutohdrCredentials = {
   // Dropbox account_id for the connected user. Used by the webhook to
   // figure out which agency a change notification belongs to.
   accountId?: string;
+  // The user's Dropbox root namespace id. For team accounts this is the
+  // TEAM root, which is where shared folders like "/AutoHDR" usually
+  // live. Without setting the Dropbox-API-Path-Root header to this id,
+  // all paths would resolve against the user's personal namespace and
+  // return path/not_found for anything in team space. Captured during
+  // initializeCursor and passed on every subsequent API call.
+  rootNamespaceId?: string;
   // The Dropbox app's App secret. We store it per-integration because
   // each customer creates their own Dropbox app (at least until we
   // ship a shared-OAuth flow), so there's no single global secret.
@@ -115,7 +122,18 @@ export function parseDropboxPath(
 }
 
 async function getDropbox(creds: DropboxAutohdrCredentials) {
-  return new Dropbox({ accessToken: creds.accessToken, fetch: fetch as any });
+  const opts: any = { accessToken: creds.accessToken, fetch: fetch as any };
+  // If we know the user's root namespace (team or personal), always pass
+  // Dropbox-API-Path-Root = { ".tag": "root", "root": <namespaceId> }. That
+  // makes paths resolve the same way they appear in Dropbox's own web UI,
+  // which is what users expect when they type "/AutoHDR".
+  if (creds.rootNamespaceId) {
+    opts.pathRoot = JSON.stringify({
+      ".tag": "root",
+      root: creds.rootNamespaceId,
+    });
+  }
+  return new Dropbox(opts);
 }
 
 // Extract the most useful human-readable line from a Dropbox SDK error.
@@ -154,21 +172,33 @@ export async function initializeCursor(integrationId: string): Promise<{
   const creds = integration.credentials as DropboxAutohdrCredentials;
   const dbx = await getDropbox(creds);
 
-  // Step 1: validate the token. If this fails, tell the user the token is bad.
+  // Step 1: validate the token AND discover whether this is a team account.
+  // account.root_info.root_namespace_id is the id to pass as Dropbox-API-Path-Root
+  // so paths resolve the way they do in Dropbox's web UI. For team accounts the
+  // root namespace is the TEAM root, which is where shared folders like
+  // "/AutoHDR" actually live.
   let accountId: string;
+  let rootNamespaceId: string | undefined;
   try {
     const accountResult = await dbx.usersGetCurrentAccount();
-    accountId = (accountResult.result as any).account_id as string;
+    const account = accountResult.result as any;
+    accountId = account.account_id as string;
+    rootNamespaceId = account.root_info?.root_namespace_id;
   } catch (err: any) {
     throw new Error(
       `Dropbox rejected the access token. Generate a new one in the app console (Settings → OAuth 2 → Generate) and make sure the token was created AFTER you submitted the permissions tab. (${describeDropboxError(err)})`
     );
   }
 
-  // Step 2: capture the watch-folder cursor. If this fails, the path is the problem.
+  // Step 2: rebuild the client with path_root so paths resolve against the
+  // account's root (team root for team accounts, personal root otherwise).
+  const rootedCreds: DropboxAutohdrCredentials = { ...creds, rootNamespaceId };
+  const rootedDbx = await getDropbox(rootedCreds);
+
+  // Step 3: capture the watch-folder cursor. If this fails, the path is the problem.
   let cursor: string;
   try {
-    const latest = await dbx.filesListFolderGetLatestCursor({
+    const latest = await rootedDbx.filesListFolderGetLatestCursor({
       path: creds.watchFolder,
       recursive: true,
       include_media_info: false,
@@ -179,7 +209,7 @@ export async function initializeCursor(integrationId: string): Promise<{
   } catch (err: any) {
     const summary = describeDropboxError(err);
     const pathHint = summary.includes("path/not_found")
-      ? `The folder "${creds.watchFolder}" does not exist in this Dropbox. Check spelling, capitalization, and that the token user can see it (team-space folders may need to be shared with them).`
+      ? `The folder "${creds.watchFolder}" does not exist in this Dropbox account. Check spelling and capitalization.`
       : summary.includes("missing_scope") || summary.includes("no_permission")
         ? `The token is missing scopes. In the Permissions tab, enable files.content.read, files.content.write, files.metadata.read, files.metadata.write, account_info.read. Click Submit, then regenerate the access token.`
         : `Check that the watch folder path "${creds.watchFolder}" exactly matches a folder in this Dropbox.`;
@@ -189,6 +219,7 @@ export async function initializeCursor(integrationId: string): Promise<{
   const updated: DropboxAutohdrCredentials = {
     ...creds,
     accountId,
+    rootNamespaceId,
     cursor,
   };
   await prisma.integration.update({
