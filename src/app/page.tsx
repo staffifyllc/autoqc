@@ -27,6 +27,7 @@ import {
   Moon,
   ArrowDownUp,
   RotateCcw,
+  Sofa,
 } from "lucide-react";
 import { SpotlightCard } from "@/components/landing/SpotlightCard";
 import { TwilightHero } from "@/components/landing/TwilightHero";
@@ -44,6 +45,12 @@ const features: Array<{
   premium?: boolean;
   isNew?: boolean;
 }> = [
+  {
+    icon: Sofa,
+    title: "Virtual Staging",
+    copy: "Empty rooms filled with realistic furniture in six styles. Architecture preserved exactly. Preview free, keep a render for $3. Currently in closed beta.",
+    isNew: true,
+  },
   {
     icon: Moon,
     title: "Virtual Twilight",
