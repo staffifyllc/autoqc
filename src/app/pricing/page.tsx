@@ -178,7 +178,7 @@ export default function PricingPage() {
           <motion.div variants={fadeUp} className="mb-16">
             <div className="relative overflow-hidden glass-card p-8 border border-blue-500/30 bg-gradient-to-br from-blue-500/5 via-background to-cyan-500/5">
               <div className="absolute top-0 right-0 px-3 py-1 rounded-bl-lg bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xs font-bold uppercase tracking-wider">
-                New · Volume pricing
+                New · Volume Ready
               </div>
               <div className="flex items-start gap-4">
                 <div className="shrink-0 w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center">
@@ -193,21 +193,14 @@ export default function PricingPage() {
                       Pipeline
                     </span>
                   </div>
-                  <div className="flex items-baseline gap-2 mt-2 mb-3">
-                    <span className="text-3xl font-bold">From $1</span>
-                    <span className="text-sm text-muted-foreground">/ property at volume</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-4 max-w-2xl leading-relaxed">
+                  <p className="text-sm text-muted-foreground mt-3 mb-4 max-w-2xl leading-relaxed">
                     Pipe your AutoHDR finals straight into AutoQC. Every drop
                     runs the full 14-check audit and auto-fix pass, then the
                     reviewed JPEGs overwrite the originals in place. Your
                     delivery path does not change. Your editors do not change
                     a single click. High-volume shops using AutoHDR get
-                    dedicated pipeline pricing starting at{" "}
-                    <span className="font-semibold text-foreground">
-                      $1 per property
-                    </span>
-                    .
+                    dedicated pipeline pricing — let&apos;s talk about a rate
+                    that works for your shop.
                   </p>
                   <div className="grid sm:grid-cols-2 gap-3 text-xs mb-5">
                     <div className="flex items-center gap-2">
