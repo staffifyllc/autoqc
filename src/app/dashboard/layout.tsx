@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   Home,
   Palette,
-  Users,
   Plug,
   CreditCard,
   Coins,
@@ -47,7 +46,6 @@ const navSections: Array<{
     label: "Configure",
     items: [
       { href: "/dashboard/profiles", label: "Style Profiles", icon: Palette },
-      { href: "/dashboard/profiles/clients", label: "Clients", icon: Users },
       { href: "/dashboard/configure/sort-order", label: "Photo Order", icon: ArrowDownUp },
       { href: "/dashboard/integrations", label: "Integrations", icon: Plug },
     ],
