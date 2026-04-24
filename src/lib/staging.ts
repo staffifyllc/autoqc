@@ -3,13 +3,19 @@
 // staging has two axes (room type × furniture style), so we build the
 // prompt from a room manifest plus a style modifier at request time.
 //
-// Model: google/nano-banana on Replicate (same weights as Twilight).
-// Per-call cost ~$0.04; retail $3 per purchased render → strong margin.
+// Model: OpenAI gpt-image-1 via /v1/images/edits. We swapped off
+// google/nano-banana because it hallucinated architecture (removed
+// doorways, hung art over windows) despite the preservation prompt.
+// gpt-image-1 respects negative constraints much better on room edits.
+// Per-call cost ~$0.17 at high quality; retail $2 per keeper render
+// so the feature still clears ~90% margin.
 //
 // Ship behavior: staging runs behind the VIRTUAL_STAGING_ENABLED env
 // flag. When the flag is off, only admin agencies can preview/purchase.
 
-export const STAGING_CREDIT_COST = 3;
+// Flat across every agency. Per-agency overrides were retired when
+// we standardized on $2 universally.
+export const STAGING_CREDIT_COST = 2;
 
 // Room types where staging actually helps sellers. Kitchens rarely need
 // staging and bathrooms/hallways almost never do; gating them off keeps
@@ -124,14 +130,19 @@ const ROOM_MANIFEST: Record<string, RoomManifest> = {
   },
 };
 
-// Preservation-first opening. This is the instruction block the model
-// sees before anything else. Paul-authored after the first round of
-// renders showed the model silently replacing mirrors, fireplaces,
-// sconces, and other focal-wall details it did not recognize as
-// "architecture." Naming every protected category explicitly,
-// up-front, with a primacy-effect position, dramatically cuts the
-// hallucination rate.
-const PRESERVATION_CORE = `Virtually stage this real estate photo by adding realistic furniture and decor only. Preserve the original image exactly. Do not alter, remove, move, resize, repaint, cover, blur, replace, regenerate, or reinterpret any permanent feature including windows, doors, walls, ceilings, floors, trim, baseboards, vents, outlets, switches, lighting fixtures, cabinets, countertops, appliances, fireplaces, stairs, railings, mirrors, reflections, or exterior views through windows. Keep identical camera angle, crop, composition, perspective, room dimensions, and natural lighting direction. Windows are protected objects and must remain fully intact with original frame lines, glass, mullions, and outdoor scenery unchanged. Do not block key windows or doors with oversized furniture. Only place properly scaled furniture and decor that fits naturally in the room and respects walkways. Add realistic contact shadows from staged items only. Structural preservation is more important than aesthetics. If staging would require changing any existing room element, choose different furniture placement instead. Reject any result where window count changes, door count changes, fixtures disappear, geometry shifts, perspective changes, or any architectural detail is modified. Output must look like the exact original listing photo professionally furnished, with furniture added as an overlay only.`;
+// Preservation-first opening. The TWO ABSOLUTE RULES come first
+// because diffusion models exhibit strong primacy bias — whatever we
+// say at the top gets the most weight. Paul's real renders showed the
+// model quietly removing a doorway and hanging a giant picture over a
+// window, despite the long preservation list. Leading with the two
+// highest-frequency failure modes, stated as hard constraints in
+// isolation, gives them the weight the earlier prose version lacked.
+const PRESERVATION_CORE = `TWO ABSOLUTE RULES:
+1. DO NOT ADD, REMOVE, COVER, BLOCK, RESIZE, OR ALTER ANY DOORWAY OR WINDOW. Every door and every window in the original image must appear in the output at the same position, same size, same frame, same glass, same view through it. If the input has a doorway, the output must have that exact doorway. Do not hide it behind a sofa, a plant, a bookshelf, or an accent chair.
+2. DO NOT HANG ART, MIRRORS, SHELVES, OR ANY DECOR OVER A WINDOW OR A DOORWAY. Art goes on solid wall only. If no solid wall is available, omit the art.
+Violating either rule is an automatic reject.
+
+Beyond those two rules: virtually stage this real estate photo by adding realistic furniture and decor only. Preserve the original image exactly. Do not alter, remove, move, resize, repaint, cover, blur, replace, regenerate, or reinterpret any permanent feature including windows, doors, walls, ceilings, floors, trim, baseboards, vents, outlets, switches, lighting fixtures, cabinets, countertops, appliances, fireplaces, stairs, railings, mirrors, reflections, or exterior views through windows. Keep identical camera angle, crop, composition, perspective, room dimensions, and natural lighting direction. Windows are protected objects and must remain fully intact with original frame lines, glass, mullions, and outdoor scenery unchanged. Only place properly scaled furniture and decor that fits naturally in the room and respects walkways. Add realistic contact shadows from staged items only. Structural preservation is more important than aesthetics. If staging would require changing any existing room element, choose different furniture placement instead. Output must look like the exact original listing photo professionally furnished, with furniture added as an overlay only.`;
 
 export function buildStagingPrompt(opts: {
   roomType: string;

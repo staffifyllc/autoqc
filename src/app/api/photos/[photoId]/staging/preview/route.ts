@@ -3,7 +3,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { requireAgency } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { s3, BUCKET, getDownloadUrl } from "@/lib/s3";
-import { geminiEditImage } from "@/lib/gemini";
+import { openaiEditImage } from "@/lib/openai";
 import {
   buildStagingPrompt,
   ELIGIBLE_STAGING_ROOM_TYPES,
@@ -43,7 +43,7 @@ export async function POST(
     // this. Keeps real customers out while we validate quality.
     const agency = await prisma.agency.findUnique({
       where: { id: session.user.agencyId! },
-      select: { isAdmin: true, stagingCreditCost: true },
+      select: { isAdmin: true },
     });
     if (!agency) {
       return NextResponse.json({ error: "Agency not found" }, { status: 404 });
@@ -89,7 +89,7 @@ export async function POST(
       },
       orderBy: { createdAt: "desc" },
     });
-    const effectiveCost = agency.stagingCreditCost ?? STAGING_CREDIT_COST;
+    const effectiveCost = STAGING_CREDIT_COST;
 
     if (existing && Date.now() - existing.createdAt.getTime() < PREVIEW_FRESH_MS) {
       const url = await getDownloadUrl(existing.s3Key);
@@ -104,9 +104,11 @@ export async function POST(
 
     const prompt = buildStagingPrompt({ roomType, style });
 
-    const { bytes, mimeType } = await geminiEditImage({
+    const { bytes, mimeType } = await openaiEditImage({
       sourceUrl,
       prompt,
+      quality: "high",
+      size: "1536x1024",
     });
 
     const ext = mimeType.includes("png") ? "png" : "jpg";
@@ -126,7 +128,7 @@ export async function POST(
         type: "STAGING_PREVIEW",
         style,
         s3Key: outKey,
-        provider: "gemini",
+        provider: "openai-gpt-image-1",
         prompt,
         status: "READY",
         creditCost: 0,

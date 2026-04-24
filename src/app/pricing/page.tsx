@@ -264,7 +264,7 @@ export default function PricingPage() {
                     or coastal. Architecture is preserved exactly — fireplaces,
                     sconces, mirrors, and built-ins stay put. Preview free, pay{" "}
                     <span className="font-semibold text-foreground">
-                      $3 per keeper render
+                      $2 per keeper render
                     </span>
                     . No model releases, no editor hours.
                   </p>

@@ -36,7 +36,7 @@ export const updates: UpdateEntry[] = [
       {
         category: "Feature",
         title: "Virtual Staging on empty rooms",
-        body: "In Virtual Staging (closed beta) you can now stage an empty room with realistic furniture while keeping the exact architecture. Six styles: Modern, Traditional, Scandinavian, Farmhouse, Mid-Century, Coastal. Previews are free so you can compare styles side by side. Keep a render for 3 credits ($3). Works on living rooms, bedrooms, dining rooms, and offices for now. Admin / invited agencies only during beta.",
+        body: "In Virtual Staging (closed beta) you can now stage an empty room with realistic furniture while keeping the exact architecture. Six styles: Modern, Traditional, Scandinavian, Farmhouse, Mid-Century, Coastal. Previews are free so you can compare styles side by side. Keep a render for 2 credits ($2). Works on living rooms, bedrooms, dining rooms, and offices for now. Admin / invited agencies only during beta.",
       },
       {
         category: "Polish",

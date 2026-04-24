@@ -70,7 +70,7 @@ export default function VirtualStagingPage() {
         <p className="text-sm text-muted-foreground max-w-2xl">
           Drop empty rooms, pick a style, and get photorealistic staged
           renders in seconds. Architecture preserved exactly. Preview is
-          free. Keep renders you love for $3 each.
+          free. Keep renders you love for $2 each.
         </p>
       </div>
 
@@ -125,7 +125,7 @@ export default function VirtualStagingPage() {
             },
             {
               icon: ArrowRight,
-              title: "Keep for $3 each",
+              title: "Keep for $2 each",
               copy: "Download the styled render and ship it.",
             },
           ].map((s, i) => (

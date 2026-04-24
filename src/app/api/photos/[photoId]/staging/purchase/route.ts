@@ -3,7 +3,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { requireAgency } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { s3, BUCKET, getDownloadUrl } from "@/lib/s3";
-import { geminiEditImage } from "@/lib/gemini";
+import { openaiEditImage } from "@/lib/openai";
 import {
   buildStagingPrompt,
   ELIGIBLE_STAGING_ROOM_TYPES,
@@ -39,7 +39,7 @@ export async function POST(
 
     const agency = await prisma.agency.findUnique({
       where: { id: session.user.agencyId! },
-      select: { creditBalance: true, isAdmin: true, stagingCreditCost: true },
+      select: { creditBalance: true, isAdmin: true },
     });
     if (!agency) {
       return NextResponse.json({ error: "Agency not found" }, { status: 404 });
@@ -51,10 +51,9 @@ export async function POST(
       );
     }
 
-    // Per-agency price override. Null = default (3 credits). Set to 1
-    // for Flylisted and any other partner agencies on the discounted
-    // rate. See Agency.stagingCreditCost in prisma/schema.prisma.
-    const effectiveCost = agency.stagingCreditCost ?? STAGING_CREDIT_COST;
+    // Flat across every agency. Per-agency overrides retired at
+    // standardization on $2.
+    const effectiveCost = STAGING_CREDIT_COST;
 
     const photo = await prisma.photo.findFirst({
       where: {
@@ -102,7 +101,7 @@ export async function POST(
     if (!agency.isAdmin && agency.creditBalance < effectiveCost) {
       return NextResponse.json(
         {
-          error: `Not enough credits. Virtual Staging costs ${effectiveCost} credit${effectiveCost === 1 ? "" : "s"}.`,
+          error: `Not enough credits. Virtual Staging costs ${effectiveCost} credits.`,
           creditsNeeded: effectiveCost,
           creditsAvailable: agency.creditBalance,
         },
@@ -137,7 +136,12 @@ export async function POST(
       const sourceUrl = await getDownloadUrl(sourceKey);
 
       const prompt = buildStagingPrompt({ roomType, style });
-      const { bytes, mimeType } = await geminiEditImage({ sourceUrl, prompt });
+      const { bytes, mimeType } = await openaiEditImage({
+        sourceUrl,
+        prompt,
+        quality: "high",
+        size: "1536x1024",
+      });
 
       const ext = mimeType.includes("png") ? "png" : "jpg";
       const outKey = `${session.user.agencyId}/${photo.propertyId}/staging/final/${photo.id}-${style}-${Date.now()}.${ext}`;
@@ -156,7 +160,7 @@ export async function POST(
           type: "STAGING_FINAL",
           style,
           s3Key: outKey,
-          provider: "gemini",
+          provider: "openai-gpt-image-1",
           prompt,
           status: "READY",
           creditCost: effectiveCost,

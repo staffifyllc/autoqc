@@ -55,7 +55,7 @@ const features: Array<{
   {
     icon: Sofa,
     title: "Virtual Staging",
-    copy: "Empty rooms filled with realistic furniture in six styles. Architecture preserved exactly. Preview free, keep a render for $3. Currently in closed beta.",
+    copy: "Empty rooms filled with realistic furniture in six styles. Architecture preserved exactly. Preview free, keep a render for $2. Currently in closed beta.",
     isNew: true,
   },
   {

@@ -1,10 +1,11 @@
-// What's-new announcement email: self-serve signup, send feedback,
-// landing refresh, Virtual Twilight. Dark-theme HTML, inline styles
-// only (most email clients strip <style> tags). CSS hover works in
-// modern clients and degrades gracefully.
+// What's-new announcement email.
+// Dark-theme HTML, inline styles only (most email clients strip <style>
+// tags). CSS hover works in modern clients and degrades gracefully.
+// Content: AutoHDR->AutoQC Dropbox pipeline, Virtual Staging beta,
+// forgot-password + settings, privacy policy.
 
 export const WHATS_NEW_SUBJECT =
-  "What's new at AutoQC: create accounts, send feedback, and more";
+  "New trick: AutoQC talks to AutoHDR now";
 
 type Args = {
   recipientName?: string | null;
@@ -36,7 +37,7 @@ export function renderWhatsNewEmail({
   </head>
   <body style="margin:0;padding:0;background:#07090c;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#e7ecef;">
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
-      Self-serve signup, send feedback, a faster landing page, and Virtual Twilight for every exterior shot.
+      AutoHDR drops, AutoQC catches. Virtual Staging for empty rooms. Plus a few quality-of-life wins.
     </div>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#07090c;">
       <tr>
@@ -63,53 +64,54 @@ export function renderWhatsNewEmail({
                   Product update · April 2026
                 </div>
                 <h1 style="margin:0 0 14px 0;font-size:32px;line-height:1.15;letter-spacing:-0.02em;font-weight:700;color:#f5f7f9;">
-                  Four things shipped<br/>
-                  <span style="background:linear-gradient(90deg,#55f19a 0%,#8df7b9 100%);-webkit-background-clip:text;background-clip:text;color:transparent;">this week.</span>
+                  Your photos got<br/>
+                  <span style="background:linear-gradient(90deg,#55f19a 0%,#8df7b9 100%);-webkit-background-clip:text;background-clip:text;color:transparent;">a little smarter.</span>
                 </h1>
                 <p style="margin:0;font-size:15px;line-height:1.6;color:#a5b0b8;">
-                  Hey ${escapeHtml(firstName)}, a lot landed at AutoQC over the past few days.
-                  Here is the short version.
+                  Hey ${escapeHtml(firstName)}. Big week. AutoQC now shakes hands with AutoHDR,
+                  empty rooms can furnish themselves, and a few things you asked for finally
+                  shipped. Short version below.
                 </p>
               </td>
             </tr>
 
             ${featureCard({
-              tagIcon: "+",
-              tag: "New",
-              title: "Self-serve signup",
-              copy: "Anyone can create an AutoQC account at autoqc.io/signup. Ten seconds, no invite, no admin needed. Forward the link to your editor, your assistant, your cousin who shoots on weekends.",
-              ctaLabel: "Share the signup page",
-              ctaUrl: `${siteUrl}/signup`,
+              tagIcon: "→",
+              tag: "Marquee",
+              title: "AutoHDR drops, AutoQC catches",
+              copy: "Point AutoQC at your AutoHDR Dropbox folder once. From there, every finished batch runs the full 14-check QC and auto-fix pass on its own, then the reviewed JPEGs overwrite the originals in the same folder. Your delivery flow does not change. Your editor does not click anything. You eat lunch.",
+              ctaLabel: "Set it up in 10 minutes",
+              ctaUrl: `${siteUrl}/dashboard/dropbox-automation`,
               accent: "#55f19a",
             })}
 
             ${featureCard({
-              tagIcon: "!",
-              tag: "New",
-              title: "Send feedback: bugs and feature requests",
-              copy: "The floating button at the bottom-right of the dashboard now does both. Report a bug and get an email when it is fixed, or suggest a feature and get an email when it ships. Every feature in AutoQC started as one of those.",
-              ctaLabel: "Try it in the dashboard",
-              ctaUrl: `${siteUrl}/dashboard`,
-              accent: "#ffd166",
+              tagIcon: "🛋",
+              tag: "Beta",
+              title: "Virtual Staging, architecture preserved",
+              copy: "Empty living room? Bedroom? Office? AutoQC fills them with real-looking furniture in six styles (modern, traditional, Scandinavian, farmhouse, mid-century, coastal). Fireplaces, sconces, mirrors, and built-ins stay exactly where they were. Previews are free. Keep a render for two dollars. Closed beta right now — reply and ask if you want in early.",
+              ctaLabel: "Peek at the styles",
+              ctaUrl: `${siteUrl}/dashboard/staging`,
+              accent: "#8df7b9",
             })}
 
             ${featureCard({
-              tagIcon: "*",
+              tagIcon: "⚙",
               tag: "Polish",
-              title: "Landing page, rebuilt around speed",
-              copy: "14 QC checks. 45 photos in under two minutes. Zero subscriptions. The new homepage makes the capability and the price land in the first two seconds. Worth a fresh look if you are pitching the service to a new agent.",
-              ctaLabel: "See the new homepage",
-              ctaUrl: siteUrl,
+              title: "Settings, forgot-password, and fewer chips",
+              copy: "You can now reset your password like a normal human being. There is a real Settings page for profile, company, and password changes. And the Summary of Changes panel no longer explodes into forty-nine chips on a fifteen-photo property — same info, five clean rollups.",
+              ctaLabel: "Check your settings",
+              ctaUrl: `${siteUrl}/dashboard/settings`,
               accent: "#7dd3fc",
             })}
 
             ${featureCard({
-              tagIcon: "~",
-              tag: "Featured",
-              title: "Virtual Twilight, $1 per exterior",
-              copy: "Every daytime exterior can now be transformed into a photoreal dusk scene. Architecture preserved exactly, warm interior lights glowing, ambient blue light on the trees. Preview free, keep it for one credit. Listings photograph themselves.",
-              ctaLabel: "Open a property to try it",
-              ctaUrl: `${siteUrl}/dashboard/properties`,
+              tagIcon: "§",
+              tag: "Housekeeping",
+              title: "A privacy policy, written by a human",
+              copy: "We put one up at autoqc.io/privacy. No lawyer-speak. No sale of your data. No training foundation models on your photos. Just what we collect, why we collect it, who we share it with, and how to delete it. Worth a two-minute skim if you are pitching AutoQC to a compliance-heavy client.",
+              ctaLabel: "Read it (it's short)",
+              ctaUrl: `${siteUrl}/privacy`,
               accent: "#c084fc",
             })}
 
@@ -130,9 +132,9 @@ export function renderWhatsNewEmail({
             <tr>
               <td style="padding:18px 0 0 0;">
                 <p style="margin:0;font-size:13px;line-height:1.6;color:#a5b0b8;">
-                  Ship something on AutoQC this week. If anything looks off, hit the Send
-                  feedback button and let us know. We actually read them and usually ship
-                  the fix before the next sunrise.
+                  Ship something this week. If anything looks off, hit the Send feedback
+                  button in the dashboard. We read every one and usually ship the fix
+                  before the next sunrise.
                 </p>
                 <p style="margin:14px 0 0 0;font-size:13px;color:#a5b0b8;">
                   &mdash; the AutoQC team
@@ -169,19 +171,27 @@ export function renderWhatsNewEmail({
 
 Hey ${firstName},
 
-Four things shipped this week:
+Big week. Four things shipped:
 
-1. Self-serve signup
-   Anyone can create an AutoQC account at ${siteUrl}/signup. No invite, no admin.
+1. AutoHDR drops, AutoQC catches
+   Point AutoQC at your AutoHDR Dropbox folder. Every finished batch runs
+   the full 14-check QC and auto-fix pass on its own, then overwrites the
+   originals in place. Your editor does not click anything.
+   ${siteUrl}/dashboard/dropbox-automation
 
-2. Send feedback: bugs and feature requests
-   The floating button on the dashboard now does both. Bug reports and feature requests go to the same place, and we email you when they are resolved.
+2. Virtual Staging, architecture preserved (beta)
+   Six furniture styles. Fireplaces, sconces, mirrors, and built-ins stay
+   put. Previews free, keep a render for $2. Reply to ask for beta access.
+   ${siteUrl}/dashboard/staging
 
-3. Landing page, rebuilt around speed
-   14 QC checks. 45 photos in under two minutes. Zero subscriptions. ${siteUrl}
+3. Settings, forgot-password, and fewer chips
+   Real password reset. Real settings page. And Summary of Changes no
+   longer explodes into 49 chips - five clean rollups instead.
+   ${siteUrl}/dashboard/settings
 
-4. Virtual Twilight, $1 per exterior
-   Every daytime exterior can become a photoreal dusk scene. Preview free, keep for one credit.
+4. Privacy policy, written by a human
+   No lawyer-speak, no selling data, no training AI on your photos.
+   ${siteUrl}/privacy
 
 See everything: ${siteUrl}/dashboard/updates
 
