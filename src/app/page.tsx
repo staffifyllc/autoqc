@@ -28,6 +28,7 @@ import {
   ArrowDownUp,
   RotateCcw,
   Sofa,
+  FolderSync,
 } from "lucide-react";
 import { SpotlightCard } from "@/components/landing/SpotlightCard";
 import { TwilightHero } from "@/components/landing/TwilightHero";
@@ -45,6 +46,12 @@ const features: Array<{
   premium?: boolean;
   isNew?: boolean;
 }> = [
+  {
+    icon: FolderSync,
+    title: "AutoHDR → AutoQC pipeline",
+    copy: "Pipe your AutoHDR finals straight into AutoQC via Dropbox. Every drop is QC'd automatically and reviewed JPEGs replace the originals in place. Zero new folders, zero new clicks.",
+    isNew: true,
+  },
   {
     icon: Sofa,
     title: "Virtual Staging",
@@ -808,6 +815,9 @@ export default function LandingPage() {
           <div className="flex items-center gap-6">
             <Link href="/pricing" className="hover:text-foreground transition">
               Pricing
+            </Link>
+            <Link href="/privacy" className="hover:text-foreground transition">
+              Privacy
             </Link>
             <Link href="/login" className="hover:text-foreground transition">
               Sign in
