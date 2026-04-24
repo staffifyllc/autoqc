@@ -17,6 +17,7 @@ import {
   Mail,
   Sofa,
   FolderSync,
+  BarChart3,
 } from "lucide-react";
 import { Bug, ArrowDownUp, Rocket, MessageSquarePlus } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
@@ -104,6 +105,7 @@ export default function DashboardLayout({
           label: "Admin",
           items: [
             { href: "/dashboard/admin", label: "Platform usage", icon: ShieldCheck },
+            { href: "/dashboard/admin/staging-insights", label: "Staging insights", icon: BarChart3 },
             { href: "/dashboard/admin/bugs", label: "Feedback", icon: MessageSquarePlus },
             { href: "/dashboard/admin/announce", label: "Announcements", icon: Mail },
           ],

@@ -238,7 +238,12 @@ export default function AdminUsagePage() {
                 return (
                   <tr key={r.id} className="hover:bg-[hsl(var(--surface-2))]">
                     <td className="px-5 py-3">
-                      <div className="font-medium">{r.name}</div>
+                      <Link
+                        href={`/dashboard/admin/agencies/${r.id}`}
+                        className="font-medium hover:text-foreground hover:underline underline-offset-2 decoration-white/20 transition"
+                      >
+                        {r.name}
+                      </Link>
                       <div className="text-[11px] font-mono text-muted-foreground">
                         {r.defaultTier} · {r.billingMode.toLowerCase()}
                       </div>
