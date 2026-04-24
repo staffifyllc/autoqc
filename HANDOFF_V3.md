@@ -9,6 +9,12 @@
 
 ## Where we are right now
 
+### Shipped today (afternoon continuation)
+- **Flylisted at-cost pricing** — new nullable `Agency.stagingCreditCost` column overrides the default 3-credit staging cost per agency. Set to 1 on the three @flylisted.com rows. Any other agency, including customers, still pays the default $3.
+- **Virtual Staging landing card** — new Sofa-iconed feature card on the landing page feature grid, flagged New.
+- **Virtual Staging standalone tab** — `/dashboard/staging` route and sidebar entry for customers who want staging without full QC. Creates a flagged Property (`isStandaloneStaging=true`), reuses the existing upload + Lambda-QC pipeline for room_type classification, and filters these sessions out of `/dashboard/properties`.
+- **First-pass staging renders on empty rooms** — ran Modern + Traditional on a clean dining room and a clean bedroom from Paul's Richmond St Dover NH photo set. All key architecture preserved (bay window, chandelier, ceiling fan, trim, floors). Dramatically better than the furnished-room test from the overnight session — confirms the failure mode was "replace existing furniture," not "model can't do staging."
+
 ### Just shipped in the current session
 - **Password reset flow** — `/forgot-password`, `/reset-password`, HMAC-signed tokens bound to `passwordSetAt`, 60-min expiry. Linked from login.
 - **`/dashboard/settings`** — Profile (name + email, save immediately, no email verification), Company (agency name), Password. Replaces the old `/dashboard/account` page.
@@ -16,6 +22,11 @@
 - **Docs rewritten** — `CLAUDE.md` + `CONTRIBUTING.md` reflect sole-operator direct-push workflow (no more PR gate, no more two-person coordination).
 - **Speed** — `next.config.mjs` enables `optimizePackageImports` for `lucide-react` / `framer-motion` / radix; removed unused `recharts` dep.
 - **Virtual Staging (closed beta, admin-only)** — full end-to-end feature live behind `VIRTUAL_STAGING_ENABLED` env flag.
+
+### Still open / paused
+- **A/B test of `google/nano-banana` vs `black-forest-labs/flux-kontext-pro`** — `scripts/ab-stage.ts` was built and ready to run when Paul pivoted. Deleted from the repo but trivial to rebuild if Paul wants to proceed. ~$0.60 to run on the 4-render test set. Worth doing once the staging UX stabilizes.
+- **MLS "Virtually Staged" watermark** — still not shipped. Paul needs to decide default-on vs off vs export-UI label.
+- **Model-agnostic abstraction** — if we A/B to a different model, `geminiEditImage()` should be renamed + the model configurable per feature.
 
 ### The open decision we were on when V2 ran out
 Smoke-tested Virtual Staging on a real photo and showed Paul 6 style renders. **4 of 6 renders lost the fireplace**, plus the wall sconces and mirror above it. Root cause: the preservation clause in `src/lib/staging.ts` says "walls, windows, doors, floors, light fixtures, ceiling" but does not name fireplaces, sconces, mirrors, built-ins, or ceiling fans explicitly. Nano Banana treats unnamed focal-wall features as swappable content.
