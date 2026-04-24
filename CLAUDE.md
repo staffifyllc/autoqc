@@ -9,7 +9,7 @@ Guidance for Claude sessions working in this repo. Load this before touching cod
 - **Repo:** https://github.com/staffifyllc/autoqc
 - **Hosting:** Vercel (`staffifyllcs-projects/autoqc`). Push to `main` auto-deploys to production.
 - **Stack:** Next.js 14.2 (App Router) + NextAuth + Prisma/PostgreSQL (RDS) + Python 3.12 Lambda (QC engine) + SQS FIFO + S3 + Stripe + Claude Sonnet 4.6 (vision) + Replicate (distraction removal, deblur).
-- **Collaborators:** Paul (owner) + Evan Leith (GitHub `flylisted`). Both have Write access. Each uses their own Claude session. **Zero visibility between Claude sessions — coordinate only via GitHub PRs and texts between the humans.**
+- **Operator:** Paul is the sole contributor. No coordination friction; direct push to `main` is enabled and each push auto-deploys.
 
 ## First things to run at the start of every session
 
@@ -21,25 +21,18 @@ git log --oneline origin/main -5
 
 If `origin/main` has moved since local, tell the user before starting new work. Never auto-pull onto a branch the user is actively working on.
 
-## How work flows (read CONTRIBUTING.md for full detail)
+## How work flows
 
-1. **Never push directly to `main`.** A branch ruleset enforces this — direct pushes are rejected. Every change ships via PR.
-2. Branch off fresh main: `git checkout main && git pull origin main && git checkout -b <feature>`.
-3. Commit focused, descriptive commits.
-4. Push → open PR → the **other person** reviews and approves (GitHub blocks self-approval).
-5. **Squash-merge** on GitHub. No `dev` branch, no merge commits.
-6. Every PR gets a Vercel preview URL posted as a PR comment. Use it for live verification before merging.
-7. After merge, delete the branch locally: `git branch -d <feature>`.
+The branch ruleset is off; you can push straight to `main`. Each push auto-deploys to production (`autoqc.io`) within ~60 seconds. Treat every push as a live deploy.
 
-Before touching any file, check if someone is already working on that area:
+Typical workflow:
 
-```bash
-git branch -r                                     # active branches on origin
-gh pr list --state open                           # open PRs (once gh is installed)
-gh pr list --state all --author flylisted         # what Evan has been working on
-```
+1. Pull latest: `git checkout main && git pull origin main`.
+2. Edit, run `npx tsc --noEmit` locally before pushing.
+3. Commit with a focused message and push. Production deploy kicks off.
+4. Watch the Vercel build (`vercel ls --yes autoqc | head -4`) before walking away for anything non-trivial.
 
-Keep branches **short-lived**. Daily-ish merges. Long-lived branches fight everything.
+PRs are still welcome for big refactors or anything you want reviewed before it ships, but they are no longer required.
 
 ## Architecture — how the pieces talk
 
@@ -235,32 +228,30 @@ await prisma.agency.update({
 
 Why: if promo grants increment `totalCreditsPurchased`, free agencies show up as "paying" in the admin dashboard and inflate revenue. `scripts/grant-credits.sh` increments both fields — **don't use it for real promo grants, only test grants where you control a sandbox account.**
 
-## Shared-resource coordination
+## Production safety
 
-Because two humans + two Claude sessions work here in parallel, the following need coordination (text between Paul and Evan, not Claude-to-Claude):
+Paul is the sole operator, but every push still hits real infra shared with paying users:
 
-- **Production RDS writes** — running a script that mass-writes to the RDS: always ping the other person first. Reads are fine anytime.
-- **Lambda deploys** — only one person should push `lambda/qc_engine/` changes at a time. Two simultaneous `aws lambda update-function-code` calls will race.
-- **Prisma schema changes** — require migration coordination. Flag in PR description, let the other person pull before they run their next `prisma generate`.
-- **Manual credit grants** — always PROMO type, never touch `totalCreditsPurchased`. See above.
-- **Stripe / billing routes** — cross-check the PR with both humans before merge. Bugs here are customer money.
+- **Production RDS writes** — mass scripts touch real customer data. Always dry-run first, then `--apply`.
+- **Lambda deploys** — `./scripts/deploy-lambda.sh` replaces the running QC engine instantly.
+- **Prisma schema changes** — `npx prisma db push` is live. Additive-only changes are safe; renames/drops need a migration plan.
+- **Manual credit grants** — always PROMO type, never touch `totalCreditsPurchased`. See the Credits model section.
+- **Stripe / billing routes** — real money. Test in Stripe's dashboard before shipping route changes.
 
 ## Vercel deploys
 
-- `main` is protected by a GitHub branch ruleset. You cannot `git push origin main`. It will be rejected. Always PR.
-- Every PR spawns a Vercel preview URL posted as a PR comment. The URL follows the pattern `autoqc-<branch>-staffifyllcs-projects.vercel.app`. Preview deploys hit the **production** backend (same RDS, S3, Lambda) — **don't run destructive test actions against them expecting isolation.**
-- Once merged, Vercel auto-deploys `main` → autoqc.io within ~60 seconds.
+- Push to `main` auto-deploys to production (`autoqc.io`) within ~60 seconds.
+- Preview URLs (for any long-lived branch or PR) follow the pattern `autoqc-<branch>-staffifyllcs-projects.vercel.app`. Previews hit the **production** backend (same RDS, S3, Lambda) — do not run destructive test actions against them expecting isolation.
 
 ## Don't touch without asking
 
-- `prisma/schema.prisma` — any change needs a migration + coordination with the other human. Don't rename existing fields; add new ones.
+- `prisma/schema.prisma` — schema changes are live the moment you `prisma db push`. Additive only; never rename or drop existing fields without a migration plan.
 - `lambda/qc_engine/handler.py` main flow — the SQS consumer loop, DLQ handling, and `Photo.issues` shape are load-bearing.
-- `lambda/qc_engine/checks/composition.py` prompt — emits `room_type`, `fix_actions`, `privacy` — downstream code depends on the exact keys.
+- `lambda/qc_engine/checks/composition.py` prompt — emits `room_type`, `fix_actions`, `privacy`; downstream code depends on the exact keys.
 - `Agency.totalCreditsPurchased` — see credits section.
 - `src/app/api/webhooks/stripe/` — real money.
 - `.env.local` — gitignored, **never commit**. Uses a symlink from `.env`.
-- Git config — never `git config user.email` etc. Both humans have their own identity set.
-- `main` branch directly — protected by ruleset, will fail anyway.
+- Git config — never `git config user.email` etc. The user has their own identity set.
 
 ## Gotchas that will trip up a fresh Claude
 
@@ -278,9 +269,7 @@ Because two humans + two Claude sessions work here in parallel, the following ne
 
 7. **Prod DB connection string is hardcoded in `scripts/grant-credits.sh`.** Not a secret in-repo (it's an infra reality), but never print it in logs or commit new references to it.
 
-8. **Squash-merge, not rebase-merge.** History should show one commit per PR on `main`. Easier to revert, easier to read.
-
-9. **"Evan" = Evan Leith, GitHub `flylisted`.** If asked "what has Evan been working on," run `gh pr list --state all --author flylisted`. His Claude has zero visibility into yours — never assume coordination happened through Claude.
+8. **Squash-merge, not rebase-merge** (when you do open PRs). History should show one commit per PR on `main`. Easier to revert, easier to read.
 
 ## Useful commands
 
@@ -292,26 +281,24 @@ npx tsc --noEmit                  # fast type check only
 npx prisma studio                 # visual DB browser → localhost:5555
 npx prisma generate               # regenerate client after schema change
 
-# Lambda (coordinate with Evan first)
+# Lambda
 ./scripts/deploy-lambda.sh
 
-# Git workflow
-git fetch origin                  # check for Evan's merges at session start
-git checkout main && git pull origin main && git checkout -b <feature>
-git push -u origin <feature>      # first push of a new branch
+# Git workflow (direct-push enabled)
+git checkout main && git pull origin main
+# ...edit...
+git add -A && git commit -m "..." && git push origin main
 
-# GitHub CLI (install: brew install gh && gh auth login)
-gh pr list --state open
-gh pr list --state all --author flylisted
-gh pr create --web                # opens PR creation in browser
-gh pr checkout <number>           # pull down someone else's PR locally
+# Vercel
+vercel ls --yes autoqc | head -6  # recent deploys + status
+vercel env ls                     # all env vars
+vercel env add KEY production     # add a prod env var
 ```
 
 ## When you're stuck or uncertain
 
 - Check `NIGHT_NOTES.md` and `NIGHT_CHANGES.md` for recent session summaries.
-- Check open PRs first: `gh pr list` or the GitHub web UI.
 - Preview deploys are safe to test. Prod DB writes from a preview deploy are **not** — the preview shares prod infra.
 - If a decision affects billing, credits, or schema: propose the plan to the user first, don't rewrite.
 
-Keep branches short. Keep commits descriptive. Ship small, ship often, coordinate the big stuff.
+Keep commits descriptive. Ship small, ship often.

@@ -1,103 +1,45 @@
 # Contributing to AutoQC
 
-This repo is shared between Paul and his Flylisted business partner. To avoid stepping on each other's work, we follow a simple branch + Pull Request flow. Nothing goes to production (autoqc.io) without a PR and a review.
+Paul is the sole operator. Direct push to `main` is enabled and every push auto-deploys to production (`autoqc.io`) within ~60 seconds. Treat every push as a live deploy.
 
-## The rule
-
-**Never push directly to `main`.** `main` is the live production branch — any push to it auto-deploys to autoqc.io. All changes go through a feature branch and a Pull Request.
-
-## The flow
-
-### 1. Start fresh
-
-Before you start new work, always pull the latest main:
+## Day-to-day
 
 ```bash
 cd photoqc
 git checkout main
 git pull origin main
+# ...edit files...
+npx tsc --noEmit                  # catch type errors before Vercel does
+git add -A
+git commit -m "Short description of the change"
+git push origin main
 ```
 
-### 2. Create a branch for your task
-
-Use a descriptive name. Prefix with your initials if you want:
+Watch the Vercel build on anything non-trivial:
 
 ```bash
-git checkout -b cull-v1
-# or
-git checkout -b pc/fix-slider-skew
+vercel ls --yes autoqc | head -6
 ```
 
-### 3. Make your changes
+## When to use a branch + PR anyway
 
-Edit, test, commit as you go. Keep commits focused — one logical change per commit.
+Optional. Use a branch and preview deploy when:
 
-```bash
-git add src/app/something/page.tsx
-git commit -m "Fix the slider aspect ratio on small screens"
-```
+- The change is big enough that you want to eyeball it on a Vercel preview URL before it hits production.
+- You're touching billing routes, webhooks, or schema.
+- You want to leave the work half-finished overnight without shipping it.
 
-### 4. Push your branch
+Preview URLs follow the pattern `autoqc-<branch>-staffifyllcs-projects.vercel.app`. Preview deploys hit the **production** backend (same RDS, S3, Lambda) — do not run destructive test actions against them expecting isolation.
 
-```bash
-git push -u origin cull-v1
-```
+## Production safety
 
-`-u` sets the upstream so future pushes are just `git push`.
+- **Prisma schema** — `npx prisma db push` is live. Additive-only changes (new fields, new enums, new indexes) are safe; renames or drops need a migration plan.
+- **Lambda deploys** — `./scripts/deploy-lambda.sh` replaces the running QC engine instantly.
+- **Prod DB writes** — always dry-run any script that mass-writes to RDS before passing `--apply`.
+- **Credit grants** — PROMO type only, never touch `totalCreditsPurchased`. See `src/app/api/onboarding/route.ts` for the correct pattern.
+- **Stripe routes** — real money. Test in Stripe's dashboard before shipping changes.
 
-### 5. Open a Pull Request
+## Secrets
 
-Go to https://github.com/staffifyllc/autoqc and you'll see a banner to open a PR from your branch to `main`. Click it, write a brief description of what changed and why, and submit.
-
-**Vercel will automatically deploy a preview URL for your branch** — e.g., `autoqc-cull-v1-staffifyllcs-projects.vercel.app`. Use this to eyeball your changes running live with real infrastructure before asking for a review.
-
-### 6. Wait for review
-
-The other person reviews, comments, or approves. If they request changes, just keep pushing commits to the same branch — the PR updates automatically.
-
-### 7. Merge
-
-Once approved, click "Squash and merge" on GitHub. That collapses all your commits into one clean commit on `main`. Vercel auto-deploys to autoqc.io within about a minute.
-
-### 8. Clean up
-
-```bash
-git checkout main
-git pull origin main
-git branch -d cull-v1
-```
-
-## What happens when two people edit the same file
-
-Git will tell you at merge time. If you try to merge your branch to main but someone merged a conflicting change first, GitHub will show "This branch has conflicts that must be resolved."
-
-Fix it locally:
-
-```bash
-git checkout cull-v1
-git pull origin main
-# Git will mark conflicts in the affected files with <<<<<<< and >>>>>>>
-# Open those files, decide which changes to keep, delete the markers, save
-git add .
-git commit -m "Resolve merge conflict with main"
-git push
-```
-
-No silent overwrites are possible. Git will always stop you before losing work.
-
-## Shared-resource rules
-
-**Production database (RDS)** — if you need to run a script that writes to prod DB, tell the other person in Slack/text first so you're not both mass-writing at once. Reads are fine anytime.
-
-**Lambda deploys** — only one person should push `lambda/qc_engine/` changes at a time. Coordinate via message.
-
-**Manual credit grants** — use a PROMO transaction type, only increment `creditBalance`, never `totalCreditsPurchased`. See `src/app/api/onboarding/route.ts` for the correct pattern.
-
-**Secrets** — never commit anything to `.env.local`. If you need a new env var, add the placeholder to `.env.example` and share the real value out-of-band.
-
-## When in doubt
-
-- Small bug fix? Branch, PR, merge, move on.
-- Big feature (cull engine, edit pipeline)? Same flow, but keep the other person in the loop so you don't both prototype the same thing.
-- Touching schema (`prisma/schema.prisma`)? Flag it in the PR description. Schema changes need a migration and coordination.
-- Not sure which branch to start from? Always `main`.
+- Never commit `.env.local`.
+- New env vars: add a placeholder to `.env.example`, put the real value in Vercel via `vercel env add KEY production`.
