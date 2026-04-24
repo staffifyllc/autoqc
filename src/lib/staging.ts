@@ -106,15 +106,15 @@ type RoomManifest = {
 const ROOM_MANIFEST: Record<string, RoomManifest> = {
   living_room: {
     add:
-      "A sectional or three-seat sofa against the longest visible wall, two accent chairs angled toward it, a coffee table between them, an area rug that anchors the seating group, a floor lamp in a corner, wall art above the sofa at eye level, one or two large houseplants.",
+      "A sectional or three-seat sofa against a solid wall (NOT in front of a window or doorway), two accent chairs angled toward it, a coffee table between them, an area rug that anchors the seating group, a floor lamp in a corner, one or two large houseplants. ONLY add wall art if there is a clearly solid wall section above the sofa with no windows, no doorways, no built-ins, and no fireplace. If the space above or around the sofa is a window or bay window, omit wall art entirely — the windows are the focal point.",
     avoid:
-      "Do not add a fireplace, do not add a TV, do not add a ceiling fan, do not add additional windows or doors, do not add skylights, do not add extra walls.",
+      "Do not add a fireplace, do not add a TV, do not add a ceiling fan, do not add additional windows or doors, do not add skylights, do not add extra walls, do not hang any art or mirror or shelf over any window, do not place the sofa in front of a doorway.",
   },
   bedroom: {
     add:
-      "A single queen or king bed centered on the longest solid wall, two matching nightstands with table lamps, a dresser against an opposite wall, a rug under the foot of the bed, neutral bedding with a throw folded at the foot, minimal wall art above the headboard.",
+      "A single queen or king bed centered on the longest solid wall (NOT in front of a window or doorway), two matching nightstands with table lamps, a dresser against an opposite wall, a rug under the foot of the bed, neutral bedding with a throw folded at the foot. ONLY add minimal art above the headboard if the wall above the bed is clearly solid. If a window sits above or behind the bed, omit wall art.",
     avoid:
-      "Do not add a second bed, do not add a ceiling fan, do not add a TV or monitor, do not add additional windows or doors, do not add a closet door that is not visible in the original.",
+      "Do not add a second bed, do not add a ceiling fan, do not add a TV or monitor, do not add additional windows or doors, do not add a closet door that is not visible in the original, do not hang any art or mirror over any window, do not place the bed in front of a doorway.",
   },
   dining_room: {
     add:
@@ -160,6 +160,10 @@ export function buildStagingPrompt(opts: {
   // Preservation-first. Room-specific furniture guidance and style
   // modifier come AFTER so the model has already committed to
   // preserving the architecture before picking what to add.
+  // The two absolute rules are repeated at the END (recency bias)
+  // because diffusion models weight both ends of the prompt and
+  // re-stating the window/door rule right before generation starts
+  // measurably cuts violations vs. stating it only at the top.
   return `${PRESERVATION_CORE}
 
 Furniture and decor to add:
@@ -168,7 +172,9 @@ ${manifest.add}
 Furniture and elements NOT to add:
 ${manifest.avoid}
 
-${style.modifier}`;
+${style.modifier}
+
+FINAL CHECK BEFORE GENERATING: Look at every window and every doorway in the input image. Every single one of them must be fully visible in the output at the same position, same size, same frame, with the same view through it. Do not place any sofa, bed, chair, table, bookshelf, plant, art piece, mirror, shelf, curtain, or any other object in front of, on top of, or covering any window or doorway. If the chosen furniture layout would require placing something over a window or blocking a doorway, pick a different layout. This rule overrides every style instruction above.`;
 }
 
 // Feature gate helper. When the env flag is off, staging remains visible
