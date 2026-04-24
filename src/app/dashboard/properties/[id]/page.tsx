@@ -669,11 +669,14 @@ export default function PropertyDetailPage({
         property.photos.forEach((p: Photo) => {
           const fixes = p.fixesApplied || [];
           fixes.forEach((f) => {
-            // Group by fix type (strip numbers for aggregation)
-            const cat = f
-              .replace(/\(.*?\)/g, "")
-              .replace(/\d+(\.\d+)?/g, "")
-              .trim();
+            // Fix strings look like "highlights - — Recover blown back door
+            // window detail". The per-photo description after the em-dash is
+            // unique and made the old summary unreadable (49 chips of count
+            // 1). Group by just the type + direction prefix so the chips
+            // roll up to ~5 buckets (highlights-, shadows+, temperature-,
+            // saturation-, tint+).
+            const prefix = f.split(" — ")[0].trim();
+            const cat = prefix.replace(/_channel/g, "");
             fixSummary[cat] = (fixSummary[cat] || 0) + 1;
           });
         });
