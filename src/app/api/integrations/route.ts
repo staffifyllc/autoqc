@@ -73,3 +73,28 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+// DELETE /api/integrations?platform=ARYEO - mark inactive (keeps row for history)
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await requireAgency();
+    const url = new URL(req.url);
+    const platform = url.searchParams.get("platform");
+    if (!platform) {
+      return NextResponse.json(
+        { error: "platform query param required" },
+        { status: 400 }
+      );
+    }
+    await prisma.integration.updateMany({
+      where: { agencyId: session.user.agencyId!, platform: platform as any },
+      data: { isActive: false },
+    });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Failed to disconnect integration" },
+      { status: 500 }
+    );
+  }
+}
