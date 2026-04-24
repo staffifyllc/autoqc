@@ -12,6 +12,9 @@ import {
   CreditCard,
   Sparkles,
   Moon,
+  FolderSync,
+  Sofa,
+  Zap,
 } from "lucide-react";
 
 const fadeUp = {
@@ -171,6 +174,126 @@ export default function PricingPage() {
             </p>
           </motion.div>
 
+          {/* AutoHDR Automation spotlight — marquee feature */}
+          <motion.div variants={fadeUp} className="mb-16">
+            <div className="relative overflow-hidden glass-card p-8 border border-blue-500/30 bg-gradient-to-br from-blue-500/5 via-background to-cyan-500/5">
+              <div className="absolute top-0 right-0 px-3 py-1 rounded-bl-lg bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xs font-bold uppercase tracking-wider">
+                New · Volume pricing
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="shrink-0 w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center">
+                  <FolderSync className="w-6 h-6 text-blue-300" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <h3 className="text-xl font-bold">
+                      AutoHDR → AutoQC Automation
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-blue-500/15 text-blue-200 border border-blue-500/30">
+                      Pipeline
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-2 mb-3">
+                    <span className="text-3xl font-bold">From $1</span>
+                    <span className="text-sm text-muted-foreground">/ property at volume</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4 max-w-2xl leading-relaxed">
+                    Pipe your AutoHDR finals straight into AutoQC. Every drop
+                    runs the full 14-check audit and auto-fix pass, then the
+                    reviewed JPEGs overwrite the originals in place. Your
+                    delivery path does not change. Your editors do not change
+                    a single click. High-volume shops using AutoHDR get
+                    dedicated pipeline pricing starting at{" "}
+                    <span className="font-semibold text-foreground">
+                      $1 per property
+                    </span>
+                    .
+                  </p>
+                  <div className="grid sm:grid-cols-2 gap-3 text-xs mb-5">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-300" />
+                      Real-time via Dropbox webhook
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-300" />
+                      30-minute safety-net cron
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-300" />
+                      Replaces originals in place
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-300" />
+                      Zero workflow change
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-300" />
+                      Nested folder trees supported
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-300" />
+                      Skips RAWs and videos automatically
+                    </div>
+                  </div>
+                  <a
+                    href="mailto:hello@autoqc.io?subject=AutoHDR%20Automation%20Volume%20Pricing"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-sm font-medium hover:opacity-90 transition"
+                  >
+                    <Zap className="w-4 h-4" />
+                    Talk to us about volume pricing
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Virtual Staging add-on */}
+          <motion.div variants={fadeUp} className="mb-6">
+            <div className="relative overflow-hidden glass-card p-8 border border-emerald-500/30 bg-gradient-to-br from-emerald-500/5 via-background to-teal-500/5">
+              <div className="absolute top-0 right-0 px-3 py-1 rounded-bl-lg bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-xs font-bold uppercase tracking-wider">
+                New
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="shrink-0 w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+                  <Sofa className="w-6 h-6 text-emerald-300" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <h3 className="text-xl font-bold">Virtual Staging</h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-emerald-500/15 text-emerald-200 border border-emerald-500/30">
+                      Add-on
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4 max-w-lg leading-relaxed">
+                    Turn empty rooms into fully furnished ones.
+                    Modern, traditional, Scandinavian, farmhouse, mid-century,
+                    or coastal. Architecture is preserved exactly — fireplaces,
+                    sconces, mirrors, and built-ins stay put. Preview free, pay{" "}
+                    <span className="font-semibold text-foreground">
+                      $3 per keeper render
+                    </span>
+                    . No model releases, no editor hours.
+                  </p>
+                  <div className="grid sm:grid-cols-3 gap-3 text-xs">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+                      6 furniture styles
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+                      Previews are free
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+                      Living, bed, dining, office
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
           {/* Virtual Twilight add-on */}
           <motion.div variants={fadeUp} className="mb-16">
             <div className="relative overflow-hidden glass-card p-8 border border-indigo-500/30 bg-gradient-to-br from-indigo-500/5 via-background to-purple-500/5">
@@ -188,11 +311,14 @@ export default function PricingPage() {
                       Add-on
                     </span>
                   </div>
-                  <p className="text-sm text-muted-foreground mb-4 max-w-lg">
+                  <p className="text-sm text-muted-foreground mb-4 max-w-lg leading-relaxed">
                     Turn any daytime exterior into a dramatic dusk shot.
-                    Preview free, pay <span className="font-semibold text-foreground">$1 per photo</span> only
-                    for the ones you keep. Architecture is preserved exactly.
-                    No fake skies, no added elements, MLS-ethical.
+                    Preview free, pay{" "}
+                    <span className="font-semibold text-foreground">
+                      $1 per photo
+                    </span>{" "}
+                    only for the ones you keep. Architecture is preserved
+                    exactly. No fake skies, no added elements, MLS-ethical.
                   </p>
                   <div className="grid sm:grid-cols-3 gap-3 text-xs">
                     <div className="flex items-center gap-2">
