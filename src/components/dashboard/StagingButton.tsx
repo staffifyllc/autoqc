@@ -307,7 +307,7 @@ export function StagingButton({
                   <div className="text-sm">
                     Staging in {currentStyle.label} style...
                   </div>
-                  <div className="text-xs">Usually 3-6 seconds.</div>
+                  <div className="text-xs">Usually 15-20 seconds.</div>
                 </div>
               )}
               {!generating && imgUrl && (
