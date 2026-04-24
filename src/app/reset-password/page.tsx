@@ -136,8 +136,16 @@ function ResetPasswordInner() {
               </div>
 
               {error && (
-                <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-200 text-xs">
-                  {error}
+                <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-200 text-xs space-y-1.5">
+                  <div>{error}</div>
+                  {/Invalid|expired|already been used/i.test(error) && (
+                    <Link
+                      href="/forgot-password"
+                      className="inline-block text-red-100 underline underline-offset-2 hover:text-white"
+                    >
+                      Request a new link &rarr;
+                    </Link>
+                  )}
                 </div>
               )}
 

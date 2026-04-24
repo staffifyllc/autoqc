@@ -7,7 +7,8 @@
  * Example:
  *   npx tsx scripts/set-user-password.ts pchareth@gmail.com "Temporary-Password-42"
  *
- * The user can change their password afterward at /dashboard/account.
+ * The user can change their password afterward in /dashboard/settings,
+ * or reset it themselves via /forgot-password.
  * Requires DATABASE_URL in env (picks up from .env / .env.local).
  */
 

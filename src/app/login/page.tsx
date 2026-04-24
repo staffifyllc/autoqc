@@ -95,7 +95,11 @@ export default function LoginPage() {
               />
               <div className="flex justify-end mt-1.5">
                 <Link
-                  href="/forgot-password"
+                  href={
+                    email
+                      ? `/forgot-password?email=${encodeURIComponent(email)}`
+                      : "/forgot-password"
+                  }
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Forgot password?

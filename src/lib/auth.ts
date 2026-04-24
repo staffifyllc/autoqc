@@ -50,7 +50,7 @@ export const authOptions: NextAuthOptions = {
 
         if (!user.passwordHash) {
           console.warn(
-            "[auth] Rejected login for %s: no password set. Run scripts/set-user-password.ts to assign one.",
+            "[auth] Rejected login for %s: no password set. User should use Forgot password to set one.",
             email
           );
           return null;

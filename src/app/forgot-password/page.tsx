@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Camera, ArrowRight, Loader2, CheckCircle2 } from "lucide-react";
 
-export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("");
+function ForgotPasswordInner() {
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
@@ -88,18 +90,34 @@ export default function ForgotPasswordPage() {
               <CheckCircle2 className="w-6 h-6 text-brand-500" />
             </div>
             <h1 className="text-2xl font-bold mb-2">Check your inbox</h1>
-            <p className="text-muted-foreground text-sm mb-8">
+            <p className="text-muted-foreground text-sm mb-6">
               If an account exists for <strong>{email}</strong>, we just sent a password reset link. The link is good for 60 minutes.
             </p>
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium text-foreground transition"
+            >
+              Back to sign in
+            </Link>
           </div>
         )}
 
-        <p className="text-xs text-muted-foreground text-center mt-6">
-          <Link href="/login" className="text-foreground hover:underline">
-            Back to sign in
-          </Link>
-        </p>
+        {!sent && (
+          <p className="text-xs text-muted-foreground text-center mt-6">
+            <Link href="/login" className="text-foreground hover:underline">
+              Back to sign in
+            </Link>
+          </p>
+        )}
       </motion.div>
     </div>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <ForgotPasswordInner />
+    </Suspense>
   );
 }

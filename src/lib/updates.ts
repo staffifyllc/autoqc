@@ -158,8 +158,8 @@ export const updates: UpdateEntry[] = [
       {
         category: "Security",
         title: "Per-user email + password",
-        body: "Login now requires a password. Your temporary password was sent via email. Change it in Account → Password on first sign-in. Existing email-only login removed.",
-        href: "/dashboard/account",
+        body: "Login now requires a password. Forgot it? Use the Forgot password link on the sign-in page. Change it any time in Settings.",
+        href: "/dashboard/settings",
       },
       {
         category: "Feature",
