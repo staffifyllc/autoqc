@@ -28,6 +28,24 @@ export type UpdateEntry = {
 
 export const updates: UpdateEntry[] = [
   {
+    version: "1.7.0",
+    date: "2026-04-24",
+    title: "Virtual Staging (closed beta)",
+    tagline: "Stage any empty living room, bedroom, dining room, or office. Six styles. Preview free.",
+    changes: [
+      {
+        category: "Feature",
+        title: "Virtual Staging on empty rooms",
+        body: "In Virtual Staging (closed beta) you can now stage an empty room with realistic furniture while keeping the exact architecture. Six styles: Modern, Traditional, Scandinavian, Farmhouse, Mid-Century, Coastal. Previews are free so you can compare styles side by side. Keep a render for 3 credits ($3). Works on living rooms, bedrooms, dining rooms, and offices for now. Admin / invited agencies only during beta.",
+      },
+      {
+        category: "Polish",
+        title: "Faster landing + dashboard",
+        body: "Client JS is now tree-shaken via Next optimizePackageImports for lucide-react, framer-motion, and Radix primitives. Cuts bundle size on every page that pulls icons or animations.",
+      },
+    ],
+  },
+  {
     version: "1.6.0",
     date: "2026-04-23",
     title: "Suggest a feature",
