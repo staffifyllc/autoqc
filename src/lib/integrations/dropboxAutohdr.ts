@@ -208,10 +208,14 @@ export async function initializeCursor(integrationId: string): Promise<{
     cursor = (latest.result as any).cursor as string;
   } catch (err: any) {
     const summary = describeDropboxError(err);
+    const scopeMatch = summary.match(/required scope '([^']+)'/);
     const pathHint = summary.includes("path/not_found")
       ? `The folder "${creds.watchFolder}" does not exist in this Dropbox account. Check spelling and capitalization.`
-      : summary.includes("missing_scope") || summary.includes("no_permission")
-        ? `The token is missing scopes. In the Permissions tab, enable files.content.read, files.content.write, files.metadata.read, files.metadata.write, account_info.read. Click Submit, then regenerate the access token.`
+      : scopeMatch ||
+        summary.includes("missing_scope") ||
+        summary.includes("no_permission") ||
+        summary.includes("not permitted")
+        ? `Your Dropbox app is missing ${scopeMatch ? `the "${scopeMatch[1]}" scope` : "required scopes"}. In the app console Permissions tab, enable all 5 scopes (files.content.read, files.content.write, files.metadata.read, files.metadata.write, account_info.read), click Submit at the bottom, THEN regenerate the access token. Tokens bake in scopes at creation time, so old tokens need to be replaced.`
         : `Check that the watch folder path "${creds.watchFolder}" exactly matches a folder in this Dropbox.`;
     throw new Error(`${pathHint} (${summary})`);
   }
