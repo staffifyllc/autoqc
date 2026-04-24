@@ -212,7 +212,7 @@ export function StagingButton({
                       className="absolute inset-0 pointer-events-none flex items-center justify-center"
                       aria-hidden
                     >
-                      <div className="text-white/15 text-6xl font-black tracking-widest uppercase -rotate-12 select-none">
+                      <div className="text-white/30 text-6xl font-black tracking-widest uppercase -rotate-12 select-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
                         Preview · AutoQC
                       </div>
                     </div>
