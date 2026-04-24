@@ -121,6 +121,69 @@ export function parseDropboxPath(
   return { propertyFolder, propertyName, fileName };
 }
 
+// The Dropbox JS SDK's filesDownload/filesUpload methods call
+// response.buffer() internally, which doesn't exist on Node 18+ native
+// fetch (it was a node-fetch v2 thing). Hitting the Content API
+// directly sidesteps the bug and also gives us explicit control over
+// the Dropbox-API-Path-Root header needed for team-root paths.
+async function dropboxDownload(
+  creds: DropboxAutohdrCredentials,
+  path: string
+): Promise<Buffer> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${creds.accessToken}`,
+    "Dropbox-API-Arg": JSON.stringify({ path }),
+  };
+  if (creds.rootNamespaceId) {
+    headers["Dropbox-API-Path-Root"] = JSON.stringify({
+      ".tag": "root",
+      root: creds.rootNamespaceId,
+    });
+  }
+  const res = await fetch("https://content.dropboxapi.com/2/files/download", {
+    method: "POST",
+    headers,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`dropbox download ${res.status}: ${text.slice(0, 300)}`);
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
+async function dropboxUpload(
+  creds: DropboxAutohdrCredentials,
+  path: string,
+  body: Buffer,
+  mode: "add" | "overwrite" = "overwrite"
+): Promise<void> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${creds.accessToken}`,
+    "Content-Type": "application/octet-stream",
+    "Dropbox-API-Arg": JSON.stringify({
+      path,
+      mode: { ".tag": mode },
+      autorename: false,
+      mute: true,
+    }),
+  };
+  if (creds.rootNamespaceId) {
+    headers["Dropbox-API-Path-Root"] = JSON.stringify({
+      ".tag": "root",
+      root: creds.rootNamespaceId,
+    });
+  }
+  const res = await fetch("https://content.dropboxapi.com/2/files/upload", {
+    method: "POST",
+    headers,
+    body: new Uint8Array(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`dropbox upload ${res.status}: ${text.slice(0, 300)}`);
+  }
+}
+
 async function getDropbox(creds: DropboxAutohdrCredentials) {
   const opts: any = { accessToken: creds.accessToken, fetch: fetch as any };
   // If we know the user's root namespace (team or personal), always pass
@@ -348,11 +411,9 @@ export async function ingestAgencyDropbox(args: {
         continue;
       }
 
-      // Download from Dropbox, upload to S3.
-      const downloadRes = (await dbx.filesDownload({ path: f.path })) as any;
-      const fileBinary: Buffer = downloadRes.result.fileBinary
-        ? Buffer.from(downloadRes.result.fileBinary)
-        : Buffer.from(await (downloadRes.result.fileBlob as Blob).arrayBuffer());
+      // Download from Dropbox (via direct Content API — SDK is broken
+      // on native fetch), upload to S3.
+      const fileBinary = await dropboxDownload(creds, f.path);
       const fileSize = fileBinary.byteLength;
 
       const s3Key = `${args.agencyId}/${property.id}/original/${f.fileName}`;
@@ -476,11 +537,12 @@ export async function pushCompletedProperties(args: {
       if (!imgRes.ok) continue;
       const buf = Buffer.from(await imgRes.arrayBuffer());
       try {
-        await dbx.filesUpload({
-          path: `${outputBase}/${photo.fileName}`,
-          contents: buf,
-          mode: { ".tag": "overwrite" },
-        });
+        await dropboxUpload(
+          creds,
+          `${outputBase}/${photo.fileName}`,
+          buf,
+          "overwrite"
+        );
         photosPushed++;
       } catch (err) {
         console.error("[dropbox-autohdr] upload failed for", photo.fileName, err);
