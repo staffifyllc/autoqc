@@ -5,7 +5,7 @@
 // forgot-password + settings, privacy policy.
 
 export const WHATS_NEW_SUBJECT =
-  "New trick: AutoQC talks to AutoHDR now";
+  "Get your mornings and weekends back";
 
 type Args = {
   recipientName?: string | null;
@@ -37,7 +37,7 @@ export function renderWhatsNewEmail({
   </head>
   <body style="margin:0;padding:0;background:#07090c;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#e7ecef;">
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
-      AutoHDR drops, AutoQC catches. Virtual Staging for empty rooms. Plus a few quality-of-life wins.
+      AutoHDR drops, AutoQC QCs, files get replaced in place. You were going to do that Saturday morning.
     </div>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#07090c;">
       <tr>
@@ -64,23 +64,25 @@ export function renderWhatsNewEmail({
                   Product update · April 2026
                 </div>
                 <h1 style="margin:0 0 14px 0;font-size:32px;line-height:1.15;letter-spacing:-0.02em;font-weight:700;color:#f5f7f9;">
-                  Your photos got<br/>
-                  <span style="background:linear-gradient(90deg,#55f19a 0%,#8df7b9 100%);-webkit-background-clip:text;background-clip:text;color:transparent;">a little smarter.</span>
+                  Get your mornings and<br/>
+                  <span style="background:linear-gradient(90deg,#55f19a 0%,#8df7b9 100%);-webkit-background-clip:text;background-clip:text;color:transparent;">weekends back.</span>
                 </h1>
                 <p style="margin:0;font-size:15px;line-height:1.6;color:#a5b0b8;">
-                  Hey ${escapeHtml(firstName)}. Big week. AutoQC now shakes hands with AutoHDR,
-                  empty rooms can furnish themselves, and a few things you asked for finally
-                  shipped. Short version below.
+                  Hey ${escapeHtml(firstName)}. Most photographers we know spend four to six
+                  hours a week checking verticals, fixing casts, and culling frames their
+                  editor missed. This week we shipped the thing that takes that chore off
+                  your plate — plus a couple of new ways to make a listing pop. Short
+                  version below.
                 </p>
               </td>
             </tr>
 
             ${featureCard({
               tagIcon: "→",
-              tag: "Marquee",
-              title: "AutoHDR drops, AutoQC catches",
-              copy: "Point AutoQC at your AutoHDR Dropbox folder once. From there, every finished batch runs the full 14-check QC and auto-fix pass on its own, then the reviewed JPEGs overwrite the originals in the same folder. Your delivery flow does not change. Your editor does not click anything. You eat lunch.",
-              ctaLabel: "Set it up in 10 minutes",
+              tag: "The big one",
+              title: "AutoHDR drops, AutoQC catches while you sleep",
+              copy: "Point AutoQC at your AutoHDR Dropbox folder once. From there, every finished batch runs the full 14-check QC and auto-fix pass automatically, and the reviewed JPEGs overwrite the originals in the same folder. No new tabs, no Saturday morning review sessions, no chasing your editor on Slack at 11pm. AutoHDR uploads Thursday night, you ship clean photos Friday morning. Ten-minute setup, one time.",
+              ctaLabel: "Set it up and go enjoy your weekend",
               ctaUrl: `${siteUrl}/dashboard/dropbox-automation`,
               accent: "#55f19a",
             })}
@@ -167,21 +169,26 @@ export function renderWhatsNewEmail({
   </body>
 </html>`;
 
-  const text = `What's new at AutoQC
+  const text = `Get your mornings and weekends back
 
 Hey ${firstName},
 
-Big week. Four things shipped:
+Most photographers we know spend four to six hours a week checking
+verticals, fixing casts, and culling frames their editor missed. This
+week we shipped the thing that takes that chore off your plate.
 
-1. AutoHDR drops, AutoQC catches
-   Point AutoQC at your AutoHDR Dropbox folder. Every finished batch runs
-   the full 14-check QC and auto-fix pass on its own, then overwrites the
-   originals in place. Your editor does not click anything.
+1. AutoHDR drops, AutoQC catches while you sleep
+   Point AutoQC at your AutoHDR Dropbox folder once. Every finished
+   batch runs the full 14-check QC and auto-fix pass automatically,
+   and the reviewed JPEGs overwrite the originals in place. AutoHDR
+   uploads Thursday night, you ship clean photos Friday morning.
+   Ten-minute setup.
    ${siteUrl}/dashboard/dropbox-automation
 
 2. Virtual Staging, architecture preserved (beta)
-   Six furniture styles. Fireplaces, sconces, mirrors, and built-ins stay
-   put. Previews free, keep a render for $2. Reply to ask for beta access.
+   Six furniture styles. Fireplaces, sconces, mirrors, doorways, and
+   built-ins stay exactly where they were. Previews free, keep a
+   render for $2. Reply to ask for beta access.
    ${siteUrl}/dashboard/staging
 
 3. Settings, forgot-password, and fewer chips
