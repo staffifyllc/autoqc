@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import {
   Camera,
   LayoutDashboard,
@@ -52,7 +53,6 @@ const navSections: Array<{
     items: [
       { href: "/dashboard/credits", label: "Credits", icon: Coins },
       { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
-      { href: "/dashboard/account", label: "Password", icon: Settings },
       { href: "/dashboard/account/bugs", label: "My feedback", icon: MessageSquarePlus },
     ],
   },
@@ -216,7 +216,10 @@ export default function DashboardLayout({
             <Settings className="w-4 h-4" strokeWidth={1.75} />
             Settings
           </Link>
-          <button className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-[hsl(var(--surface-3))] transition-colors">
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-[hsl(var(--surface-3))] transition-colors"
+          >
             <LogOut className="w-4 h-4" strokeWidth={1.75} />
             Sign Out
           </button>

@@ -25,7 +25,7 @@ export default function LoginPage() {
 
       if (res?.error || !res?.ok) {
         setError(
-          "Wrong email or password. If you never set one, contact your agency admin."
+          "Wrong email or password. Try again, or reset your password below."
         );
         setLoading(false);
         return;
@@ -80,10 +80,18 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="text-sm font-medium mb-1.5 block flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5" />
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-medium flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5" />
+                  Password
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 type="password"
                 placeholder="Your password"
