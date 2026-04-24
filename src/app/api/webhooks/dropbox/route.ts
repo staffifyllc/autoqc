@@ -23,32 +23,29 @@ export async function GET(req: NextRequest) {
 // POST is the actual change notification. Body is:
 //   { "list_folder": { "accounts": ["dbid:..."] },
 //     "delta":       { "users":    [1234, 5678] } }
-// The accounts array has Dropbox account_ids that had changes inside
-// their watched folder. We look up each account_id to the Integration
-// row that stored it on setup, then call ingestAgencyDropbox() for
-// each matched agency.
-//
-// Dropbox signs the request body with an HMAC-SHA256 using the app
-// secret from DROPBOX_APP_SECRET. We validate before acting.
+// Each customer creates their own Dropbox app, so each Integration row
+// stores its own appSecret. To authorize a call we find the integration
+// whose stored appSecret (a) verifies the HMAC signature AND (b) owns
+// one of the account_ids Dropbox is notifying us about. This means a
+// valid signature from app A can't trick us into processing agencies
+// connected via app B.
+function tryVerify(rawBody: string, secret: string, signature: string): boolean {
+  if (!secret || !signature) return false;
+  try {
+    const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
+    const sigBuf = Buffer.from(signature, "hex");
+    const expectedBuf = Buffer.from(expected, "hex");
+    if (sigBuf.length !== expectedBuf.length) return false;
+    return timingSafeEqual(sigBuf, expectedBuf);
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
     const signature = req.headers.get("x-dropbox-signature") ?? "";
-    const appSecret = process.env.DROPBOX_APP_SECRET;
-
-    if (!appSecret) {
-      console.error("[dropbox-webhook] DROPBOX_APP_SECRET not set");
-      return NextResponse.json({ error: "server_misconfigured" }, { status: 500 });
-    }
-
-    // Validate signature. Fail closed; Dropbox will retry.
-    const expected = createHmac("sha256", appSecret).update(rawBody).digest("hex");
-    const sigBuf = Buffer.from(signature, "hex");
-    const expectedBuf = Buffer.from(expected, "hex");
-    if (sigBuf.length !== expectedBuf.length || !timingSafeEqual(sigBuf, expectedBuf)) {
-      console.warn("[dropbox-webhook] bad signature");
-      return NextResponse.json({ error: "bad_signature" }, { status: 403 });
-    }
 
     const body = JSON.parse(rawBody);
     const accountIds: string[] = body?.list_folder?.accounts ?? [];
@@ -56,21 +53,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, matched: 0 });
     }
 
-    // Match each account_id to an Integration. The credentials JSON has
-    // accountId set at setup time.
     const integrations = await prisma.integration.findMany({
       where: {
         platform: "DROPBOX_AUTOHDR",
         isActive: true,
       },
     });
+
     const matched = integrations.filter((i) => {
       const creds = i.credentials as DropboxAutohdrCredentials;
-      return !!creds.accountId && accountIds.includes(creds.accountId);
+      if (!creds.appSecret || !creds.accountId) return false;
+      if (!accountIds.includes(creds.accountId)) return false;
+      return tryVerify(rawBody, creds.appSecret, signature);
     });
 
-    // Run ingest + push-back in parallel for each matched agency. Cap
-    // total run-time so Dropbox does not retry on slow runs.
+    if (matched.length === 0) {
+      console.warn("[dropbox-webhook] no integration passed signature + account check");
+      return NextResponse.json({ error: "unauthorized" }, { status: 403 });
+    }
+
     await Promise.allSettled(
       matched.map(async (i) => {
         try {

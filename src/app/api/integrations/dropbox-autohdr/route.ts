@@ -20,9 +20,11 @@ export async function GET() {
       connected: true,
       isActive: integration.isActive,
       watchFolder: creds.watchFolder,
-      outputBehavior: creds.outputBehavior ?? "processed_subfolder",
+      finalsSubfolder: creds.finalsSubfolder ?? "04-Final-Photos",
+      outputBehavior: creds.outputBehavior ?? "replace_in_place",
       outputFolder: creds.outputFolder ?? "/AutoQC Outbox",
       hasCursor: !!creds.cursor,
+      hasAppSecret: !!creds.appSecret,
       accountId: creds.accountId ?? null,
       lastSyncedAt: creds.lastSyncedAt ?? null,
       totalPhotosIngested: creds.totalPhotosIngested ?? 0,
@@ -46,8 +48,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const accessToken: string | undefined = body?.accessToken;
     const watchFolder: string | undefined = body?.watchFolder;
+    const finalsSubfolder: string | undefined = body?.finalsSubfolder;
     const outputBehavior: string | undefined = body?.outputBehavior;
     const outputFolder: string | undefined = body?.outputFolder;
+    const appSecret: string | undefined = body?.appSecret;
 
     if (!accessToken || !watchFolder) {
       return NextResponse.json(
@@ -57,22 +61,42 @@ export async function POST(req: NextRequest) {
     }
     if (
       outputBehavior &&
-      outputBehavior !== "processed_subfolder" &&
+      outputBehavior !== "replace_in_place" &&
       outputBehavior !== "outbox_folder"
     ) {
       return NextResponse.json(
-        { error: "outputBehavior must be processed_subfolder or outbox_folder" },
+        { error: "outputBehavior must be replace_in_place or outbox_folder" },
         { status: 400 }
       );
     }
 
+    // Preserve any existing appSecret/counters so a re-save (e.g. rotating
+    // just the access token) doesn't wipe the secret we already have.
+    const existing = await prisma.integration.findFirst({
+      where: {
+        agencyId: session.user.agencyId!,
+        platform: "DROPBOX_AUTOHDR",
+      },
+    });
+    const existingCreds = (existing?.credentials as DropboxAutohdrCredentials | null) ?? null;
+
     const creds: DropboxAutohdrCredentials = {
       accessToken,
       watchFolder,
+      finalsSubfolder:
+        finalsSubfolder && finalsSubfolder.trim().length > 0
+          ? finalsSubfolder.trim()
+          : existingCreds?.finalsSubfolder ?? "04-Final-Photos",
       outputBehavior:
-        (outputBehavior as "processed_subfolder" | "outbox_folder") ??
-        "processed_subfolder",
+        (outputBehavior as "replace_in_place" | "outbox_folder") ??
+        "replace_in_place",
       outputFolder: outputFolder || "/AutoQC Outbox",
+      appSecret: appSecret && appSecret.trim().length > 0
+        ? appSecret.trim()
+        : existingCreds?.appSecret,
+      totalPhotosIngested: existingCreds?.totalPhotosIngested,
+      totalPropertiesPushedBack: existingCreds?.totalPropertiesPushedBack,
+      lastSyncedAt: existingCreds?.lastSyncedAt,
     };
 
     const integration = await prisma.integration.upsert({

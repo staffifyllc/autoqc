@@ -17,9 +17,11 @@ type Status = {
   connected: boolean;
   isActive?: boolean;
   watchFolder?: string;
-  outputBehavior?: "processed_subfolder" | "outbox_folder";
+  finalsSubfolder?: string;
+  outputBehavior?: "replace_in_place" | "outbox_folder";
   outputFolder?: string;
   hasCursor?: boolean;
+  hasAppSecret?: boolean;
   accountId?: string | null;
   lastSyncedAt?: string | null;
   totalPhotosIngested?: number;
@@ -29,10 +31,12 @@ type Status = {
 export default function DropboxAutomationPage() {
   const [status, setStatus] = useState<Status | null>(null);
   const [accessToken, setAccessToken] = useState("");
-  const [watchFolder, setWatchFolder] = useState("/AutoQC Inbox");
+  const [appSecret, setAppSecret] = useState("");
+  const [watchFolder, setWatchFolder] = useState("/AutoHDR");
+  const [finalsSubfolder, setFinalsSubfolder] = useState("04-Final-Photos");
   const [outputBehavior, setOutputBehavior] = useState<
-    "processed_subfolder" | "outbox_folder"
-  >("processed_subfolder");
+    "replace_in_place" | "outbox_folder"
+  >("replace_in_place");
   const [outputFolder, setOutputFolder] = useState("/AutoQC Outbox");
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -46,6 +50,7 @@ export default function DropboxAutomationPage() {
       const d = await r.json();
       setStatus(d);
       if (d.watchFolder) setWatchFolder(d.watchFolder);
+      if (d.finalsSubfolder) setFinalsSubfolder(d.finalsSubfolder);
       if (d.outputBehavior) setOutputBehavior(d.outputBehavior);
       if (d.outputFolder) setOutputFolder(d.outputFolder);
     }
@@ -65,7 +70,9 @@ export default function DropboxAutomationPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           accessToken,
+          appSecret,
           watchFolder,
+          finalsSubfolder,
           outputBehavior,
           outputFolder,
         }),
@@ -77,6 +84,7 @@ export default function DropboxAutomationPage() {
           "Connected. AutoQC is now watching your Dropbox folder."
       );
       setAccessToken("");
+      setAppSecret("");
       await load();
     } catch (e: any) {
       setError(e.message);
@@ -131,10 +139,11 @@ export default function DropboxAutomationPage() {
           </span>
         </div>
         <p className="text-sm text-muted-foreground max-w-2xl">
-          Hands-off pipeline. Your AutoHDR software pushes finished JPEGs
-          into a Dropbox folder; AutoQC pulls them, runs the full
-          14-check QC + auto-fixes, and puts the results back in Dropbox
-          for your editor or agent to grab.
+          Hands-off pipeline. AutoHDR drops finished JPEGs into each
+          property&apos;s Finals subfolder; AutoQC walks your Dropbox tree,
+          pulls the finals, runs the full 14-check QC + auto-fixes, and
+          writes the reviewed files back to that same property as a
+          Processed subfolder. Raw folders and videos are left alone.
         </p>
       </div>
 
@@ -239,6 +248,33 @@ export default function DropboxAutomationPage() {
           </div>
 
           <div>
+            <label className="text-xs font-medium mb-1 block text-muted-foreground flex items-center gap-1.5">
+              <Key className="w-3 h-3" />
+              Dropbox app secret
+              {status?.hasAppSecret && (
+                <span className="ml-1 text-[10px] font-mono uppercase tracking-wider text-green-300 bg-green-500/10 border border-green-500/30 px-1.5 py-0.5 rounded">
+                  saved
+                </span>
+              )}
+            </label>
+            <input
+              type="password"
+              value={appSecret}
+              onChange={(e) => setAppSecret(e.target.value)}
+              placeholder={
+                status?.hasAppSecret
+                  ? "Leave blank to keep the saved secret"
+                  : "From the Dropbox app Settings tab"
+              }
+              autoComplete="off"
+              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Used only to verify webhook signatures. Never shown again after saving.
+            </p>
+          </div>
+
+          <div>
             <label className="text-xs font-medium mb-1 block text-muted-foreground">
               Watch folder in Dropbox
             </label>
@@ -246,11 +282,27 @@ export default function DropboxAutomationPage() {
               type="text"
               value={watchFolder}
               onChange={(e) => setWatchFolder(e.target.value)}
-              placeholder="/AutoQC Inbox"
+              placeholder="/AutoHDR"
               className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500/50"
             />
             <p className="text-[11px] text-muted-foreground mt-1">
-              Put a subfolder here for each property (e.g. /AutoQC Inbox/123 Main St/). AutoQC treats each subfolder as one property.
+              The top-level folder AutoHDR writes into. AutoQC walks every nested subfolder (year / quarter / month / address) looking for finished photos.
+            </p>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium mb-1 block text-muted-foreground">
+              Finals subfolder name
+            </label>
+            <input
+              type="text"
+              value={finalsSubfolder}
+              onChange={(e) => setFinalsSubfolder(e.target.value)}
+              placeholder="04-Final-Photos"
+              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              The name of the folder AutoHDR drops finished JPEGs into inside each property. AutoQC only ingests files from a folder with this exact name. Siblings like 01-RAW-Photos or 05-Final-Video are ignored. Case-insensitive.
             </p>
           </div>
 
@@ -262,14 +314,19 @@ export default function DropboxAutomationPage() {
               <label className="flex items-start gap-2 text-sm cursor-pointer p-3 rounded-lg border border-white/10 hover:bg-white/[0.02]">
                 <input
                   type="radio"
-                  checked={outputBehavior === "processed_subfolder"}
-                  onChange={() => setOutputBehavior("processed_subfolder")}
+                  checked={outputBehavior === "replace_in_place"}
+                  onChange={() => setOutputBehavior("replace_in_place")}
                   className="mt-0.5"
                 />
                 <div>
-                  <div className="font-medium">Alongside originals in /Processed</div>
+                  <div className="font-medium">
+                    Replace originals in place
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-blue-300 bg-blue-500/10 border border-blue-500/30 px-1.5 py-0.5 rounded ml-1.5">
+                      recommended
+                    </span>
+                  </div>
                   <div className="text-[11px] text-muted-foreground">
-                    Example: /AutoQC Inbox/123 Main St/Processed/image.jpg
+                    AutoHDR&apos;s JPEGs in the Finals folder are overwritten by the QC&apos;d versions. Your deliverable path stays identical.
                   </div>
                 </div>
               </label>
@@ -283,7 +340,7 @@ export default function DropboxAutomationPage() {
                 <div>
                   <div className="font-medium">Into a separate outbox folder</div>
                   <div className="text-[11px] text-muted-foreground">
-                    Example: /AutoQC Outbox/123 Main St/image.jpg
+                    Leaves originals untouched. Example: /AutoQC Outbox/3 Cumberland Cir/image.jpg
                   </div>
                 </div>
               </label>
@@ -320,7 +377,12 @@ export default function DropboxAutomationPage() {
 
           <button
             onClick={connect}
-            disabled={saving || !accessToken || !watchFolder}
+            disabled={
+              saving ||
+              !accessToken ||
+              !watchFolder ||
+              (!status?.hasAppSecret && !appSecret)
+            }
             className="px-4 py-2 rounded-lg gradient-bg text-white font-medium text-sm hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
           >
             {saving ? (
@@ -403,13 +465,7 @@ export default function DropboxAutomationPage() {
               Step 4 · Copy the App secret
             </div>
             <div className="text-[13px] text-muted-foreground leading-relaxed">
-              On the <strong>Settings</strong> tab, find <strong>App secret</strong> and click <strong>Show</strong>. Copy it somewhere safe.
-              <br />
-              This secret is what AutoQC uses to verify webhook signatures (it proves the webhook really came from Dropbox, not some random caller). Send it to your AutoQC account rep or email it to{" "}
-              <a href="mailto:hello@autoqc.io" className="text-foreground underline">
-                hello@autoqc.io
-              </a>{" "}
-              so we can drop it into the production env as <code className="text-[11px]">DROPBOX_APP_SECRET</code>. Without it, the webhook endpoint rejects every request by design.
+              On the <strong>Settings</strong> tab, find <strong>App secret</strong> and click <strong>Show</strong>. Paste it into the <strong>Dropbox app secret</strong> field in the connect form above. AutoQC uses it to verify that webhook calls really came from Dropbox, not a random caller. The secret is stored server-side and never shown back in the UI.
             </div>
           </div>
 
@@ -418,18 +474,39 @@ export default function DropboxAutomationPage() {
               Step 5 · Generate the access token
             </div>
             <div className="text-[13px] text-muted-foreground leading-relaxed">
-              Still on the <strong>Settings</strong> tab, scroll to <strong>OAuth 2</strong>. Under <strong>Generated access token</strong> click <strong>Generate</strong> and copy the token. Paste it into the connect form above.
+              Still on the <strong>Settings</strong> tab, scroll to <strong>OAuth 2</strong>. Under <strong>Generated access token</strong> click <strong>Generate</strong> and copy the token. Paste it into the <strong>Dropbox access token</strong> field in the connect form above.
             </div>
           </div>
 
           <div>
             <div className="text-[11px] font-mono uppercase tracking-wider text-blue-300 mb-1.5">
-              Step 6 · Make your inbox folder
+              Step 6 · Point AutoQC at your existing AutoHDR layout
             </div>
             <div className="text-[13px] text-muted-foreground leading-relaxed">
-              In your Dropbox, create the folder you picked above (default is{" "}
-              <code className="text-[11px] font-mono">/AutoQC Inbox</code>). Point AutoHDR at it. For each property, create a subfolder inside the inbox (e.g.{" "}
-              <code className="text-[11px] font-mono">/AutoQC Inbox/123 Main St/</code>) and have AutoHDR write finished JPEGs there. AutoQC treats each subfolder as one property.
+              No reorganization required. AutoQC walks whatever tree you already have. Just tell it:
+              <ul className="list-disc pl-5 mt-2 space-y-1">
+                <li>
+                  <strong>Watch folder</strong>: the top-level folder AutoHDR writes into (e.g.{" "}
+                  <code className="text-[11px] font-mono">/AutoHDR</code>). AutoQC descends through year / quarter / month / address automatically.
+                </li>
+                <li>
+                  <strong>Finals subfolder name</strong>: the folder AutoHDR saves finished JPEGs into inside each property (default{" "}
+                  <code className="text-[11px] font-mono">04-Final-Photos</code>). Sibling folders like{" "}
+                  <code className="text-[11px] font-mono">01-RAW-Photos</code> and{" "}
+                  <code className="text-[11px] font-mono">05-Final-Video</code> are skipped.
+                </li>
+              </ul>
+              <div className="mt-3 text-[11px] opacity-80">
+                Example structure AutoQC understands:
+                <code className="block bg-white/5 border border-white/10 rounded px-2 py-1.5 mt-1 text-[11px] font-mono leading-relaxed whitespace-pre">
+{`/AutoHDR/2026/Q2/April/
+  3 Cumberland Cir (Gina Spaziano)/
+    01-RAW-Photos/      ← ignored
+    04-Final-Photos/    ← ingested
+      A7503473.jpg
+    05-Final-Video/     ← ignored`}
+                </code>
+              </div>
             </div>
           </div>
 
@@ -438,7 +515,8 @@ export default function DropboxAutomationPage() {
               Done. What to expect
             </div>
             <div className="text-[13px] text-muted-foreground leading-relaxed">
-              With the webhook active, a drop into your inbox starts processing within seconds. Without it, the safety-net cron catches drops within 30 minutes. Either way, finished files come back to <strong>/Processed</strong> (or your configured outbox) automatically.
+              With the webhook active, a drop into any property&apos;s Finals folder starts processing within seconds. Without it, the safety-net cron catches drops within 30 minutes. By default, reviewed JPEGs overwrite AutoHDR&apos;s originals in the same Finals folder, so your downstream delivery process does not have to change anything. If you picked the outbox option instead, they go to{" "}
+              <code className="text-[11px] font-mono">/AutoQC Outbox/&lt;property&gt;/</code> and the originals are left untouched.
             </div>
           </div>
         </div>

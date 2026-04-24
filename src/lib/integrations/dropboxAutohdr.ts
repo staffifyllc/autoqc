@@ -29,12 +29,26 @@ export type DropboxAutohdrCredentials = {
   // Dropbox account_id for the connected user. Used by the webhook to
   // figure out which agency a change notification belongs to.
   accountId?: string;
+  // The Dropbox app's App secret. We store it per-integration because
+  // each customer creates their own Dropbox app (at least until we
+  // ship a shared-OAuth flow), so there's no single global secret.
+  // The webhook validates the X-Dropbox-Signature HMAC against this.
+  appSecret?: string;
   // Serialized Dropbox cursor. null after first save, populated after
   // initializeCursor() runs once.
   cursor?: string;
-  // "processed_subfolder" pushes finals to /AutoQC Inbox/<property>/Processed/
-  // "outbox_folder" pushes finals to /AutoQC Outbox/<property>/
-  outputBehavior?: "processed_subfolder" | "outbox_folder";
+  // Name of the AutoHDR "finished photos" subfolder inside each property
+  // directory. AutoHDR workflows commonly write finals to a specific
+  // subfolder (e.g. "04-Final-Photos") while raws and videos live in
+  // sibling folders that AutoQC must ignore. We only ingest files whose
+  // IMMEDIATE PARENT folder matches this name (case-insensitive). The
+  // property is the parent of THAT folder. Defaults to "04-Final-Photos".
+  finalsSubfolder?: string;
+  // "replace_in_place" overwrites the files in <property>/<finalsSubfolder>/
+  //   directly — AutoHDR's JPEGs are replaced by AutoQC's reviewed versions.
+  // "outbox_folder" leaves originals untouched and writes finals to
+  //   <outputFolder>/<property>/ instead.
+  outputBehavior?: "replace_in_place" | "outbox_folder";
   // Customer's preferred output folder path when outputBehavior is
   // "outbox_folder". Defaults to "/AutoQC Outbox".
   outputFolder?: string;
@@ -52,28 +66,52 @@ function isImage(fileName: string): boolean {
   return ext ? IMAGE_EXTENSIONS.has(ext) : false;
 }
 
-// Parse a Dropbox path like /AutoQC Inbox/123 Main St/IMG_0001.jpg
-// against the watched root /AutoQC Inbox, returning the subfolder
-// (property name) and the file name. Returns null if the path is not
-// in a subfolder of the watched root (we ignore files dropped
-// directly at the root or in /Processed paths that we wrote).
+export const DEFAULT_FINALS_SUBFOLDER = "04-Final-Photos";
+
+// Parse a Dropbox path against the watched root. AutoHDR workflows store
+// finished JPEGs inside a specific subfolder of each property (default
+// "04-Final-Photos"), alongside siblings like "01-RAW-Photos" and
+// "05-Final-Video" that we must ignore. We only accept paths shaped like
+//   <watchRoot>/.../<propertyName>/<finalsSubfolder>/<file>.jpg
+// at any nesting depth. The property folder is the parent of the finals
+// subfolder. Returns null for anything else, including files we wrote
+// into our own /Processed output (to prevent a feedback loop).
+//
+// Returns:
+//   - propertyFolder: full Dropbox path of the property folder — used as
+//     the dedupe key so same-named properties in different months stay
+//     separate Properties.
+//   - propertyName:   last segment of propertyFolder; shown as the
+//     AutoQC property address.
+//   - fileName:       the leaf file name.
 export function parseDropboxPath(
   fullPath: string,
-  watchFolder: string
-): { subfolder: string; fileName: string } | null {
+  watchFolder: string,
+  finalsSubfolder: string = DEFAULT_FINALS_SUBFOLDER
+): {
+  propertyFolder: string;
+  propertyName: string;
+  fileName: string;
+} | null {
   const normalized = fullPath.replace(/\\/g, "/");
   const rootNormalized = watchFolder.replace(/\\/g, "/").replace(/\/$/, "");
   if (!normalized.toLowerCase().startsWith(rootNormalized.toLowerCase() + "/")) {
     return null;
   }
   const relative = normalized.slice(rootNormalized.length + 1);
-  const parts = relative.split("/");
-  if (parts.length < 2) return null; // file at root, skip
-  // Skip files inside our own /Processed output so we do not loop.
+  const parts = relative.split("/").filter(Boolean);
+  // Need at least: ...somewhere.../<property>/<finalsSubfolder>/<file>
+  if (parts.length < 3) return null;
   if (parts.some((p) => p.toLowerCase() === "processed")) return null;
-  const subfolder = parts[0];
+
   const fileName = parts[parts.length - 1];
-  return { subfolder, fileName };
+  const immediateParent = parts[parts.length - 2];
+  if (immediateParent.toLowerCase() !== finalsSubfolder.toLowerCase()) {
+    return null;
+  }
+  const propertyName = parts[parts.length - 3];
+  const propertyFolder = `${rootNormalized}/${parts.slice(0, -2).join("/")}`;
+  return { propertyFolder, propertyName, fileName };
 }
 
 async function getDropbox(creds: DropboxAutohdrCredentials) {
@@ -169,28 +207,39 @@ export async function ingestAgencyDropbox(args: {
     if (!result.has_more) break;
   }
 
-  // Group image files by subfolder (property name), skip non-images
-  // and anything inside /Processed output.
-  const grouped = new Map<string, Array<{ path: string; fileName: string }>>();
+  // Group image files by their property folder (the parent of the
+  // finals subfolder), skip non-images and anything outside the finals
+  // pattern. grouped key = full propertyFolder path (unique across
+  // month/quarter/year subtrees).
+  const finalsSubfolder = creds.finalsSubfolder || DEFAULT_FINALS_SUBFOLDER;
+  type GroupEntry = {
+    propertyName: string;
+    files: Array<{ path: string; fileName: string }>;
+  };
+  const grouped = new Map<string, GroupEntry>();
   let skipped = 0;
   for (const entry of newEntries) {
-    const parsed = parseDropboxPath(entry.path, creds.watchFolder);
+    const parsed = parseDropboxPath(entry.path, creds.watchFolder, finalsSubfolder);
     if (!parsed || !isImage(parsed.fileName)) {
       skipped++;
       continue;
     }
-    const arr = grouped.get(parsed.subfolder) ?? [];
-    arr.push({ path: entry.path, fileName: parsed.fileName });
-    grouped.set(parsed.subfolder, arr);
+    const existing = grouped.get(parsed.propertyFolder);
+    if (existing) {
+      existing.files.push({ path: entry.path, fileName: parsed.fileName });
+    } else {
+      grouped.set(parsed.propertyFolder, {
+        propertyName: parsed.propertyName,
+        files: [{ path: entry.path, fileName: parsed.fileName }],
+      });
+    }
   }
 
   let totalIngested = 0;
   let totalProperties = 0;
 
   const entries = Array.from(grouped.entries());
-  for (const [subfolder, files] of entries) {
-    const sourceFolder = `${creds.watchFolder.replace(/\/$/, "")}/${subfolder}`;
-
+  for (const [sourceFolder, { propertyName, files }] of entries) {
     // Find or create the Property. Use dropboxSourceFolder as the dedupe
     // key so repeated drops into the same folder append to the same
     // property rather than creating a new one every time.
@@ -204,7 +253,7 @@ export async function ingestAgencyDropbox(args: {
       property = await prisma.property.create({
         data: {
           agencyId: args.agencyId,
-          address: subfolder,
+          address: propertyName,
           dropboxSourceFolder: sourceFolder,
           dropboxIntegrationId: integration.id,
         },
@@ -326,10 +375,15 @@ export async function pushCompletedProperties(args: {
     const allTerminal = property.photos.every((p) => TERMINAL.has(p.status));
     if (!allTerminal) continue;
 
+    const finalsSub = creds.finalsSubfolder || DEFAULT_FINALS_SUBFOLDER;
+    // replace_in_place: write back to the same finals folder AutoHDR used,
+    // overwriting the original JPEGs. Safe from feedback loops because
+    // ingest dedupes by (propertyId, fileName) — a filename we already
+    // know is skipped on the next webhook.
     const outputBase =
       creds.outputBehavior === "outbox_folder"
         ? `${(creds.outputFolder ?? "/AutoQC Outbox").replace(/\/$/, "")}/${property.address}`
-        : `${(property.dropboxSourceFolder ?? "").replace(/\/$/, "")}/Processed`;
+        : `${(property.dropboxSourceFolder ?? "").replace(/\/$/, "")}/${finalsSub}`;
 
     try {
       await dbx.filesCreateFolderV2({ path: outputBase });
