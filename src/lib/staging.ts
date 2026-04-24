@@ -124,19 +124,14 @@ const ROOM_MANIFEST: Record<string, RoomManifest> = {
   },
 };
 
-// The always-on preservation clause. Paraphrased from the Twilight
-// prompt because the same "edit this image, keep the rest" constraint
-// matters even more for staging — an invented wall destroys the listing.
-const PRESERVATION_CLAUSE = `CRITICAL rules you must not break:
-- Preserve the exact architecture, walls, windows, doors, floors, light fixtures, and ceiling of the original photo. Do not move, remove, recolor, or redraw any of these.
-- Do not add or remove any structural elements. The room must be the SAME room after staging, only with furniture added.
-- Do not alter the crop, framing, aspect ratio, or camera angle.
-- Preserve the exact lighting direction. Light coming through a window from the left must still come from the left, and the furniture you add must cast shadows consistent with that direction.
-- Do not add reflective glass furniture that would show impossible reflections (mirrored coffee tables, glass dining tables on this pass).
-- Furniture must be in realistic proportion to the room. Do not oversize a sofa, do not undersize a bed.
-- The result must look like a photo of the SAME room after a stager came in, not a different room.
-- No people, no pets, no text overlays, no watermarks.
-- Keep the render photorealistic and MLS-appropriate. No heavy color grading, no exaggerated saturation.`;
+// Preservation-first opening. This is the instruction block the model
+// sees before anything else. Paul-authored after the first round of
+// renders showed the model silently replacing mirrors, fireplaces,
+// sconces, and other focal-wall details it did not recognize as
+// "architecture." Naming every protected category explicitly,
+// up-front, with a primacy-effect position, dramatically cuts the
+// hallucination rate.
+const PRESERVATION_CORE = `Virtually stage this real estate photo by adding realistic furniture and decor only. Preserve the original image exactly. Do not alter, remove, move, resize, repaint, cover, blur, replace, regenerate, or reinterpret any permanent feature including windows, doors, walls, ceilings, floors, trim, baseboards, vents, outlets, switches, lighting fixtures, cabinets, countertops, appliances, fireplaces, stairs, railings, mirrors, reflections, or exterior views through windows. Keep identical camera angle, crop, composition, perspective, room dimensions, and natural lighting direction. Windows are protected objects and must remain fully intact with original frame lines, glass, mullions, and outdoor scenery unchanged. Do not block key windows or doors with oversized furniture. Only place properly scaled furniture and decor that fits naturally in the room and respects walkways. Add realistic contact shadows from staged items only. Structural preservation is more important than aesthetics. If staging would require changing any existing room element, choose different furniture placement instead. Reject any result where window count changes, door count changes, fixtures disappear, geometry shifts, perspective changes, or any architectural detail is modified. Output must look like the exact original listing photo professionally furnished, with furniture added as an overlay only.`;
 
 export function buildStagingPrompt(opts: {
   roomType: string;
@@ -151,17 +146,18 @@ export function buildStagingPrompt(opts: {
     throw new Error(`Unknown staging style: ${opts.style}`);
   }
 
-  return `Stage this empty real estate photo by adding furniture. Keep the room exactly as it is architecturally; only add staging.
+  // Preservation-first. Room-specific furniture guidance and style
+  // modifier come AFTER so the model has already committed to
+  // preserving the architecture before picking what to add.
+  return `${PRESERVATION_CORE}
 
-Furniture to add:
+Furniture and decor to add:
 ${manifest.add}
 
 Furniture and elements NOT to add:
 ${manifest.avoid}
 
-${style.modifier}
-
-${PRESERVATION_CLAUSE}`;
+${style.modifier}`;
 }
 
 // Feature gate helper. When the env flag is off, staging remains visible
