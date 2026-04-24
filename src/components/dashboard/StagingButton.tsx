@@ -36,6 +36,10 @@ export function StagingButton({
   const [generating, setGenerating] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Server decides the effective credit cost per agency (Flylisted gets
+  // a discount, other partners can get overrides too). Default stays
+  // STAGING_CREDIT_COST until the preview API tells us otherwise.
+  const [creditCost, setCreditCost] = useState<number>(STAGING_CREDIT_COST);
   // Closed-beta gate. Same pattern the sidebar uses to hide admin nav.
   // While we validate render quality, only admin agencies see the button.
   const [eligible, setEligible] = useState<boolean | null>(null);
@@ -82,6 +86,7 @@ export function StagingButton({
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Preview failed");
       setPreviewUrl(data.url);
+      if (typeof data.creditCost === "number") setCreditCost(data.creditCost);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -221,7 +226,7 @@ export function StagingButton({
                     Pick a style above to generate a preview.
                   </div>
                   <div className="text-xs">
-                    Previews are free. Keep a render you like for {STAGING_CREDIT_COST} credits.
+                    Previews are free. Keep a render you like for {creditCost} credit{creditCost === 1 ? "" : "s"}.
                   </div>
                 </div>
               )}
@@ -244,7 +249,7 @@ export function StagingButton({
                     Staged and added to property exports.
                   </span>
                 ) : (
-                  `Previews are free. Keep this render for ${STAGING_CREDIT_COST} credits ($${STAGING_CREDIT_COST}).`
+                  `Previews are free. Keep this render for ${creditCost} credit${creditCost === 1 ? "" : "s"} ($${creditCost}).`
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -272,7 +277,7 @@ export function StagingButton({
                     ) : (
                       <>
                         <Sofa className="w-3 h-3" />
-                        Keep for {STAGING_CREDIT_COST} credits
+                        Keep for {creditCost} credit{creditCost === 1 ? "" : "s"}
                       </>
                     )}
                   </button>

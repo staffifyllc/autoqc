@@ -39,7 +39,7 @@ export async function POST(
 
     const agency = await prisma.agency.findUnique({
       where: { id: session.user.agencyId! },
-      select: { creditBalance: true, isAdmin: true },
+      select: { creditBalance: true, isAdmin: true, stagingCreditCost: true },
     });
     if (!agency) {
       return NextResponse.json({ error: "Agency not found" }, { status: 404 });
@@ -50,6 +50,11 @@ export async function POST(
         { status: 403 }
       );
     }
+
+    // Per-agency price override. Null = default (3 credits). Set to 1
+    // for Flylisted and any other partner agencies on the discounted
+    // rate. See Agency.stagingCreditCost in prisma/schema.prisma.
+    const effectiveCost = agency.stagingCreditCost ?? STAGING_CREDIT_COST;
 
     const photo = await prisma.photo.findFirst({
       where: {
@@ -94,11 +99,11 @@ export async function POST(
       });
     }
 
-    if (!agency.isAdmin && agency.creditBalance < STAGING_CREDIT_COST) {
+    if (!agency.isAdmin && agency.creditBalance < effectiveCost) {
       return NextResponse.json(
         {
-          error: `Not enough credits. Virtual Staging costs ${STAGING_CREDIT_COST} credits.`,
-          creditsNeeded: STAGING_CREDIT_COST,
+          error: `Not enough credits. Virtual Staging costs ${effectiveCost} credit${effectiveCost === 1 ? "" : "s"}.`,
+          creditsNeeded: effectiveCost,
           creditsAvailable: agency.creditBalance,
         },
         { status: 402 }
@@ -111,13 +116,13 @@ export async function POST(
       await prisma.$transaction([
         prisma.agency.update({
           where: { id: session.user.agencyId! },
-          data: { creditBalance: { decrement: STAGING_CREDIT_COST } },
+          data: { creditBalance: { decrement: effectiveCost } },
         }),
         prisma.creditTransaction.create({
           data: {
             agencyId: session.user.agencyId!,
             type: "USAGE",
-            amount: -STAGING_CREDIT_COST,
+            amount: -effectiveCost,
             description: `Virtual Staging (${style}): ${photo.property.address} / ${photo.fileName}`,
           },
         }),
@@ -154,7 +159,7 @@ export async function POST(
           provider: "gemini",
           prompt,
           status: "READY",
-          creditCost: STAGING_CREDIT_COST,
+          creditCost: effectiveCost,
         },
       });
 
@@ -165,13 +170,13 @@ export async function POST(
         await prisma.$transaction([
           prisma.agency.update({
             where: { id: session.user.agencyId! },
-            data: { creditBalance: { increment: STAGING_CREDIT_COST } },
+            data: { creditBalance: { increment: effectiveCost } },
           }),
           prisma.creditTransaction.create({
             data: {
               agencyId: session.user.agencyId!,
               type: "REFUND",
-              amount: STAGING_CREDIT_COST,
+              amount: effectiveCost,
               description: `Refund: Virtual Staging (${style}) failed on ${photo.fileName}`,
             },
           }),

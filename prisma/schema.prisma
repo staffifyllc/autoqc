@@ -107,6 +107,12 @@ model Agency {
   // Admin / test mode - bypasses credit checks
   isAdmin            Boolean @default(false)
 
+  // Per-agency staging price override. Null = use STAGING_CREDIT_COST
+  // default (3). Non-null = use this value instead. Used to give
+  // partner / internal agencies discounted rates without affecting
+  // anyone else.
+  stagingCreditCost  Int?
+
   // Default tier applied when creating new properties
   defaultTier        PropertyTier @default(STANDARD)
 

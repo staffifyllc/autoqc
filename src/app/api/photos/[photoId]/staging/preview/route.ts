@@ -9,6 +9,7 @@ import {
   ELIGIBLE_STAGING_ROOM_TYPES,
   stagingEnabledForUser,
   styleById,
+  STAGING_CREDIT_COST,
   STAGING_STYLES,
   type StagingStyleId,
 } from "@/lib/staging";
@@ -42,7 +43,7 @@ export async function POST(
     // this. Keeps real customers out while we validate quality.
     const agency = await prisma.agency.findUnique({
       where: { id: session.user.agencyId! },
-      select: { isAdmin: true },
+      select: { isAdmin: true, stagingCreditCost: true },
     });
     if (!agency) {
       return NextResponse.json({ error: "Agency not found" }, { status: 404 });
@@ -88,9 +89,11 @@ export async function POST(
       },
       orderBy: { createdAt: "desc" },
     });
+    const effectiveCost = agency.stagingCreditCost ?? STAGING_CREDIT_COST;
+
     if (existing && Date.now() - existing.createdAt.getTime() < PREVIEW_FRESH_MS) {
       const url = await getDownloadUrl(existing.s3Key);
-      return NextResponse.json({ variant: existing, url, cached: true });
+      return NextResponse.json({ variant: existing, url, cached: true, creditCost: effectiveCost });
     }
 
     // Source photo: prefer the auto-fixed version unless the user opted
@@ -131,7 +134,7 @@ export async function POST(
     });
 
     const url = await getDownloadUrl(outKey);
-    return NextResponse.json({ variant, url, cached: false });
+    return NextResponse.json({ variant, url, cached: false, creditCost: effectiveCost });
   } catch (error: any) {
     if (error?.message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
