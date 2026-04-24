@@ -24,6 +24,7 @@ import { downloadPhotoZip, downloadFile } from "@/lib/photoZip";
 import { DistractionCategoriesPanel } from "@/components/dashboard/DistractionCategoriesPanel";
 import { prettyDistractionLabel } from "@/lib/distractionCategories";
 import { TwilightButton } from "@/components/dashboard/TwilightButton";
+import { StagingButton } from "@/components/dashboard/StagingButton";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -1172,6 +1173,14 @@ export default function PropertyDetailPage({
                           }
                           hasTwilight={!!selectedPhoto.hasTwilight}
                           twilightUrl={selectedPhoto.twilightUrl ?? null}
+                          onPurchased={() => fetchProperty()}
+                        />
+                        <StagingButton
+                          photoId={selectedPhoto.id}
+                          fileName={selectedPhoto.fileName}
+                          roomType={
+                            (selectedPhoto.issues as any)?._room_type ?? null
+                          }
                           onPurchased={() => fetchProperty()}
                         />
                       </div>

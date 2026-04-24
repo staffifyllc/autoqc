@@ -385,6 +385,10 @@ model PhotoVariant {
   s3Key       String
   provider    String?             // "gemini" | "leonardo" | ...
   prompt      String?             @db.Text
+  // Style modifier for variants that have styled options (virtual
+  // staging picks a furniture style). Null for Twilight and any other
+  // single-style variant types.
+  style       String?
   status      PhotoVariantStatus  @default(READY)
   creditCost  Int                 @default(0)  // credits charged for this variant, 0 = preview
   createdAt   DateTime            @default(now())
@@ -393,11 +397,14 @@ model PhotoVariant {
   photo       Photo               @relation(fields: [photoId], references: [id], onDelete: Cascade)
 
   @@index([photoId, type])
+  @@index([photoId, type, style])
 }
 
 enum PhotoVariantType {
   TWILIGHT_PREVIEW
   TWILIGHT_FINAL
+  STAGING_PREVIEW
+  STAGING_FINAL
 }
 
 enum PhotoVariantStatus {
