@@ -80,18 +80,10 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-sm font-medium flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5" />
-                  Password
-                </label>
-                <Link
-                  href="/forgot-password"
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Forgot password?
-                </Link>
-              </div>
+              <label className="text-sm font-medium mb-1.5 block flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5" />
+                Password
+              </label>
               <input
                 type="password"
                 placeholder="Your password"
@@ -101,6 +93,14 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition"
               />
+              <div className="flex justify-end mt-1.5">
+                <Link
+                  href="/forgot-password"
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Forgot password?
+                </Link>
+              </div>
             </div>
 
             {error && (
