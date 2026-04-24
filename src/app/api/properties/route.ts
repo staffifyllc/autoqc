@@ -13,7 +13,8 @@ export async function GET() {
     const session = await requireAgency();
 
     const properties = await prisma.property.findMany({
-      where: { agencyId: session.user.agencyId },
+      // Exclude staging-only sessions; they live under their own tab.
+      where: { agencyId: session.user.agencyId, isStandaloneStaging: false },
       include: {
         client: { select: { clientName: true } },
         _count: { select: { photos: true } },

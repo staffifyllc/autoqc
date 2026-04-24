@@ -113,6 +113,7 @@ model Agency {
   // anyone else.
   stagingCreditCost  Int?
 
+
   // Default tier applied when creating new properties
   defaultTier        PropertyTier @default(STANDARD)
 
@@ -225,6 +226,14 @@ model Property {
   // from Agency.distractionCategoriesDefault on create unless overridden.
   // Only runs when tier == PREMIUM AND this list is non-empty.
   distractionCategories String[] @default([])
+
+  // True for property rows auto-created by the standalone Virtual
+  // Staging tab. The main Properties list filters these out so they do
+  // not pollute the QC workflow. Photos attached to these properties
+  // still go through the normal QC pipeline to get room_type
+  // classification, and the Virtual Staging button lights up on
+  // eligible rooms once classification completes.
+  isStandaloneStaging Boolean @default(false)
 
   photoCount      Int      @default(0)
   qcPassCount     Int      @default(0)

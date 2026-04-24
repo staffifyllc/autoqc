@@ -16,6 +16,7 @@ import {
   LogOut,
   ShieldCheck,
   Mail,
+  Sofa,
 } from "lucide-react";
 import { Bug, ArrowDownUp, Rocket, MessageSquarePlus } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
@@ -36,6 +37,7 @@ const navSections: Array<{
     items: [
       { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
       { href: "/dashboard/properties", label: "Properties", icon: Home },
+      { href: "/dashboard/staging", label: "Virtual Staging", icon: Sofa },
       { href: UPDATES_HREF, label: "What's New", icon: Rocket },
     ],
   },
