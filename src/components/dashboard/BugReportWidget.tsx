@@ -116,7 +116,7 @@ export function BugReportWidget() {
       {/* Floating trigger button */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 group flex items-center gap-2 px-4 py-2.5 rounded-full bg-[hsl(var(--surface-3))] border border-white/10 shadow-lg shadow-black/30 hover:bg-[hsl(var(--surface-2))] transition-colors"
+        className="fixed bottom-24 right-6 z-40 group flex items-center gap-2 px-4 py-2.5 rounded-full bg-[hsl(var(--surface-3))] border border-white/10 shadow-lg shadow-black/30 hover:bg-[hsl(var(--surface-2))] transition-colors"
         title="Send feedback"
       >
         <MessageSquarePlus className="w-4 h-4 text-[hsl(var(--primary))]" />

@@ -46,13 +46,13 @@ export function SupportChatWidget() {
           setConversationId(d.conversationId);
           setMessages(d.messages ?? []);
         } else if ((d?.messages ?? []).length === 0) {
-          // No prior conversation. Seed a friendly opener from "Paul"
+          // No prior conversation. Seed a friendly opener from "Nova"
           // so the user doesn't stare at an empty box.
           setMessages([
             {
               role: "assistant",
               content:
-                "hey, paul here. i built autoqc and run support myself. ask me anything about the product, pricing, or how to set something up. i'm fast.",
+                "hey, nova here. i'm on the autoqc support team. ask me anything about the product, pricing, or how to set something up. i'm fast.",
             },
           ]);
         }
@@ -111,16 +111,16 @@ export function SupportChatWidget() {
         <button
           onClick={() => setOpen(true)}
           className="fixed bottom-5 right-5 z-50 w-14 h-14 rounded-full shadow-lg shadow-black/40 border-2 border-amber-500/40 bg-[#1a1a1a] hover:scale-105 transition-transform overflow-hidden flex items-center justify-center"
-          aria-label="Chat with Paul"
-          title="Chat with Paul"
+          aria-label="Chat with Nova"
+          title="Chat with Nova"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/paul.jpg"
-            alt="Paul"
+            src="/nova.jpg"
+            alt="Nova"
             className="w-full h-full object-cover"
             onError={(e) => {
-              // Fallback: if /paul.jpg isn't deployed yet, hide the
+              // Fallback: if /nova.jpg isn't deployed yet, hide the
               // broken image and show a chat bubble icon instead.
               (e.target as HTMLImageElement).style.display = "none";
               (e.currentTarget.parentElement as HTMLElement).innerHTML +=
@@ -139,8 +139,8 @@ export function SupportChatWidget() {
               <div className="w-9 h-9 rounded-full overflow-hidden border border-white/10 bg-[#1a1a1a] flex items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/paul.jpg"
-                  alt="Paul"
+                  src="/nova.jpg"
+                  alt="Nova"
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = "none";
@@ -150,7 +150,7 @@ export function SupportChatWidget() {
               <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-[#0d1117]" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold leading-tight">Paul</div>
+              <div className="text-sm font-semibold leading-tight">Nova</div>
               <div className="text-[11px] text-emerald-300 leading-tight">
                 Online · usually replies in seconds
               </div>
