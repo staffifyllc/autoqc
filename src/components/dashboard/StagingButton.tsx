@@ -42,8 +42,8 @@ export function StagingButton({
   // a discount, other partners can get overrides too). Default stays
   // STAGING_CREDIT_COST until the preview API tells us otherwise.
   const [creditCost, setCreditCost] = useState<number>(STAGING_CREDIT_COST);
-  // Closed-beta gate. Same pattern the sidebar uses to hide admin nav.
-  // While we validate render quality, only admin agencies see the button.
+  // Server decides eligibility (env flag OR admin agency). Hide the
+  // button until we get the verdict to avoid flashing it on / off.
   const [eligible, setEligible] = useState<boolean | null>(null);
   // Optional inspiration image. When set, gets passed to OpenAI as a
   // second image[] entry and the prompt gains a "use this for style
@@ -54,9 +54,10 @@ export function StagingButton({
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/admin/usage")
-      .then((r) => {
-        if (!cancelled) setEligible(r.status === 200);
+    fetch("/api/staging/eligibility")
+      .then(async (r) => {
+        const d = (await r.json().catch(() => ({}))) as { eligible?: boolean };
+        if (!cancelled) setEligible(!!d.eligible);
       })
       .catch(() => {
         if (!cancelled) setEligible(false);
