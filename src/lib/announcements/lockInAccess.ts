@@ -71,8 +71,23 @@ export function renderLockInAccessEmail({
                   held. Log back in this week to lock it in before we close
                   enrollment to the next round.
                 </p>
+                <div style="margin:0 0 18px 0;padding:18px 20px;background:rgba(85,241,154,0.06);border:1px solid rgba(85,241,154,0.22);border-radius:12px;">
+                  <div style="font-family:'Courier New',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#55f19a;margin-bottom:8px;">
+                    A note from me, founder to operator
+                  </div>
+                  <p style="margin:0;font-size:15px;line-height:1.65;color:#e7ecef;">
+                    When you signed up, I dropped <strong style="color:#55f19a;">5 free credits</strong>
+                    in your account so you could try AutoQC without pulling out
+                    a card. They are still sitting there waiting for you. And
+                    in an effort to get to know one another, I would love to
+                    offer you another <strong style="color:#55f19a;">5 credits on top</strong>,
+                    on me. That is 10 free properties, fully QC'd, fully
+                    auto-fixed, when you log back in. Run one of yours through
+                    and tell me what you think.
+                  </p>
+                </div>
                 <a href="${siteUrl}/login" style="display:inline-block;background:#55f19a;color:#07090c;padding:14px 24px;border-radius:12px;font-weight:600;text-decoration:none;font-size:14px;letter-spacing:0.01em;">
-                  Lock in my access &rarr;
+                  Claim my 10 free properties &rarr;
                 </a>
               </td>
             </tr>
@@ -167,7 +182,16 @@ in invite-only mode while we keep the platform tight, and your seat is
 being held. Log back in this week to lock it in before we close
 enrollment to the next round.
 
-Lock in my access: ${siteUrl}/login
+A note from me, founder to operator:
+
+When you signed up, I dropped 5 free credits in your account so you
+could try AutoQC without pulling out a card. They are still sitting
+there waiting for you. And in an effort to get to know one another,
+I would love to offer you another 5 credits on top, on me. That is
+10 free properties, fully QC'd, fully auto-fixed, when you log back
+in. Run one of yours through and tell me what you think.
+
+Claim my 10 free properties: ${siteUrl}/login
 
 Why come back:
 
