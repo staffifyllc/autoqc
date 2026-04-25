@@ -130,19 +130,32 @@ const ROOM_MANIFEST: Record<string, RoomManifest> = {
   },
 };
 
-// Preservation-first opening. The TWO ABSOLUTE RULES come first
-// because diffusion models exhibit strong primacy bias — whatever we
-// say at the top gets the most weight. Paul's real renders showed the
-// model quietly removing a doorway and hanging a giant picture over a
-// window, despite the long preservation list. Leading with the two
-// highest-frequency failure modes, stated as hard constraints in
-// isolation, gives them the weight the earlier prose version lacked.
-const PRESERVATION_CORE = `TWO ABSOLUTE RULES:
-1. DO NOT ADD, REMOVE, COVER, BLOCK, RESIZE, OR ALTER ANY DOORWAY OR WINDOW. Every door and every window in the original image must appear in the output at the same position, same size, same frame, same glass, same view through it. If the input has a doorway, the output must have that exact doorway. Do not hide it behind a sofa, a plant, a bookshelf, or an accent chair.
-2. DO NOT HANG ART, MIRRORS, SHELVES, OR ANY DECOR OVER A WINDOW OR A DOORWAY. Art goes on solid wall only. If no solid wall is available, omit the art.
-Violating either rule is an automatic reject.
+// Preservation-first opening. Paul-authored, intentionally aggressive.
+// Treats the architecture as read-only pixels and frames the task as a
+// strict furniture overlay. The self-check at the bottom of buildPrompt
+// (recency position) is the second half of this — both halves matter.
+const PRESERVATION_CORE = `CRITICAL INSTRUCTION: This is NOT an image redesign task. This is a strict furniture-overlay task. The base photo is locked and must remain architecturally identical to the source image.
 
-Beyond those two rules: virtually stage this real estate photo by adding realistic furniture and decor only. Preserve the original image exactly. Do not alter, remove, move, resize, repaint, cover, blur, replace, regenerate, or reinterpret any permanent feature including windows, doors, walls, ceilings, floors, trim, baseboards, vents, outlets, switches, lighting fixtures, cabinets, countertops, appliances, fireplaces, stairs, railings, mirrors, reflections, or exterior views through windows. Keep identical camera angle, crop, composition, perspective, room dimensions, and natural lighting direction. Windows are protected objects and must remain fully intact with original frame lines, glass, mullions, and outdoor scenery unchanged. Only place properly scaled furniture and decor that fits naturally in the room and respects walkways. Add realistic contact shadows from staged items only. Structural preservation is more important than aesthetics. If staging would require changing any existing room element, choose different furniture placement instead. Output must look like the exact original listing photo professionally furnished, with furniture added as an overlay only.`;
+You are only allowed to add removable furniture and decor on top of the existing room. You are NOT allowed to edit the room itself in any way.
+
+ABSOLUTE DO NOT CHANGE RULES:
+Do not alter, delete, cover, replace, crop, move, resize, repaint, regenerate, blur, blend, inpaint, outpaint, stylize, reinterpret, or obscure any existing structural or permanent object.
+
+Protected objects include:
+windows, glass doors, doors, walls, ceilings, floors, trim, molding, baseboards, outlets, switches, vents, recessed lights, chandeliers, cabinets, counters, sinks, faucets, appliances, stairs, railings, fireplaces, columns, beams, built-ins, mirrors, reflections, room openings, exterior scenery, shadows created by architecture.
+
+WINDOW LOCK:
+Every original window must remain visible in the exact same position, size, shape, frame, pane lines, transparency, brightness, and outdoor view. Never place artwork, beds, sofas, lamps, curtains, plants, or decor over a window. Never cover any portion of a window.
+
+ZERO STRUCTURAL PIXEL CHANGE POLICY:
+Treat all architecture as read-only pixels. Only add new pixels for furniture/decor in empty floor space or against blank wall space that contains no window, door, opening, fixture, or architectural detail.
+
+If furniture placement conflicts with a protected object, move the furniture elsewhere.
+
+Allowed additions only:
+sofa, chairs, beds, tables, rugs, lamps, plants, pillows, tasteful wall art on blank uninterrupted wall sections only, small decor accessories.
+
+Keep original camera angle, lens perspective, crop, room dimensions, and lighting logic identical.`;
 
 export function buildStagingPrompt(opts: {
   roomType: string;
@@ -185,7 +198,19 @@ ${manifest.avoid}
 
 ${style.modifier}
 
-FINAL CHECK BEFORE GENERATING: Look at every window and every doorway in the input image. Every single one of them must be fully visible in the output at the same position, same size, same frame, with the same view through it. Do not place any sofa, bed, chair, table, bookshelf, plant, art piece, mirror, shelf, curtain, or any other object in front of, on top of, or covering any window or doorway. If the chosen furniture layout would require placing something over a window or blocking a doorway, pick a different layout. This rule overrides every style instruction above.`;
+SELF-CHECK BEFORE FINAL OUTPUT:
+
+1. Same number of windows as source image
+2. Same number of doors/openings as source image
+3. No windows covered or replaced
+4. No fixtures removed
+5. No wall/floor/ceiling geometry changed
+6. Same perspective and crop
+7. Only furniture added
+
+If any check fails, discard result and regenerate.
+
+Final output must look like the untouched original property photo with removable staged furniture added only.`;
 }
 
 // Feature gate helper. When the env flag is off, staging remains visible
