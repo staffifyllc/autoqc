@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const rawEmail = body?.email;
     const password = body?.password;
+    const refCode = (body?.ref as string | undefined)?.trim().toUpperCase();
 
     if (!rawEmail || !password) {
       return NextResponse.json(
@@ -56,21 +57,55 @@ export async function POST(req: NextRequest) {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
+    let userId: string;
     if (existing) {
       // Row was created earlier (invite, onboarding in progress, etc.) but
       // the user never set a password. Claim it by attaching one now.
-      await prisma.user.update({
+      const u = await prisma.user.update({
         where: { id: existing.id },
         data: { passwordHash, passwordSetAt: new Date() },
+        select: { id: true },
       });
+      userId = u.id;
     } else {
-      await prisma.user.create({
+      const u = await prisma.user.create({
         data: {
           email,
           passwordHash,
           passwordSetAt: new Date(),
         },
+        select: { id: true },
       });
+      userId = u.id;
+    }
+
+    // If the visitor came in through a ?ref= referral link, mark the
+    // matching ReferralInvite row as SIGNED_UP so we can credit the
+    // inviter when this new agency processes a paid property. We
+    // upsert because the invite may not have existed (organic signup
+    // via a shared link rather than an explicit emailed invite).
+    if (refCode) {
+      try {
+        const code = await prisma.referralCode.findUnique({
+          where: { code: refCode },
+        });
+        if (code) {
+          await prisma.referralInvite.upsert({
+            where: {
+              codeId_inviteeEmail: { codeId: code.id, inviteeEmail: email },
+            },
+            update: { status: "SIGNED_UP", signedUpUserId: userId },
+            create: {
+              codeId: code.id,
+              inviteeEmail: email,
+              status: "SIGNED_UP",
+              signedUpUserId: userId,
+            },
+          });
+        }
+      } catch (refErr) {
+        console.error("[signup referral] non-fatal:", refErr);
+      }
     }
 
     return NextResponse.json({ success: true });

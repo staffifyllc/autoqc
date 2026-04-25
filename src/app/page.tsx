@@ -816,6 +816,9 @@ export default function LandingPage() {
             <Link href="/pricing" className="hover:text-foreground transition">
               Pricing
             </Link>
+            <Link href="/affiliates" className="hover:text-foreground transition">
+              Affiliates
+            </Link>
             <Link href="/privacy" className="hover:text-foreground transition">
               Privacy
             </Link>

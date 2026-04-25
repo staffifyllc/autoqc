@@ -89,6 +89,62 @@ export async function POST(req: NextRequest) {
         },
       });
       agencyId = agency.id;
+
+      // If this user came in through a ?ref=CODE link, signup recorded
+      // a ReferralInvite with signedUpUserId set but no agency yet
+      // (because the agency didn't exist). Link the agency now AND
+      // grant the inviter their reward credits in the same transaction.
+      // Reward only fires once per (inviter, invitee).
+      const REFERRAL_REWARD = 25;
+      try {
+        const invite = await prisma.referralInvite.findFirst({
+          where: { signedUpUserId: session.user.id, status: "SIGNED_UP" },
+          include: { code: true },
+        });
+        if (invite && invite.creditedAt === null) {
+          await prisma.$transaction([
+            prisma.referralInvite.update({
+              where: { id: invite.id },
+              data: {
+                signedUpAgencyId: agencyId,
+                status: "CREDITED",
+                creditedAt: new Date(),
+                creditsEarned: REFERRAL_REWARD,
+              },
+            }),
+            prisma.agency.update({
+              where: { id: invite.code.agencyId },
+              data: { creditBalance: { increment: REFERRAL_REWARD } },
+            }),
+            prisma.creditTransaction.create({
+              data: {
+                agencyId: invite.code.agencyId,
+                type: "PROMO",
+                amount: REFERRAL_REWARD,
+                description: `Referral credit: ${invite.inviteeEmail} signed up`,
+              },
+            }),
+            // Top up the new agency too so their welcome bundle reflects
+            // the referral. They keep the 5-credit organic welcome plus
+            // the 25-credit referral bonus = 30 total.
+            prisma.agency.update({
+              where: { id: agencyId },
+              data: { creditBalance: { increment: REFERRAL_REWARD } },
+            }),
+            prisma.creditTransaction.create({
+              data: {
+                agencyId,
+                type: "PROMO",
+                amount: REFERRAL_REWARD,
+                description: `Referral signup bonus: ${REFERRAL_REWARD} credits`,
+              },
+            }),
+          ]);
+        }
+      } catch (refErr) {
+        // Non-fatal: signup completes even if referral wiring blew up.
+        console.error("[onboarding referral credit] non-fatal:", refErr);
+      }
     }
 
     return NextResponse.json({ success: true, agencyId });

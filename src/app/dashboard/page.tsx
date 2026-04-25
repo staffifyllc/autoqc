@@ -16,6 +16,7 @@ import {
   Activity,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { OnboardingChecklist } from "@/components/dashboard/OnboardingChecklist";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },
@@ -91,6 +92,8 @@ export default function DashboardPage() {
 
   return (
     <motion.div initial="hidden" animate="visible" variants={stagger}>
+      <OnboardingChecklist />
+
       {/* Header */}
       <motion.div
         variants={fadeUp}

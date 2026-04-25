@@ -139,6 +139,45 @@ model Agency {
   properties    Property[]
   integrations  Integration[]
   creditTransactions CreditTransaction[]
+  referralCode  ReferralCode?
+}
+
+model ReferralCode {
+  id        String           @id @default(cuid())
+  agencyId  String           @unique
+  code      String           @unique
+  createdAt DateTime         @default(now())
+
+  agency  Agency           @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  invites ReferralInvite[]
+}
+
+// One row per email invited. status walks PENDING -> SIGNED_UP -> CREDITED.
+// EXPIRED if 90 days elapse without progress.
+model ReferralInvite {
+  id               String         @id @default(cuid())
+  codeId           String
+  inviteeEmail     String
+  status           ReferralStatus @default(PENDING)
+  signedUpUserId   String?
+  signedUpAgencyId String?
+  creditedAt       DateTime?
+  creditsEarned    Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  code ReferralCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+
+  @@unique([codeId, inviteeEmail])
+  @@index([inviteeEmail])
+  @@index([signedUpAgencyId])
+}
+
+enum ReferralStatus {
+  PENDING
+  SIGNED_UP
+  CREDITED
+  EXPIRED
 }
 
 enum BillingMode {

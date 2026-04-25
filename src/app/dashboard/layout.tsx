@@ -19,8 +19,11 @@ import {
   FolderSync,
   BarChart3,
   Users,
+  Gift,
+  ArrowDownUp,
+  Rocket,
+  MessageSquarePlus,
 } from "lucide-react";
-import { Bug, ArrowDownUp, Rocket, MessageSquarePlus } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
 import { BugReportWidget } from "@/components/dashboard/BugReportWidget";
 import { motion } from "framer-motion";
@@ -34,6 +37,8 @@ const navSections: Array<{
   label: string;
   items: Array<{ href: string; label: string; icon: any }>;
 }> = [
+  // Workspace = the four things people use daily. Anything they touch
+  // once and forget moved out.
   {
     label: "Workspace",
     items: [
@@ -41,9 +46,11 @@ const navSections: Array<{
       { href: "/dashboard/properties", label: "Properties", icon: Home },
       { href: "/dashboard/staging", label: "Virtual Staging", icon: Sofa },
       { href: "/dashboard/dropbox-automation", label: "AutoHDR Automation", icon: FolderSync },
-      { href: UPDATES_HREF, label: "What's New", icon: Rocket },
     ],
   },
+  // Configure trimmed to 3. Photo Order stays — agencies do tweak it
+  // per-client. My feedback dropped from sidebar; the floating Bug
+  // widget still gives access from any page.
   {
     label: "Configure",
     items: [
@@ -52,13 +59,16 @@ const navSections: Array<{
       { href: "/dashboard/integrations", label: "Integrations", icon: Plug },
     ],
   },
+  // Account gets the new growth lever (Refer & earn) and the demoted
+  // What's New entry. My feedback removed.
   {
     label: "Account",
     items: [
       { href: "/dashboard/credits", label: "Credits", icon: Coins },
       { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
       { href: "/dashboard/team", label: "Team", icon: Users },
-      { href: "/dashboard/account/bugs", label: "My feedback", icon: MessageSquarePlus },
+      { href: "/dashboard/refer", label: "Refer & earn", icon: Gift },
+      { href: UPDATES_HREF, label: "What's New", icon: Rocket },
     ],
   },
 ];

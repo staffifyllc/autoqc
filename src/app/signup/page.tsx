@@ -1,17 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Camera, ArrowRight, Loader2, Lock } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Camera, ArrowRight, Loader2, Lock, Gift } from "lucide-react";
 import { signIn } from "next-auth/react";
 
-export default function SignupPage() {
+function SignupForm() {
+  const params = useSearchParams();
+  const refFromUrl = params.get("ref")?.trim().toUpperCase() || null;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Stash the referral code in localStorage so it survives a page
+  // reload during signup (some clients refresh between steps).
+  useEffect(() => {
+    if (refFromUrl) {
+      try {
+        localStorage.setItem("autoqc_ref_code", refFromUrl);
+      } catch {
+        // localStorage can throw in private browsing; safe to ignore.
+      }
+    }
+  }, [refFromUrl]);
 
   const canSubmit =
     email.length > 0 &&
@@ -34,10 +49,17 @@ export default function SignupPage() {
 
     setLoading(true);
     try {
+      let storedRef: string | null = null;
+      try {
+        storedRef = localStorage.getItem("autoqc_ref_code");
+      } catch {
+        /* private mode; ignore */
+      }
+      const ref = refFromUrl || storedRef || undefined;
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, ref }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -184,6 +206,12 @@ export default function SignupPage() {
         <div className="absolute inset-0 dot-pattern opacity-20" />
         <div className="absolute inset-0 mesh-gradient opacity-50" />
         <div className="relative text-center max-w-md p-8">
+          {refFromUrl ? (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-200 text-xs font-medium mb-5">
+              <Gift className="w-3.5 h-3.5" />
+              Referral applied · 25 free credits on signup
+            </div>
+          ) : null}
           <h2 className="text-3xl font-bold mb-4">
             Automated QC for every shoot.
           </h2>
@@ -195,5 +223,13 @@ export default function SignupPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
   );
 }
