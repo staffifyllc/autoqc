@@ -29,6 +29,7 @@ export async function POST(
       style?: string;
       overrideRoomType?: string;
       inspirationKey?: string;
+      customPrompt?: string;
     };
     const style = body.style as StagingStyleId | undefined;
     if (!style || !styleById(style)) {
@@ -52,8 +53,10 @@ export async function POST(
       );
     }
 
-    // Flat across every agency. Per-agency overrides retired at
-    // standardization on $2.
+    // Flat $2 unlock per photo, charged on the first preview. By the
+    // time the user hits "Keep" we should already be unlocked, so this
+    // route mostly skips the charge. The charge fallback below only
+    // fires if a client somehow hits Keep without ever calling preview.
     const effectiveCost = STAGING_CREDIT_COST;
 
     const photo = await prisma.photo.findFirst({
@@ -99,20 +102,23 @@ export async function POST(
       });
     }
 
-    if (!agency.isAdmin && agency.creditBalance < effectiveCost) {
-      return NextResponse.json(
-        {
-          error: `Not enough credits. Virtual Staging costs ${effectiveCost} credits.`,
-          creditsNeeded: effectiveCost,
-          creditsAvailable: agency.creditBalance,
-        },
-        { status: 402 }
-      );
-    }
-
-    // Deduct + record before generating, refund on failure. Same pattern
-    // as twilight/purchase.
-    if (!agency.isAdmin) {
+    // Skip the credit charge entirely if this photo was already
+    // unlocked by a prior preview call. The flat $2 unlock model
+    // charges once per photo at the first preview; "Keep" is free
+    // after that.
+    const isUnlocked = !!photo.stagingUnlockedAt;
+    let chargedHere = false;
+    if (!isUnlocked && !agency.isAdmin) {
+      if (agency.creditBalance < effectiveCost) {
+        return NextResponse.json(
+          {
+            error: `Not enough credits. Virtual Staging costs ${effectiveCost} credits ($${effectiveCost}).`,
+            creditsNeeded: effectiveCost,
+            creditsAvailable: agency.creditBalance,
+          },
+          { status: 402 }
+        );
+      }
       await prisma.$transaction([
         prisma.agency.update({
           where: { id: session.user.agencyId! },
@@ -123,10 +129,20 @@ export async function POST(
             agencyId: session.user.agencyId!,
             type: "USAGE",
             amount: -effectiveCost,
-            description: `Virtual Staging (${style}): ${photo.property.address} / ${photo.fileName}`,
+            description: `Virtual Staging unlock: ${photo.property.address} / ${photo.fileName}`,
           },
         }),
+        prisma.photo.update({
+          where: { id: photo.id },
+          data: { stagingUnlockedAt: new Date() },
+        }),
       ]);
+      chargedHere = true;
+    } else if (!isUnlocked && agency.isAdmin) {
+      await prisma.photo.update({
+        where: { id: photo.id },
+        data: { stagingUnlockedAt: new Date() },
+      });
     }
 
     try {
@@ -141,7 +157,12 @@ export async function POST(
         ? await getDownloadUrl(body.inspirationKey!)
         : undefined;
 
-      const prompt = buildStagingPrompt({ roomType, style, hasInspiration });
+      const prompt = buildStagingPrompt({
+        roomType,
+        style,
+        hasInspiration,
+        customPrompt: body.customPrompt,
+      });
       const { bytes, mimeType } = await openaiEditImage({
         sourceUrl,
         prompt,
@@ -177,7 +198,11 @@ export async function POST(
       const url = await getDownloadUrl(outKey);
       return NextResponse.json({ variant, url, alreadyPurchased: false });
     } catch (genErr: any) {
-      if (!agency.isAdmin) {
+      // Refund only if we charged on THIS call. If this photo was
+      // already unlocked from a prior preview, there's nothing to
+      // refund here — the original unlock charge stays on the books
+      // because the user already received the preview render then.
+      if (chargedHere) {
         await prisma.$transaction([
           prisma.agency.update({
             where: { id: session.user.agencyId! },

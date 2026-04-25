@@ -161,6 +161,11 @@ export function buildStagingPrompt(opts: {
   roomType: string;
   style: StagingStyleId;
   hasInspiration?: boolean;
+  // Free-form text the user typed in the modal. Layered AFTER our
+  // safety + style instructions so it cannot override the
+  // architecture-preservation rules. Limited length to keep the prompt
+  // bounded.
+  customPrompt?: string;
 }): string {
   const manifest = ROOM_MANIFEST[opts.roomType];
   const style = styleById(opts.style);
@@ -181,6 +186,20 @@ export function buildStagingPrompt(opts: {
 A second reference image is attached as visual inspiration for the furniture style, color palette, textures, and overall mood. Use it for aesthetic cues only. Do not copy the reference image's room layout, window count, door positions, ceiling shape, or any architectural element. The room you are staging is the first image; the reference is the second image. Architecture of the first image is absolute.`
     : "";
 
+  // Optional user-supplied direction. Capped, sanitized, and inserted
+  // BEFORE the SELF-CHECK so the architecture-preservation rules still
+  // run after it. The model may bias toward the user's note for
+  // furniture choices but must not override the structural rules.
+  const safeCustom = (opts.customPrompt ?? "")
+    .replace(/[\u0000-\u001f]+/g, " ")
+    .trim()
+    .slice(0, 500);
+  const customClause = safeCustom
+    ? `
+
+User-supplied direction (apply within the rules above; never alter architecture to satisfy this): "${safeCustom}"`
+    : "";
+
   // Preservation-first. Room-specific furniture guidance and style
   // modifier come AFTER so the model has already committed to
   // preserving the architecture before picking what to add.
@@ -196,7 +215,7 @@ ${manifest.add}
 Furniture and elements NOT to add:
 ${manifest.avoid}
 
-${style.modifier}
+${style.modifier}${customClause}
 
 SELF-CHECK BEFORE FINAL OUTPUT:
 

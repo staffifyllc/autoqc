@@ -31,6 +31,7 @@ export async function POST(
       style?: string;
       overrideRoomType?: string;
       inspirationKey?: string;
+      customPrompt?: string;
     };
     const style = body.style as StagingStyleId | undefined;
     if (!style || !styleById(style)) {
@@ -80,6 +81,30 @@ export async function POST(
       );
     }
 
+    // Pay-once-per-photo unlock model. The first staging interaction
+    // on a photo charges 2 credits and sets stagingUnlockedAt. Every
+    // subsequent preview on that photo (same style or any other style)
+    // is free. Eliminates the "preview six styles, buy nothing" margin
+    // drain — customer pays for access, then has the full toolkit.
+    const effectiveCost = STAGING_CREDIT_COST;
+    const isUnlocked = !!photo.stagingUnlockedAt;
+    const photoForCharge = await prisma.agency.findUnique({
+      where: { id: session.user.agencyId! },
+      select: { creditBalance: true, isAdmin: true },
+    });
+    if (!isUnlocked && !photoForCharge!.isAdmin) {
+      if ((photoForCharge?.creditBalance ?? 0) < effectiveCost) {
+        return NextResponse.json(
+          {
+            error: `Not enough credits. Unlocking Virtual Staging on a photo costs ${effectiveCost} credits ($${effectiveCost}).`,
+            creditsNeeded: effectiveCost,
+            creditsAvailable: photoForCharge?.creditBalance ?? 0,
+          },
+          { status: 402 }
+        );
+      }
+    }
+
     // Cached preview for this (photo, style) pair?
     const existing = await prisma.photoVariant.findFirst({
       where: {
@@ -90,11 +115,52 @@ export async function POST(
       },
       orderBy: { createdAt: "desc" },
     });
-    const effectiveCost = STAGING_CREDIT_COST;
 
-    if (existing && Date.now() - existing.createdAt.getTime() < PREVIEW_FRESH_MS) {
+    if (
+      existing &&
+      Date.now() - existing.createdAt.getTime() < PREVIEW_FRESH_MS &&
+      isUnlocked
+    ) {
       const url = await getDownloadUrl(existing.s3Key);
-      return NextResponse.json({ variant: existing, url, cached: true, creditCost: effectiveCost });
+      return NextResponse.json({
+        variant: existing,
+        url,
+        cached: true,
+        creditCost: effectiveCost,
+        unlocked: true,
+      });
+    }
+
+    // Charge + unlock if first time on this photo. Done before generating
+    // so a failed credit deduction does not waste the OpenAI render. We
+    // refund inside the catch if the OpenAI call dies.
+    let chargedThisCall = false;
+    if (!isUnlocked && !photoForCharge!.isAdmin) {
+      await prisma.$transaction([
+        prisma.agency.update({
+          where: { id: session.user.agencyId! },
+          data: { creditBalance: { decrement: effectiveCost } },
+        }),
+        prisma.creditTransaction.create({
+          data: {
+            agencyId: session.user.agencyId!,
+            type: "USAGE",
+            amount: -effectiveCost,
+            description: `Virtual Staging unlock: ${photo.property.address} / ${photo.fileName}`,
+          },
+        }),
+        prisma.photo.update({
+          where: { id: photo.id },
+          data: { stagingUnlockedAt: new Date() },
+        }),
+      ]);
+      chargedThisCall = true;
+    } else if (!isUnlocked && photoForCharge!.isAdmin) {
+      // Admins bypass the charge but still get the unlock flag set.
+      await prisma.photo.update({
+        where: { id: photo.id },
+        data: { stagingUnlockedAt: new Date() },
+      });
     }
 
     // Source photo: prefer the auto-fixed version unless the user opted
@@ -108,15 +174,50 @@ export async function POST(
       ? await getDownloadUrl(body.inspirationKey!)
       : undefined;
 
-    const prompt = buildStagingPrompt({ roomType, style, hasInspiration });
-
-    const { bytes, mimeType } = await openaiEditImage({
-      sourceUrl,
-      prompt,
-      quality: "high",
-      size: "1536x1024",
-      inspirationUrl,
+    const prompt = buildStagingPrompt({
+      roomType,
+      style,
+      hasInspiration,
+      customPrompt: body.customPrompt,
     });
+
+    let bytes: Buffer;
+    let mimeType: string;
+    try {
+      const out = await openaiEditImage({
+        sourceUrl,
+        prompt,
+        quality: "high",
+        size: "1536x1024",
+        inspirationUrl,
+      });
+      bytes = out.bytes;
+      mimeType = out.mimeType;
+    } catch (genErr) {
+      // OpenAI failed — refund the unlock charge so the customer is not
+      // out two credits with nothing to show.
+      if (chargedThisCall) {
+        await prisma.$transaction([
+          prisma.agency.update({
+            where: { id: session.user.agencyId! },
+            data: { creditBalance: { increment: effectiveCost } },
+          }),
+          prisma.creditTransaction.create({
+            data: {
+              agencyId: session.user.agencyId!,
+              type: "REFUND",
+              amount: effectiveCost,
+              description: `Refund: Virtual Staging unlock failed on ${photo.fileName}`,
+            },
+          }),
+          prisma.photo.update({
+            where: { id: photo.id },
+            data: { stagingUnlockedAt: null },
+          }),
+        ]);
+      }
+      throw genErr;
+    }
 
     const ext = mimeType.includes("png") ? "png" : "jpg";
     const outKey = `${session.user.agencyId}/${photo.propertyId}/staging/preview/${photo.id}-${style}-${Date.now()}.${ext}`;
@@ -143,7 +244,14 @@ export async function POST(
     });
 
     const url = await getDownloadUrl(outKey);
-    return NextResponse.json({ variant, url, cached: false, creditCost: effectiveCost });
+    return NextResponse.json({
+      variant,
+      url,
+      cached: false,
+      creditCost: effectiveCost,
+      unlocked: true,
+      chargedThisCall,
+    });
   } catch (error: any) {
     if (error?.message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

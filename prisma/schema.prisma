@@ -348,6 +348,12 @@ model Photo {
   // exists, downloads and pushes include it alongside the main output.
   variants      PhotoVariant[]
 
+  // Virtual Staging unlock: timestamp of the first 2-credit charge on
+  // this photo. Once set, every preview + every keeper render on this
+  // photo is free for the user. Eliminates the "preview spam, never
+  // buy" margin drain on the gpt-image-1 model.
+  stagingUnlockedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

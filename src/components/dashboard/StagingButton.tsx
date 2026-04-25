@@ -45,12 +45,19 @@ export function StagingButton({
   // Server decides eligibility (env flag OR admin agency). Hide the
   // button until we get the verdict to avoid flashing it on / off.
   const [eligible, setEligible] = useState<boolean | null>(null);
+  // Pay-once unlock state. Server returns this on every preview/purchase
+  // response. When false, the modal shows a confirm gate before letting
+  // the user generate a render.
+  const [unlocked, setUnlocked] = useState<boolean>(false);
   // Optional inspiration image. When set, gets passed to OpenAI as a
   // second image[] entry and the prompt gains a "use this for style
   // cues only, not architecture" clause.
   const [inspirationKey, setInspirationKey] = useState<string | null>(null);
   const [inspirationPreview, setInspirationPreview] = useState<string | null>(null);
   const [uploadingInspiration, setUploadingInspiration] = useState(false);
+  // Optional free-form direction the user types in the modal. Layered
+  // into the prompt AFTER the safety + style instructions.
+  const [customPrompt, setCustomPrompt] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -75,9 +82,21 @@ export function StagingButton({
     return null;
   }
 
-  const openPanel = () => {
+  const openPanel = async () => {
     setOpen(true);
     setError(null);
+    // Fetch unlock status so the modal knows whether to show the
+    // "$2 to unlock" confirm gate or jump straight to styles.
+    try {
+      const r = await fetch(`/api/photos/${photoId}/staging/status`);
+      if (r.ok) {
+        const d = await r.json();
+        setUnlocked(!!d.unlocked);
+      }
+    } catch {
+      // Silent — the user can still try to render and the server will
+      // either charge them or say no money.
+    }
   };
 
   const uploadInspiration = async (file: File) => {
@@ -131,6 +150,7 @@ export function StagingButton({
         body: JSON.stringify({
           style: s,
           inspirationKey: inspirationKey ?? undefined,
+          customPrompt: customPrompt.trim() || undefined,
           // Pass the room type the parent gave us as an explicit override.
           // Lets standalone-staging pages drive the type via a dropdown
           // even when QC has not classified the photo yet.
@@ -141,6 +161,7 @@ export function StagingButton({
       if (!res.ok) throw new Error(data?.error ?? "Preview failed");
       setPreviewUrl(data.url);
       if (typeof data.creditCost === "number") setCreditCost(data.creditCost);
+      if (typeof data.unlocked === "boolean") setUnlocked(data.unlocked);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -158,6 +179,7 @@ export function StagingButton({
         body: JSON.stringify({
           style,
           inspirationKey: inspirationKey ?? undefined,
+          customPrompt: customPrompt.trim() || undefined,
           overrideRoomType: roomType ?? undefined,
         }),
       });
@@ -228,24 +250,96 @@ export function StagingButton({
               </button>
             </div>
 
-            {/* Style picker */}
-            <div className="px-5 py-3 border-b border-white/10 flex items-center gap-2 overflow-x-auto">
-              {STAGING_STYLES.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => generate(s.id)}
-                  disabled={generating || purchasing}
-                  className={`text-xs px-3 py-1.5 rounded-full border whitespace-nowrap transition ${
-                    style === s.id
-                      ? "bg-amber-500/20 border-amber-500/60 text-amber-100"
-                      : "bg-white/5 border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/10"
-                  } disabled:opacity-50`}
-                  title={s.description}
-                >
-                  {s.label}
-                </button>
-              ))}
+            {/* Unlock gate — shows on first staging interaction with this photo */}
+            {!unlocked && !finalUrl && !previewUrl && !generating && (
+              <div className="px-5 py-4 border-b border-white/10 bg-amber-500/5">
+                <div className="flex items-start gap-3">
+                  <div className="shrink-0 w-9 h-9 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">
+                    <Sofa className="w-4 h-4 text-amber-300" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold mb-0.5">
+                      Staging this room is {creditCost} credits (${creditCost})
+                    </div>
+                    <div className="text-[12px] text-muted-foreground mb-3">
+                      Unlock once, then preview every style, attach inspiration,
+                      add custom direction, and keep whichever render you love
+                      — no extra charges on this photo.
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => generate(style)}
+                        disabled={generating || purchasing}
+                        className="text-xs px-4 py-2 rounded-lg gradient-bg text-white font-medium hover:opacity-90 transition disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        <Sofa className="w-3.5 h-3.5" />
+                        Proceed · charge {creditCost} credits
+                      </button>
+                      <button
+                        onClick={close}
+                        disabled={generating || purchasing}
+                        className="text-xs px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Style picker (select one) */}
+            <div className="px-5 pt-3 pb-1 border-b border-white/10">
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                  Style · select one
+                </div>
+                {unlocked && (
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300 inline-flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Unlocked · all styles included
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                {STAGING_STYLES.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => generate(s.id)}
+                    disabled={generating || purchasing || !unlocked}
+                    className={`text-xs px-3 py-1.5 rounded-full border whitespace-nowrap transition ${
+                      style === s.id
+                        ? "bg-amber-500/20 border-amber-500/60 text-amber-100"
+                        : "bg-white/5 border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/10"
+                    } disabled:opacity-40 disabled:cursor-not-allowed`}
+                    title={unlocked ? s.description : "Unlock to use"}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Custom prompt — optional free-form direction */}
+            {unlocked && (
+              <div className="px-5 py-3 border-b border-white/10">
+                <label className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1.5 block">
+                  Custom direction · optional
+                </label>
+                <input
+                  type="text"
+                  value={customPrompt}
+                  onChange={(e) => setCustomPrompt(e.target.value.slice(0, 500))}
+                  placeholder="e.g. lots of plants, warm earthy tones, cozy not minimal"
+                  className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                />
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  Layered on top of our preservation rules. Architecture is
+                  always protected — your direction only steers furniture
+                  choice.
+                </div>
+              </div>
+            )}
 
             {/* Inspiration upload */}
             <div className="px-5 py-3 border-b border-white/10 flex items-center gap-3">
