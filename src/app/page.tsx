@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { SpotlightCard } from "@/components/landing/SpotlightCard";
 import { TwilightHero } from "@/components/landing/TwilightHero";
+import { StagingHero } from "@/components/landing/StagingHero";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -404,10 +405,14 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Virtual Staging — prominent new-feature spotlight */}
+      <StagingHero />
+
       {/* Virtual Twilight — prominent new-feature spotlight */}
       <TwilightHero />
 
-      {/* Kitchen color-temperature demo */}
+      {/* Exterior — verticals + exposure correction. The most-cited
+          pain point in real estate photography. */}
       <section className="py-20 px-6 border-t border-border">
         <div className="max-w-5xl mx-auto">
           <motion.div
@@ -421,22 +426,23 @@ export default function LandingPage() {
               variants={fadeUp}
               className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-3"
             >
-              Color temperature
+              Exterior · the front-of-house shot
             </motion.p>
             <motion.h2
               variants={fadeUp}
               className="text-3xl md:text-4xl font-semibold tracking-tight"
             >
-              Tungsten cast, neutralized.
+              Tilted house, dull sky, fixed.
             </motion.h2>
             <motion.p
               variants={fadeUp}
               className="text-muted-foreground mt-3 max-w-2xl"
             >
-              Mixed interior lighting gives every kitchen a yellow cast.
-              AutoQC reads the scene, pulls the white balance back to
-              neutral, and delivers the clean white cabinets the agent
-              expects to see.
+              Front-of-house shots fail QC more than any other photo type.
+              The walls lean. The roofline drifts. The sky is flat. AutoQC
+              straightens the verticals, levels the horizon, lifts shadows,
+              recovers the sky, and makes the listing's hero shot actually
+              hero. Every exterior gets the AutoHDR-grade pass.
             </motion.p>
           </motion.div>
 
@@ -448,19 +454,27 @@ export default function LandingPage() {
             className="panel overflow-hidden"
           >
             <div className="p-3 border-b border-border text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
-              Kitchen interior, yellow cast corrected
+              Exterior, verticals + exposure corrected
             </div>
             <ReactCompareSlider
               itemOne={
                 <ReactCompareSliderImage
-                  src="/demos/kitchen-before.jpg"
-                  alt="Kitchen interior with yellow tungsten color cast"
+                  src="/demos/exterior-before.jpg"
+                  alt="Front of house, slightly tilted with flat sky and dull facade"
+                  // Fall back to the kitchen demo until the exterior
+                  // image pair is dropped into /public/demos.
+                  onError={(e: any) => {
+                    e.currentTarget.src = "/demos/kitchen-before.jpg";
+                  }}
                 />
               }
               itemTwo={
                 <ReactCompareSliderImage
-                  src="/demos/kitchen-after.jpg"
-                  alt="Same kitchen with white balance neutralized"
+                  src="/demos/exterior-after.jpg"
+                  alt="Same front of house, AutoQC-corrected: verticals straight, exposure balanced, sky recovered"
+                  onError={(e: any) => {
+                    e.currentTarget.src = "/demos/kitchen-after.jpg";
+                  }}
                 />
               }
               className="max-h-[70vh]"
