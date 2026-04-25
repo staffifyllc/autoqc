@@ -20,22 +20,61 @@ const STYLES = [
 export function StagingHero() {
   return (
     <section className="relative overflow-hidden border-t border-border">
-      {/* Warm gradient backdrop — late-afternoon sun through tall windows */}
+      {/* Empty → Furnished gradient story, baked into the background.
+          Left side reads "empty room": cool, dim, blue-gray light.
+          Right side reads "furnished and lit": warm amber/orange glow.
+          The transition in the middle is the moment of staging. */}
       <div
         aria-hidden
         className="absolute inset-0"
         style={{
           background:
-            "linear-gradient(140deg, hsl(28 30% 8%) 0%, hsl(35 35% 14%) 35%, hsl(20 25% 10%) 70%, hsl(0 0% 4%) 100%)",
+            "linear-gradient(95deg, hsl(220 18% 9%) 0%, hsl(220 16% 11%) 22%, hsl(30 22% 13%) 55%, hsl(28 38% 16%) 78%, hsl(20 30% 10%) 100%)",
         }}
       />
-      {/* Soft warm beam */}
+      {/* Cool window-light suggestion on the empty side (top-left) */}
       <div
         aria-hidden
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(circle at 75% 30%, hsl(35 90% 60% / 0.18) 0%, transparent 45%)",
+            "radial-gradient(ellipse at 12% 22%, hsl(210 60% 70% / 0.10) 0%, transparent 40%)",
+        }}
+      />
+      {/* Warm interior-lamp glow on the furnished side (right) */}
+      <div
+        aria-hidden
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(circle at 78% 35%, hsl(35 95% 60% / 0.22) 0%, transparent 48%)",
+        }}
+      />
+      {/* Secondary warm pool, low + right, like a side table lamp */}
+      <div
+        aria-hidden
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(circle at 88% 78%, hsl(28 90% 55% / 0.14) 0%, transparent 32%)",
+        }}
+      />
+      {/* Faint horizontal seam where empty meets furnished, very low opacity */}
+      <div
+        aria-hidden
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent 0%, transparent 45%, hsl(35 85% 55% / 0.06) 50%, transparent 55%, transparent 100%)",
+        }}
+      />
+      {/* Vignette to keep edges dark and copy floating in the warm middle */}
+      <div
+        aria-hidden
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(ellipse at 50% 50%, transparent 0%, transparent 55%, hsl(0 0% 0% / 0.45) 100%)",
         }}
       />
 

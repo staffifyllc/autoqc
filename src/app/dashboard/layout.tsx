@@ -143,7 +143,7 @@ export default function DashboardLayout({
               AutoQC
             </span>
             <span className="text-[10px] font-mono text-muted-foreground">
-              v1
+              v3
             </span>
           </div>
         </div>

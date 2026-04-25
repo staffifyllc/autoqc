@@ -28,6 +28,58 @@ export type UpdateEntry = {
 
 export const updates: UpdateEntry[] = [
   {
+    version: "3.0.0",
+    date: "2026-04-25",
+    title: "AutoQC v3",
+    tagline: "Live support, refer & earn, Virtual Staging unlocks, and a refreshed home.",
+    changes: [
+      {
+        category: "Feature",
+        title: "Live AI support — chat with Paul",
+        body: "A floating chat widget in the bottom-right of every dashboard page now connects you to Paul, our live AI support agent. Ask anything about pricing, setup, or how a feature works. Conversations persist across page navigations and survive across logins so you never lose context.",
+      },
+      {
+        category: "Feature",
+        title: "Refer & earn — 25 free credits both sides",
+        body: "Every agency now has a unique referral link at /dashboard/refer. When a friend signs up through your link, BOTH of you get 25 free credits. No cap, no expiration.",
+        href: "/dashboard/refer",
+      },
+      {
+        category: "Feature",
+        title: "Virtual Staging: pay-once-per-photo unlocks",
+        body: "Staging a room costs 2 credits up-front and unlocks every style on that photo: Modern, Traditional, Scandinavian, Modern Farmhouse, Mid-Century, Coastal. Add a custom prompt to layer your direction on top of our preservation rules. Every render after the first is free. Keep what you love.",
+        href: "/dashboard/staging",
+      },
+      {
+        category: "Feature",
+        title: "Affiliate program (application-only)",
+        body: "Photographers and agency consultants can now apply to the AutoQC affiliate program at /affiliates. Approved affiliates get a custom link, recurring commission, and a partner dashboard.",
+        href: "/affiliates",
+      },
+      {
+        category: "Feature",
+        title: "Onboarding checklist on Overview",
+        body: "First-time users now see a six-step onboarding checklist on the dashboard: connect a platform, set your style profile, run your first QC, invite a teammate, set photo order, and refer a friend. Tracks your progress, dismisses when complete.",
+      },
+      {
+        category: "Polish",
+        title: "Sidebar trim",
+        body: "Workspace, Configure, and Account groupings tightened. Daily-use pages live in Workspace. Configure-once items moved to Configure. Account holds billing, credits, team, refer, and updates. Floating bug widget still gives feedback access from any page.",
+      },
+      {
+        category: "Polish",
+        title: "Virtual Staging hero on landing page",
+        body: "The home page now leads with a dedicated Virtual Staging section showing all six styles, custom-direction support, and the empty\u2192furnished gradient story baked into the background.",
+      },
+      {
+        category: "Polish",
+        title: "Team invites with passwordless setup",
+        body: "Agency owners can invite teammates by email at /dashboard/team. Each invitee receives a passwordless setup link that lands them in Onboarding with seat already provisioned.",
+        href: "/dashboard/team",
+      },
+    ],
+  },
+  {
     version: "1.7.0",
     date: "2026-04-24",
     title: "Virtual Staging (closed beta)",

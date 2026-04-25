@@ -412,7 +412,10 @@ export default function LandingPage() {
       <TwilightHero />
 
       {/* Exterior — verticals + exposure correction. The most-cited
-          pain point in real estate photography. */}
+          pain point in real estate photography. Slider is currently
+          using the kitchen white-balance pair as a stand-in. Drop a
+          real front-of-house before/after at
+          /public/demos/exterior-{before,after}.jpg and swap the srcs. */}
       <section className="py-20 px-6 border-t border-border">
         <div className="max-w-5xl mx-auto">
           <motion.div
@@ -454,27 +457,19 @@ export default function LandingPage() {
             className="panel overflow-hidden"
           >
             <div className="p-3 border-b border-border text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
-              Exterior, verticals + exposure corrected
+              AutoQC: before / after
             </div>
             <ReactCompareSlider
               itemOne={
                 <ReactCompareSliderImage
-                  src="/demos/exterior-before.jpg"
-                  alt="Front of house, slightly tilted with flat sky and dull facade"
-                  // Fall back to the kitchen demo until the exterior
-                  // image pair is dropped into /public/demos.
-                  onError={(e: any) => {
-                    e.currentTarget.src = "/demos/kitchen-before.jpg";
-                  }}
+                  src="/demos/kitchen-before.jpg"
+                  alt="Real estate photo, raw camera output before AutoQC"
                 />
               }
               itemTwo={
                 <ReactCompareSliderImage
-                  src="/demos/exterior-after.jpg"
-                  alt="Same front of house, AutoQC-corrected: verticals straight, exposure balanced, sky recovered"
-                  onError={(e: any) => {
-                    e.currentTarget.src = "/demos/kitchen-after.jpg";
-                  }}
+                  src="/demos/kitchen-after.jpg"
+                  alt="Same photo after AutoQC, color and exposure corrected"
                 />
               }
               className="max-h-[70vh]"
