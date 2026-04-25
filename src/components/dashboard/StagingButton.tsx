@@ -131,6 +131,10 @@ export function StagingButton({
         body: JSON.stringify({
           style: s,
           inspirationKey: inspirationKey ?? undefined,
+          // Pass the room type the parent gave us as an explicit override.
+          // Lets standalone-staging pages drive the type via a dropdown
+          // even when QC has not classified the photo yet.
+          overrideRoomType: roomType ?? undefined,
         }),
       });
       const data = await res.json();
@@ -154,6 +158,7 @@ export function StagingButton({
         body: JSON.stringify({
           style,
           inspirationKey: inspirationKey ?? undefined,
+          overrideRoomType: roomType ?? undefined,
         }),
       });
       const data = await res.json();
