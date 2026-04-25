@@ -180,6 +180,38 @@ enum ReferralStatus {
   EXPIRED
 }
 
+// Live support chat. One conversation per user (or anon visitor with a
+// cookie-set visitorId). Messages stored verbatim so Paul can review
+// what users actually ask + how the AI is answering. Open conversations
+// stay around forever; could be archived after N days as needed.
+model SupportConversation {
+  id         String           @id @default(cuid())
+  userId     String?
+  agencyId   String?
+  visitorId  String?          // for anonymous chat visitors
+  status     String           @default("OPEN")
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  messages   SupportMessage[]
+
+  @@index([userId])
+  @@index([agencyId])
+  @@index([visitorId])
+}
+
+model SupportMessage {
+  id             String              @id @default(cuid())
+  conversationId String
+  role           String              // "user" | "assistant"
+  content        String              @db.Text
+  createdAt      DateTime            @default(now())
+
+  conversation   SupportConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
 enum BillingMode {
   CREDITS        // Pre-purchased credits ($10/property)
   PAY_AS_YOU_GO  // Card charged per property ($12/property)

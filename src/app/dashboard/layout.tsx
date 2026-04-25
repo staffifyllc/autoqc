@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
 import { BugReportWidget } from "@/components/dashboard/BugReportWidget";
+import { SupportChatWidget } from "@/components/dashboard/SupportChatWidget";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { updates } from "@/lib/updates";
@@ -252,6 +253,10 @@ export default function DashboardLayout({
 
       {/* Floating "report a bug" widget - persists across dashboard */}
       <BugReportWidget />
+
+      {/* Live AI support — Paul. Floating bottom-right. Persists open
+          state across page nav within the same session. */}
+      <SupportChatWidget />
     </div>
   );
 }
