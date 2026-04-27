@@ -78,7 +78,11 @@ if [ -f ../../.env.local ]; then
         --no-cli-pager > /dev/null
 fi
 
-# Deploy profile learner function
+# Deploy profile learner function. Needs the same OpenCV layer and
+# memory budget as the main engine — without them the Lambda dies with
+# either ImportModuleError (no cv2) or OutOfMemory on real reference
+# sets. Without this config the /api/profiles/[id]/learn flow looks
+# like it's working but never writes any results back.
 echo ""
 echo "Deploying photoqc-profile-learner..."
 aws lambda update-function-code \
@@ -86,6 +90,23 @@ aws lambda update-function-code \
     --zip-file fileb://package.zip \
     --region $AWS_REGION \
     --no-cli-pager > /dev/null || echo "Note: profile-learner function not found (optional)"
+
+# Ensure memory + layer config matches what the function actually needs.
+# Idempotent — safe to re-run on every deploy.
+ENGINE_LAYERS=$(aws lambda get-function-configuration \
+    --function-name photoqc-engine \
+    --region $AWS_REGION \
+    --query 'Layers[].Arn' \
+    --output text 2>/dev/null || echo "")
+if [ -n "$ENGINE_LAYERS" ]; then
+    aws lambda update-function-configuration \
+        --function-name photoqc-profile-learner \
+        --layers $ENGINE_LAYERS \
+        --memory-size 3008 \
+        --timeout 300 \
+        --region $AWS_REGION \
+        --no-cli-pager > /dev/null 2>&1 || echo "Note: profile-learner config update skipped"
+fi
 
 # Cleanup
 rm -rf build
