@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion, useScroll, useTransform, useMotionTemplate } from "framer-motion";
 
 // Cinematic 3-stage scroll-driven transformation: raw -> AutoQC edited
 // -> fully staged. Same room, scrolling forward.
@@ -57,21 +57,46 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
   // === STAGE 2 → 3: furniture drops from the sky ===
   // Staged image is clipped from the top, revealing top-down. Plus a
   // subtle translateY → 0 with a small overshoot for "thud" landing.
-  const stagedClipTop = useTransform(
+  // Mask edge (% from top). The mask is BLACK above the edge (visible)
+  // and TRANSPARENT below it (hidden), with a feather band straddling
+  // the edge. As scroll advances, the edge moves from -10% (above the
+  // frame, nothing visible yet) down to 110% (past the bottom, fully
+  // revealed). The feather makes the leading edge dissolve into dust
+  // instead of slicing on a hard line.
+  const maskEdge = useTransform(
     scrollYProgress,
-    [0.55, 0.85],
-    [100, 0]
+    [0.55, 0.9],
+    [-10, 110]
+  );
+  // Position of the leading edge in viewport %, used for spawning dust
+  // and drawing speed streaks just above it.
+  const leadingEdgePct = useTransform(
+    scrollYProgress,
+    [0.55, 0.9],
+    [-5, 100]
   );
   const stagedTranslateY = useTransform(
     scrollYProgress,
     [0.55, 0.82, 0.88],
-    ["-3%", "1.2%", "0%"]
+    ["-2.5%", "1.0%", "0%"]
   );
   // Soft drop shadow under the falling layer to anchor it visually.
   const stagedShadowOpacity = useTransform(
     scrollYProgress,
     [0.55, 0.85, 0.92],
     [0, 0.6, 0]
+  );
+  // Settle puff fires when the drop completes — quick flash of dust at
+  // the floor line.
+  const settlePuffOpacity = useTransform(
+    scrollYProgress,
+    [0.85, 0.9, 0.95],
+    [0, 0.55, 0]
+  );
+  const settlePuffScale = useTransform(
+    scrollYProgress,
+    [0.85, 0.95],
+    [0.6, 1.4]
   );
 
   // Stage label (one of three) — fades to whichever stage is most
@@ -99,6 +124,25 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
     [0.55, 0.82, 0.88],
     [-0.6, 0.4, 0]
   );
+
+  // CSS string templates — useMotionTemplate is required for non-
+  // transform CSS props like clip-path and mask-image, otherwise the
+  // motion value isn't subscribed by framer-motion's style updates.
+  const editedClipPath = useMotionTemplate`inset(0 ${editedClipRight}% 0 0)`;
+  const seamLeft = useMotionTemplate`${editedSeamPct}%`;
+  // Mask edge clamped + offset for the feather band. We compute three
+  // intermediate motion values so the gradient stops are well-formed.
+  const maskTopStop = useTransform(maskEdge, (v) =>
+    Math.max(0, Math.min(100, v - 7))
+  );
+  const maskBotStop = useTransform(maskEdge, (v) =>
+    Math.max(0, Math.min(100, v + 7))
+  );
+  const maskGradient = useMotionTemplate`linear-gradient(180deg, black 0%, black ${maskTopStop}%, transparent ${maskBotStop}%, transparent 100%)`;
+  const leadingEdgeAbove = useTransform(leadingEdgePct, (v: number) =>
+    Math.max(0, v - 14)
+  );
+  const leadingEdgeAboveCss = useMotionTemplate`${leadingEdgeAbove}%`;
 
   return (
     <section
@@ -160,10 +204,7 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
                 draggable={false}
                 className="absolute inset-0 w-full h-full object-cover"
                 style={{
-                  clipPath: useTransform(
-                    editedClipRight,
-                    (v: number) => `inset(0 ${v}% 0 0)`
-                  ),
+                  clipPath: editedClipPath,
                 }}
               />
               {/* Glowing seam tracking the scan wipe */}
@@ -171,7 +212,7 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
                 aria-hidden
                 className="absolute inset-y-0 w-[3px] pointer-events-none"
                 style={{
-                  left: useTransform(editedSeamPct, (v: number) => `${v}%`),
+                  left: seamLeft,
                   opacity: scanSeamOpacity,
                   background:
                     "linear-gradient(180deg, transparent 0%, #55f19a 50%, transparent 100%)",
@@ -180,17 +221,17 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
                 }}
               />
 
-              {/* Stage C — Virtual staged, drops in from the top. Clip
-                  starts at top:100% (fully clipped from above, invisible)
-                  and animates to 0% (fully revealed). Translate + tiny
-                  rotation give the falling/thud feel. */}
+              {/* Stage C — Virtual staged, drops in from the top. The
+                  mask is a feathered linear gradient so the falling
+                  edge looks like dust + light reveal, not a guillotine
+                  line. Mask edge moves from below the frame up past
+                  the top, with a 14% feather band straddling the
+                  current edge. */}
               <motion.div
                 className="absolute inset-0"
                 style={{
-                  clipPath: useTransform(
-                    stagedClipTop,
-                    (v: number) => `inset(${v}% 0 0 0)`
-                  ),
+                  maskImage: maskGradient,
+                  WebkitMaskImage: maskGradient,
                 }}
               >
                 <motion.img
@@ -205,6 +246,14 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
                 />
               </motion.div>
 
+              {/* Speed streaks — vertical light trails just above the
+                  leading edge, suggesting the staging is being pulled
+                  down through the air. Fade in/out with the drop. */}
+              <SpeedStreaks
+                progress={scrollYProgress}
+                leadingEdgeCss={leadingEdgeAboveCss}
+              />
+
               {/* Soft drop-shadow band under the falling content — sells
                   the "landed on the floor" moment. */}
               <motion.div
@@ -217,10 +266,28 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
                 }}
               />
 
-              {/* Falling-pixel particle hint at the start of stage 3 —
-                  five tiny green dots that drop with stagger when the
-                  furniture starts coming in. */}
-              <FallingDots progress={scrollYProgress} />
+              {/* Construction dust — many small particles fall from above
+                  during stage 3, varied size/speed/x-position, white-ish
+                  with low opacity. Sells the "drop from sky" with
+                  physical debris. */}
+              <ConstructionDust progress={scrollYProgress} />
+
+              {/* Settle puff — quick dust cloud at the floor line right
+                  when the drop completes. */}
+              <motion.div
+                aria-hidden
+                className="absolute left-1/2 bottom-[8%] pointer-events-none"
+                style={{
+                  opacity: settlePuffOpacity,
+                  scale: settlePuffScale,
+                  width: "70%",
+                  height: "20%",
+                  translateX: "-50%",
+                  background:
+                    "radial-gradient(ellipse at 50% 100%, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.18) 35%, transparent 65%)",
+                  filter: "blur(8px)",
+                }}
+              />
 
               {/* Stage label, pinned top-left over the photo */}
               <div className="absolute top-3 left-3 h-7 flex items-center pointer-events-none">
@@ -266,43 +333,138 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
   );
 }
 
-function FallingDots({ progress }: { progress: any }) {
-  // Five amber dots, each starts above the frame and drops to its
-  // landing position over a slightly different scroll window. Adds
-  // physicality to the "furniture dropping from sky" moment.
-  const dots = [
-    { x: 18, land: 62, fireFrom: 0.56, fireTo: 0.7 },
-    { x: 36, land: 58, fireFrom: 0.58, fireTo: 0.72 },
-    { x: 50, land: 64, fireFrom: 0.6, fireTo: 0.74 },
-    { x: 66, land: 60, fireFrom: 0.62, fireTo: 0.76 },
-    { x: 82, land: 66, fireFrom: 0.64, fireTo: 0.78 },
-  ];
+// Generate a deterministic dust spec list once at module scope so
+// re-renders don't reshuffle the particles every frame.
+type DustSpec = {
+  x: number;          // 0..100
+  size: number;       // px
+  fireFrom: number;   // scrollYProgress to start
+  fireTo: number;     // scrollYProgress to end at floor
+  baseOpacity: number;
+  drift: number;      // horizontal drift in % during fall
+  blur: number;       // blur radius in px
+};
+
+function buildDust(count: number): DustSpec[] {
+  // PRNG with fixed seed so the layout is stable across renders.
+  let seed = 1729;
+  const rand = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+  return Array.from({ length: count }).map(() => {
+    const fireFrom = 0.55 + rand() * 0.18; // start anywhere from 0.55..0.73
+    const fall = 0.12 + rand() * 0.14;     // each particle takes 0.12..0.26 progress to fall
+    return {
+      x: rand() * 100,
+      size: 1 + rand() * 4,         // 1..5 px
+      fireFrom,
+      fireTo: Math.min(0.95, fireFrom + fall),
+      baseOpacity: 0.25 + rand() * 0.5, // 0.25..0.75
+      drift: (rand() - 0.5) * 14,   // -7..7 % horizontal drift
+      blur: rand() < 0.4 ? 0.5 + rand() * 1.5 : 0,
+    };
+  });
+}
+
+const DUST = buildDust(38);
+
+function ConstructionDust({ progress }: { progress: any }) {
   return (
     <>
-      {dots.map((d, i) => {
-        const y = useTransform(
-          progress,
-          [d.fireFrom, d.fireTo],
-          ["-15%", `${d.land}%`]
-        );
-        const opacity = useTransform(
-          progress,
-          [d.fireFrom - 0.01, d.fireFrom + 0.02, d.fireTo, d.fireTo + 0.04],
-          [0, 1, 1, 0]
-        );
-        return (
-          <motion.div
-            key={i}
-            aria-hidden
-            className="absolute w-1.5 h-1.5 rounded-full bg-[#55f19a] shadow-[0_0_10px_rgba(85,241,154,0.9)] pointer-events-none"
-            style={{
-              left: `${d.x}%`,
-              top: y,
-              opacity,
-            }}
-          />
-        );
-      })}
+      {DUST.map((d, i) => (
+        <DustParticle key={i} spec={d} progress={progress} />
+      ))}
+    </>
+  );
+}
+
+function DustParticle({
+  spec,
+  progress,
+}: {
+  spec: DustSpec;
+  progress: any;
+}) {
+  // Each particle starts above the frame and lands ~85% down (above
+  // the floor where furniture sits). White-ish, semi-transparent.
+  const top = useTransform(
+    progress,
+    [spec.fireFrom, spec.fireTo],
+    ["-8%", "85%"]
+  );
+  const left = useTransform(
+    progress,
+    [spec.fireFrom, spec.fireTo],
+    [`${spec.x}%`, `${spec.x + spec.drift}%`]
+  );
+  const opacity = useTransform(
+    progress,
+    [spec.fireFrom - 0.005, spec.fireFrom + 0.02, spec.fireTo - 0.04, spec.fireTo + 0.01],
+    [0, spec.baseOpacity, spec.baseOpacity * 0.6, 0]
+  );
+  return (
+    <motion.div
+      aria-hidden
+      className="absolute rounded-full bg-white pointer-events-none"
+      style={{
+        width: spec.size,
+        height: spec.size,
+        top,
+        left,
+        opacity,
+        filter: spec.blur ? `blur(${spec.blur}px)` : undefined,
+        boxShadow:
+          spec.size > 3
+            ? "0 0 6px rgba(255,255,255,0.4)"
+            : undefined,
+      }}
+    />
+  );
+}
+
+// Speed streaks — vertical light trails just above the leading edge of
+// the falling staging, suggesting motion. Streaks shorten + fade as the
+// drop slows.
+function SpeedStreaks({
+  progress,
+  leadingEdgeCss,
+}: {
+  progress: any;
+  leadingEdgeCss: any;
+}) {
+  // Render 6 vertical streaks at fixed x positions. Each streak's `top`
+  // tracks just above the leading edge so it travels with the drop.
+  const xs = [12, 28, 44, 58, 74, 88];
+  const streakOpacity = useTransform(
+    progress,
+    [0.55, 0.6, 0.78, 0.86],
+    [0, 0.7, 0.4, 0]
+  );
+  const streakHeight = useTransform(
+    progress,
+    [0.55, 0.65, 0.85],
+    ["8%", "14%", "0%"]
+  );
+  return (
+    <>
+      {xs.map((x, i) => (
+        <motion.div
+          key={i}
+          aria-hidden
+          className="absolute pointer-events-none"
+          style={{
+            left: `${x}%`,
+            top: leadingEdgeCss,
+            width: "1px",
+            height: streakHeight,
+            opacity: streakOpacity,
+            background:
+              "linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.7) 60%, rgba(255,255,255,0.95) 100%)",
+            transform: "translateX(-0.5px)",
+          }}
+        />
+      ))}
     </>
   );
 }
