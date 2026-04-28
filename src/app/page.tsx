@@ -3,10 +3,6 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import {
-  ReactCompareSlider,
-  ReactCompareSliderImage,
-} from "react-compare-slider";
-import {
   ArrowRight,
   Ban,
   Camera,
@@ -33,6 +29,10 @@ import {
 import { SpotlightCard } from "@/components/landing/SpotlightCard";
 import { TwilightHero } from "@/components/landing/TwilightHero";
 import { StagingHero } from "@/components/landing/StagingHero";
+import { CursorReticle } from "@/components/landing/CursorReticle";
+import { SmoothScroll } from "@/components/landing/SmoothScroll";
+import { WebGLBeforeAfter } from "@/components/landing/WebGLBeforeAfter";
+import { QCScanScene } from "@/components/landing/QCScanScene";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -150,6 +150,10 @@ const neverDos = [
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background">
+      {/* Lusion-style chrome: smooth scroll + custom cursor reticle */}
+      <SmoothScroll />
+      <CursorReticle />
+
       {/* Nav */}
       <nav className="fixed top-0 w-full z-50 border-b border-border/60 bg-background/75 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
@@ -321,20 +325,12 @@ export default function LandingPage() {
                 LIVE RESULT
               </span>
             </div>
-            <ReactCompareSlider
-              itemOne={
-                <ReactCompareSliderImage
-                  src="/demos/hero-before.jpg"
-                  alt="Living room with a yellow color cast and slight tilt, raw camera output"
-                />
-              }
-              itemTwo={
-                <ReactCompareSliderImage
-                  src="/demos/hero-after.jpg"
-                  alt="Same living room after AutoQC, with verticals straightened and color neutralized"
-                />
-              }
-              className="max-h-[70vh]"
+            <WebGLBeforeAfter
+              beforeSrc="/demos/hero-before.jpg"
+              afterSrc="/demos/hero-after.jpg"
+              className="aspect-[3/2] max-h-[70vh] w-full bg-black"
+              beforeLabel="Raw upload"
+              afterLabel="AutoQC output"
             />
             <div className="px-3 py-2 border-t border-border flex items-center justify-between text-[11px] font-mono text-muted-foreground">
               <span>← Raw upload</span>
@@ -405,6 +401,10 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Cinematic scroll-driven scan: as the user scrolls, AutoQC
+          visibly audits a sample photo with all 14 checks. */}
+      <QCScanScene imageSrc="/demos/hero-after.jpg" />
+
       {/* Virtual Staging — prominent new-feature spotlight */}
       <StagingHero />
 
@@ -459,26 +459,13 @@ export default function LandingPage() {
             <div className="p-3 border-b border-border text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
               AutoQC: before / after
             </div>
-            <ReactCompareSlider
-              itemOne={
-                <ReactCompareSliderImage
-                  src="/demos/kitchen-before.jpg"
-                  alt="Real estate photo, raw camera output before AutoQC"
-                />
-              }
-              itemTwo={
-                <ReactCompareSliderImage
-                  src="/demos/kitchen-after.jpg"
-                  alt="Same photo after AutoQC, color and exposure corrected"
-                />
-              }
-              className="max-h-[70vh]"
+            <WebGLBeforeAfter
+              beforeSrc="/demos/kitchen-before.jpg"
+              afterSrc="/demos/kitchen-after.jpg"
+              className="aspect-[3/2] max-h-[70vh] w-full bg-black"
+              beforeLabel="Raw upload"
+              afterLabel="AutoQC output"
             />
-            <div className="px-3 py-2 border-t border-border flex items-center justify-between text-[11px] font-mono text-muted-foreground">
-              <span>← Raw upload</span>
-              <span>Drag to compare</span>
-              <span className="text-primary">AutoQC output →</span>
-            </div>
           </motion.div>
         </div>
       </section>
