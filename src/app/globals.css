@@ -385,3 +385,12 @@
 .animate-cursor-scan {
   animation: cursor-scan 1.6s ease-in-out infinite;
 }
+
+/* Subtle bob on the manual slider handle until first drag */
+@keyframes handle-bob {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(6px); }
+}
+.animate-handle-bob {
+  animation: handle-bob 2s ease-in-out infinite;
+}

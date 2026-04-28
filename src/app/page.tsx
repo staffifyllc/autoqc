@@ -29,10 +29,9 @@ import {
 import { SpotlightCard } from "@/components/landing/SpotlightCard";
 import { TwilightHero } from "@/components/landing/TwilightHero";
 import { StagingHero } from "@/components/landing/StagingHero";
-import { CursorReticle } from "@/components/landing/CursorReticle";
-import { SmoothScroll } from "@/components/landing/SmoothScroll";
-import { WebGLBeforeAfter } from "@/components/landing/WebGLBeforeAfter";
+import { ManualBeforeAfter } from "@/components/landing/ManualBeforeAfter";
 import { QCScanScene } from "@/components/landing/QCScanScene";
+import { ScrollStagingDemo } from "@/components/landing/ScrollStagingDemo";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -150,10 +149,6 @@ const neverDos = [
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background">
-      {/* Lusion-style chrome: smooth scroll + custom cursor reticle */}
-      <SmoothScroll />
-      <CursorReticle />
-
       {/* Nav */}
       <nav className="fixed top-0 w-full z-50 border-b border-border/60 bg-background/75 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
@@ -325,7 +320,7 @@ export default function LandingPage() {
                 LIVE RESULT
               </span>
             </div>
-            <WebGLBeforeAfter
+            <ManualBeforeAfter
               beforeSrc="/demos/hero-before.jpg"
               afterSrc="/demos/hero-after.jpg"
               className="aspect-[3/2] max-h-[70vh] w-full bg-black"
@@ -411,64 +406,14 @@ export default function LandingPage() {
       {/* Virtual Twilight — prominent new-feature spotlight */}
       <TwilightHero />
 
-      {/* Exterior — verticals + exposure correction. The most-cited
-          pain point in real estate photography. Slider is currently
-          using the kitchen white-balance pair as a stand-in. Drop a
-          real front-of-house before/after at
-          /public/demos/exterior-{before,after}.jpg and swap the srcs. */}
-      <section className="py-20 px-6 border-t border-border">
-        <div className="max-w-5xl mx-auto">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={stagger}
-            className="mb-8"
-          >
-            <motion.p
-              variants={fadeUp}
-              className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-3"
-            >
-              Exterior · the front-of-house shot
-            </motion.p>
-            <motion.h2
-              variants={fadeUp}
-              className="text-3xl md:text-4xl font-semibold tracking-tight"
-            >
-              Tilted house, dull sky, fixed.
-            </motion.h2>
-            <motion.p
-              variants={fadeUp}
-              className="text-muted-foreground mt-3 max-w-2xl"
-            >
-              Front-of-house shots fail QC more than any other photo type.
-              The walls lean. The roofline drifts. The sky is flat. AutoQC
-              straightens the verticals, levels the horizon, lifts shadows,
-              recovers the sky, and makes the listing's hero shot actually
-              hero. Every exterior gets the AutoHDR-grade pass.
-            </motion.p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="panel overflow-hidden"
-          >
-            <div className="p-3 border-b border-border text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
-              AutoQC: before / after
-            </div>
-            <WebGLBeforeAfter
-              beforeSrc="/demos/kitchen-before.jpg"
-              afterSrc="/demos/kitchen-after.jpg"
-              className="aspect-[3/2] max-h-[70vh] w-full bg-black"
-              beforeLabel="Raw upload"
-              afterLabel="AutoQC output"
-            />
-          </motion.div>
-        </div>
-      </section>
+      {/* Scroll-driven 3-stage transformation: raw -> AutoQC edited
+          -> virtually staged. Same Richmond St dining room the whole
+          time. Tells the full pipeline story in one scroll. */}
+      <ScrollStagingDemo
+        rawSrc="/demos/kitchen-before.jpg"
+        editedSrc="/demos/kitchen-after.jpg"
+        stagedSrc="/demos/staged-after.jpg"
+      />
 
       {/* Why this matters (trust angle) */}
       <section id="why" className="py-20 px-6 border-t border-border">
