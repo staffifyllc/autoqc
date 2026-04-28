@@ -166,6 +166,13 @@ export function buildStagingPrompt(opts: {
   // architecture-preservation rules. Limited length to keep the prompt
   // bounded.
   customPrompt?: string;
+  // Multi-angle staging: when present, the second source image IS the
+  // anchor's already-staged result (same room, different angle), and
+  // anchorManifest is a Claude Vision-generated description of where
+  // every furniture piece sits relative to architecture in the anchor.
+  // Both fields together force furniture identity AND position to
+  // match across angles.
+  anchorManifest?: string;
 }): string {
   const manifest = ROOM_MANIFEST[opts.roomType];
   const style = styleById(opts.style);
@@ -176,15 +183,37 @@ export function buildStagingPrompt(opts: {
     throw new Error(`Unknown staging style: ${opts.style}`);
   }
 
-  // When the user provides a style reference image, tell the model to
-  // pull aesthetic cues from it — but explicitly forbid copying the
-  // reference's room layout or architecture. The room being staged is
-  // ALWAYS the first image; the reference is for tone/palette only.
-  const inspirationClause = opts.hasInspiration
+  // Two distinct second-image modes, mutually exclusive:
+  //
+  // (a) Anchor mode: this is a different angle of a room that's already
+  //     been staged. Match furniture identity AND position exactly.
+  // (b) Inspiration mode: pure aesthetic reference. Use only for tone /
+  //     palette, never for layout.
+  //
+  // Anchor wins if both are passed (it's stricter). The second image is
+  // always slot 2 of /v1/images/edits.
+  const safeAnchorManifest = (opts.anchorManifest ?? "")
+    .replace(/[ -]+/g, " ")
+    .trim()
+    .slice(0, 1500);
+  const anchorClause = safeAnchorManifest
     ? `
 
+CRITICAL: This is a different camera angle of a room that has already been staged. The second attached image shows the exact same room from a different angle, fully staged. Your job is to render this new angle with the EXACT SAME furniture pieces in the EXACT SAME physical positions.
+
+Treat the second image as ground truth for which pieces of furniture exist and what they look like (same sofa, same chairs, same tables, same rugs, same artwork, same colors and materials). Do NOT introduce new pieces. Do NOT change colors, fabrics, or finishes. The only thing changing between the two images is the camera viewpoint.
+
+Use the architectural features that appear in BOTH images (window count, doorway shape, fireplace, fixtures, floor pattern, wall layout) to triangulate exactly where each piece must sit in this new angle.
+
+Spatial layout to match (from the anchor image):
+${safeAnchorManifest}
+
+Pieces that are off-frame in this new angle (not visible in the new viewpoint) must NOT be inserted into the new image. Better to show empty floor than to invent furniture that doesn't belong here.`
+    : opts.hasInspiration
+      ? `
+
 A second reference image is attached as visual inspiration for the furniture style, color palette, textures, and overall mood. Use it for aesthetic cues only. Do not copy the reference image's room layout, window count, door positions, ceiling shape, or any architectural element. The room you are staging is the first image; the reference is the second image. Architecture of the first image is absolute.`
-    : "";
+      : "";
 
   // Optional user-supplied direction. Capped, sanitized, and inserted
   // BEFORE the SELF-CHECK so the architecture-preservation rules still
@@ -207,7 +236,7 @@ User-supplied direction (apply within the rules above; never alter architecture 
   // because diffusion models weight both ends of the prompt and
   // re-stating the window/door rule right before generation starts
   // measurably cuts violations vs. stating it only at the top.
-  return `${PRESERVATION_CORE}${inspirationClause}
+  return `${PRESERVATION_CORE}${anchorClause}
 
 Furniture and decor to add:
 ${manifest.add}

@@ -13,6 +13,7 @@ import {
   STAGING_STYLES,
   type StagingStyleId,
 } from "@/lib/staging";
+import { buildSpatialManifest } from "@/lib/stagingManifest";
 
 // POST /api/photos/[photoId]/staging/purchase
 // Body: { style: StagingStyleId, overrideRoomType?: string }
@@ -30,6 +31,7 @@ export async function POST(
       overrideRoomType?: string;
       inspirationKey?: string;
       customPrompt?: string;
+      anchorPhotoId?: string;
     };
     const style = body.style as StagingStyleId | undefined;
     if (!style || !styleById(style)) {
@@ -152,15 +154,53 @@ export async function POST(
         : photo.s3KeyFixed!;
       const sourceUrl = await getDownloadUrl(sourceKey);
 
-      const hasInspiration = !!body.inspirationKey;
-      const inspirationUrl = hasInspiration
-        ? await getDownloadUrl(body.inspirationKey!)
-        : undefined;
+      // Anchor mode (same logic as preview route): pull the anchor's
+      // staged variant + manifest and lock the new render to match.
+      let anchorImageUrl: string | undefined;
+      let anchorManifest: string | undefined;
+      if (body.anchorPhotoId && body.anchorPhotoId !== photo.id) {
+        const anchor = await prisma.photo.findFirst({
+          where: { id: body.anchorPhotoId, propertyId: photo.propertyId },
+          include: {
+            variants: {
+              where: {
+                type: { in: ["STAGING_FINAL", "STAGING_PREVIEW"] },
+                status: "READY",
+              },
+              orderBy: [{ type: "asc" }, { createdAt: "desc" }],
+              take: 1,
+            },
+          },
+        });
+        if (anchor && anchor.variants.length > 0) {
+          anchorImageUrl = await getDownloadUrl(anchor.variants[0].s3Key);
+          anchorManifest = anchor.stagingSpatialManifest ?? undefined;
+          if (!anchorManifest) {
+            try {
+              anchorManifest = await buildSpatialManifest({ imageUrl: anchorImageUrl });
+              await prisma.photo.update({
+                where: { id: anchor.id },
+                data: { stagingSpatialManifest: anchorManifest },
+              });
+            } catch (e) {
+              console.error("backfill anchor manifest failed:", e);
+            }
+          }
+        }
+      }
+      const useAnchor = !!anchorImageUrl;
+      const hasInspiration = !useAnchor && !!body.inspirationKey;
+      const secondImageUrl = useAnchor
+        ? anchorImageUrl
+        : hasInspiration
+          ? await getDownloadUrl(body.inspirationKey!)
+          : undefined;
 
       const prompt = buildStagingPrompt({
         roomType,
         style,
         hasInspiration,
+        anchorManifest: useAnchor ? anchorManifest : undefined,
         customPrompt: body.customPrompt,
       });
       const { bytes, mimeType } = await openaiEditImage({
@@ -168,7 +208,7 @@ export async function POST(
         prompt,
         quality: "high",
         size: "1536x1024",
-        inspirationUrl,
+        inspirationUrl: secondImageUrl,
       });
 
       const ext = mimeType.includes("png") ? "png" : "jpg";
@@ -195,8 +235,31 @@ export async function POST(
         },
       });
 
-      const url = await getDownloadUrl(outKey);
-      return NextResponse.json({ variant, url, alreadyPurchased: false });
+      // Persist anchor relationship + lazy-write spatial manifest from
+      // this staged result. See preview route for full rationale.
+      if (useAnchor && body.anchorPhotoId) {
+        await prisma.photo.update({
+          where: { id: photo.id },
+          data: { stagingAnchorPhotoId: body.anchorPhotoId },
+        });
+      }
+      const downloadUrl = await getDownloadUrl(outKey);
+      if (!photo.stagingSpatialManifest) {
+        buildSpatialManifest({ imageUrl: downloadUrl })
+          .then((manifest) =>
+            prisma.photo.update({
+              where: { id: photo.id },
+              data: { stagingSpatialManifest: manifest },
+            })
+          )
+          .catch((e) => console.error("manifest gen failed:", e));
+      }
+      return NextResponse.json({
+        variant,
+        url: downloadUrl,
+        alreadyPurchased: false,
+        anchorMatched: useAnchor,
+      });
     } catch (genErr: any) {
       // Refund only if we charged on THIS call. If this photo was
       // already unlocked from a prior preview, there's nothing to

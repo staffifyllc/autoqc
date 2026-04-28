@@ -13,6 +13,7 @@ import {
   STAGING_STYLES,
   type StagingStyleId,
 } from "@/lib/staging";
+import { buildSpatialManifest } from "@/lib/stagingManifest";
 
 // 24h cache per (photoId, style). Flipping between styles regenerates.
 const PREVIEW_FRESH_MS = 24 * 60 * 60 * 1000;
@@ -32,6 +33,10 @@ export async function POST(
       overrideRoomType?: string;
       inspirationKey?: string;
       customPrompt?: string;
+      // When set, lock furniture identity + position to a previously-
+      // staged photo of the same room. Anchor must belong to the same
+      // property as this photo (verified server-side).
+      anchorPhotoId?: string;
     };
     const style = body.style as StagingStyleId | undefined;
     if (!style || !styleById(style)) {
@@ -169,15 +174,72 @@ export async function POST(
     const sourceKey = preferOriginal ? photo.s3KeyOriginal : photo.s3KeyFixed!;
     const sourceUrl = await getDownloadUrl(sourceKey);
 
-    const hasInspiration = !!body.inspirationKey;
-    const inspirationUrl = hasInspiration
-      ? await getDownloadUrl(body.inspirationKey!)
-      : undefined;
+    // Anchor mode: stage as a different angle of an already-staged
+    // sibling photo. We resolve the anchor's most recent staged variant
+    // (KEEPER preferred, else PREVIEW) and use it as the second source
+    // image. Manifest comes from the anchor photo's stored manifest, or
+    // is generated lazily right now if it's missing.
+    let anchorImageUrl: string | undefined;
+    let anchorManifest: string | undefined;
+    if (body.anchorPhotoId && body.anchorPhotoId !== photo.id) {
+      const anchor = await prisma.photo.findFirst({
+        where: {
+          id: body.anchorPhotoId,
+          propertyId: photo.propertyId,
+        },
+        include: {
+          variants: {
+            where: {
+              type: { in: ["STAGING_FINAL", "STAGING_PREVIEW"] },
+              status: "READY",
+            },
+            orderBy: [
+              // Prefer keeper over preview, then most recent.
+              { type: "asc" }, // STAGING_FINAL < STAGING_PREVIEW alphabetically
+              { createdAt: "desc" },
+            ],
+            take: 1,
+          },
+        },
+      });
+      if (anchor && anchor.variants.length > 0) {
+        const v = anchor.variants[0];
+        anchorImageUrl = await getDownloadUrl(v.s3Key);
+        anchorManifest = anchor.stagingSpatialManifest ?? undefined;
+        // Lazy-generate the manifest if the anchor was staged before
+        // this feature shipped.
+        if (!anchorManifest) {
+          try {
+            anchorManifest = await buildSpatialManifest({ imageUrl: anchorImageUrl });
+            await prisma.photo.update({
+              where: { id: anchor.id },
+              data: { stagingSpatialManifest: anchorManifest },
+            });
+          } catch (e) {
+            console.error("backfill anchor manifest failed:", e);
+            // Soft-fail: still attach the image even if manifest gen
+            // fails. Identity match still works, position match degrades
+            // gracefully.
+          }
+        }
+      }
+    }
+
+    // Inspiration + anchor are mutually exclusive at the OpenAI call
+    // level (only one second image). Anchor wins when both are present.
+    const useAnchor = !!anchorImageUrl;
+    const hasInspiration = !useAnchor && !!body.inspirationKey;
+    const secondImageUrl = useAnchor
+      ? anchorImageUrl
+      : hasInspiration
+        ? await getDownloadUrl(body.inspirationKey!)
+        : undefined;
 
     const prompt = buildStagingPrompt({
       roomType,
       style,
       hasInspiration,
+      anchorManifest: useAnchor ? anchorManifest : undefined,
       customPrompt: body.customPrompt,
     });
 
@@ -189,7 +251,7 @@ export async function POST(
         prompt,
         quality: "high",
         size: "1536x1024",
-        inspirationUrl,
+        inspirationUrl: secondImageUrl,
       });
       bytes = out.bytes;
       mimeType = out.mimeType;
@@ -243,14 +305,41 @@ export async function POST(
       },
     });
 
-    const url = await getDownloadUrl(outKey);
+    // Persist the anchor relationship if this was a "match the anchor"
+    // render. Lets the dashboard display "this angle matches angle #X"
+    // and prevents accidental anchor flips on subsequent re-renders.
+    if (useAnchor && body.anchorPhotoId) {
+      await prisma.photo.update({
+        where: { id: photo.id },
+        data: { stagingAnchorPhotoId: body.anchorPhotoId },
+      });
+    }
+
+    // Generate the spatial manifest for THIS staged result if we don't
+    // already have one for this photo. Future angles that pick this
+    // photo as anchor will pull from this stored manifest. One Vision
+    // call per photo, not per render — cheap, idempotent, and fire-and-
+    // forget so it doesn't slow the response.
+    const downloadUrl = await getDownloadUrl(outKey);
+    if (!photo.stagingSpatialManifest) {
+      buildSpatialManifest({ imageUrl: downloadUrl })
+        .then((manifest) =>
+          prisma.photo.update({
+            where: { id: photo.id },
+            data: { stagingSpatialManifest: manifest },
+          })
+        )
+        .catch((e) => console.error("manifest gen failed:", e));
+    }
+
     return NextResponse.json({
       variant,
-      url,
+      url: downloadUrl,
       cached: false,
       creditCost: effectiveCost,
       unlocked: true,
       chargedThisCall,
+      anchorMatched: useAnchor,
     });
   } catch (error: any) {
     if (error?.message === "Unauthorized") {

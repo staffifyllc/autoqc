@@ -58,6 +58,21 @@ export function StagingButton({
   // Optional free-form direction the user types in the modal. Layered
   // into the prompt AFTER the safety + style instructions.
   const [customPrompt, setCustomPrompt] = useState("");
+  // Multi-angle anchor: when set, the staging engine pulls the
+  // anchor's already-staged image as a second source AND injects its
+  // spatial manifest into the prompt, so the same furniture lands in
+  // the same physical positions across angles.
+  type AnchorOpt = {
+    photoId: string;
+    fileName: string;
+    sameRoom: boolean;
+    hasManifest: boolean;
+    previewUrl: string | null;
+    variantStyle: string | null;
+    variantType: string | null;
+  };
+  const [anchorOptions, setAnchorOptions] = useState<AnchorOpt[]>([]);
+  const [anchorPhotoId, setAnchorPhotoId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,13 +100,26 @@ export function StagingButton({
   const openPanel = async () => {
     setOpen(true);
     setError(null);
-    // Fetch unlock status so the modal knows whether to show the
-    // "$2 to unlock" confirm gate or jump straight to styles.
+    // Fetch unlock status + sibling anchors in parallel.
     try {
-      const r = await fetch(`/api/photos/${photoId}/staging/status`);
-      if (r.ok) {
-        const d = await r.json();
+      const [statusRes, anchorsRes] = await Promise.all([
+        fetch(`/api/photos/${photoId}/staging/status`),
+        fetch(`/api/photos/${photoId}/staging/anchors`),
+      ]);
+      if (statusRes.ok) {
+        const d = await statusRes.json();
         setUnlocked(!!d.unlocked);
+      }
+      if (anchorsRes.ok) {
+        const d = await anchorsRes.json();
+        setAnchorOptions(Array.isArray(d.anchors) ? d.anchors : []);
+        // Auto-pick the first same-room sibling that has a manifest, so
+        // a customer staging the second angle of a room gets the lock-in
+        // by default. They can clear it if they want a different look.
+        const top = (d.anchors as AnchorOpt[]).find(
+          (a) => a.sameRoom && a.hasManifest
+        );
+        if (top) setAnchorPhotoId(top.photoId);
       }
     } catch {
       // Silent — the user can still try to render and the server will
@@ -151,6 +179,7 @@ export function StagingButton({
           style: s,
           inspirationKey: inspirationKey ?? undefined,
           customPrompt: customPrompt.trim() || undefined,
+          anchorPhotoId: anchorPhotoId ?? undefined,
           // Pass the room type the parent gave us as an explicit override.
           // Lets standalone-staging pages drive the type via a dropdown
           // even when QC has not classified the photo yet.
@@ -180,6 +209,7 @@ export function StagingButton({
           style,
           inspirationKey: inspirationKey ?? undefined,
           customPrompt: customPrompt.trim() || undefined,
+          anchorPhotoId: anchorPhotoId ?? undefined,
           overrideRoomType: roomType ?? undefined,
         }),
       });
@@ -285,6 +315,84 @@ export function StagingButton({
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Multi-angle anchor picker. Only renders when this
+                property already has another staged photo. Picking one
+                locks the staging to match its furniture identity AND
+                position — same sofa, same chairs, same spots. Built
+                for "stage all 4 angles of the same living room
+                consistently." */}
+            {unlocked && anchorOptions.length > 0 && (
+              <div className="px-5 pt-4 pb-3 border-b border-white/10">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                    Match the staging from another angle · optional
+                  </div>
+                  {anchorPhotoId && (
+                    <button
+                      onClick={() => {
+                        setAnchorPhotoId(null);
+                        setPreviewUrl(null);
+                        setFinalUrl(null);
+                      }}
+                      className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                  {anchorOptions.map((a) => {
+                    const active = anchorPhotoId === a.photoId;
+                    return (
+                      <button
+                        key={a.photoId}
+                        onClick={() => {
+                          setAnchorPhotoId(active ? null : a.photoId);
+                          // New anchor invalidates whatever preview/keeper
+                          // is on screen since the next render will look
+                          // different.
+                          setPreviewUrl(null);
+                          setFinalUrl(null);
+                        }}
+                        title={
+                          a.sameRoom
+                            ? "Same room — locks furniture and position"
+                            : "Different room type — match the look only"
+                        }
+                        className={`group relative w-16 h-12 rounded-lg overflow-hidden border-2 transition shrink-0 ${
+                          active
+                            ? "border-amber-400 ring-2 ring-amber-400/40"
+                            : "border-white/10 hover:border-white/30"
+                        }`}
+                      >
+                        {a.previewUrl ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={a.previewUrl}
+                            alt={a.fileName}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-white/5 flex items-center justify-center text-[9px] font-mono text-muted-foreground">
+                            {a.fileName.slice(0, 6)}
+                          </div>
+                        )}
+                        {a.sameRoom && (
+                          <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-1 ring-black" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {anchorPhotoId && (
+                  <p className="mt-2 text-[11px] text-amber-200/80 leading-snug">
+                    Locked to match. Same furniture pieces, same
+                    positions, just from this angle.
+                  </p>
+                )}
               </div>
             )}
 

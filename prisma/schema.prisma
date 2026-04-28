@@ -386,6 +386,17 @@ model Photo {
   // buy" margin drain on the gpt-image-1 model.
   stagingUnlockedAt DateTime?
 
+  // Multi-angle staging anchor + spatial manifest. When the customer
+  // stages the same room from multiple angles, the FIRST angle becomes
+  // the "anchor" — its staged result is described by Claude Vision into
+  // a spatial manifest (where each piece sits relative to architecture).
+  // Subsequent angles attach the anchor's staged image as inspiration
+  // AND include the manifest in the prompt, so the same furniture lands
+  // in the same physical positions. Both fields are nullable; non-anchor
+  // photos use stagingAnchorPhotoId to point back at the anchor.
+  stagingSpatialManifest String? @db.Text
+  stagingAnchorPhotoId   String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
