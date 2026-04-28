@@ -32,17 +32,46 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
     offset: ["start end", "end start"],
   });
 
-  // Stage opacity curves. Each stage owns ~40% of the scroll, with
-  // overlapping crossfades at the seams.
-  const editedOpacity = useTransform(
+  // === STAGE 1 → 2: photo gets fixed via a left-to-right scan wipe ===
+  // The edited image is revealed behind a clip-path that sweeps from left
+  // to right. A glowing green seam line tracks the wipe edge so the
+  // motion reads as "AutoQC actively running over the photo".
+  // editedClipRight: percentage of the image that's STILL CLIPPED on the
+  // right side. 100 = nothing visible, 0 = fully visible.
+  const editedClipRight = useTransform(
     scrollYProgress,
-    [0.2, 0.4, 0.55, 0.65],
+    [0.2, 0.5],
+    [100, 0]
+  );
+  const editedSeamPct = useTransform(
+    scrollYProgress,
+    [0.2, 0.5],
+    [0, 100]
+  );
+  const scanSeamOpacity = useTransform(
+    scrollYProgress,
+    [0.18, 0.22, 0.5, 0.55],
     [0, 1, 1, 0]
   );
-  const stagedOpacity = useTransform(
+
+  // === STAGE 2 → 3: furniture drops from the sky ===
+  // Staged image is clipped from the top, revealing top-down. Plus a
+  // subtle translateY → 0 with a small overshoot for "thud" landing.
+  const stagedClipTop = useTransform(
     scrollYProgress,
-    [0.55, 0.7, 1, 1],
-    [0, 1, 1, 1]
+    [0.55, 0.85],
+    [100, 0]
+  );
+  const stagedTranslateY = useTransform(
+    scrollYProgress,
+    [0.55, 0.82, 0.88],
+    ["-3%", "1.2%", "0%"]
+  );
+  // Soft drop shadow under the falling layer to anchor it visually.
+  const stagedShadowOpacity = useTransform(
+    scrollYProgress,
+    [0.55, 0.85, 0.92],
+    [0, 0.6, 0]
   );
 
   // Stage label (one of three) — fades to whichever stage is most
@@ -63,8 +92,13 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
     [0, 1, 1]
   );
 
-  // Subtle scale-up on the staged image to give the "drop in" feel.
-  const stagedScale = useTransform(scrollYProgress, [0.55, 0.75], [1.04, 1]);
+  // Tiny rotation jitter on the falling staged image — adds physicality
+  // to the drop without distracting.
+  const stagedRotate = useTransform(
+    scrollYProgress,
+    [0.55, 0.82, 0.88],
+    [-0.6, 0.4, 0]
+  );
 
   return (
     <section
@@ -108,27 +142,85 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
         <div className="relative h-[200vh]">
           <div className="sticky top-[12vh] mx-auto max-w-5xl">
             <div className="relative aspect-[3/2] w-full rounded-2xl overflow-hidden border border-white/10 shadow-2xl shadow-black/60 bg-black">
-              {/* Stage A — Raw (always rendered, fades out as edited fades in) */}
+              {/* Stage A — Raw (always the base layer) */}
               {/* eslint-disable @next/next/no-img-element */}
               <img
                 src={rawSrc}
                 alt="Raw upload"
+                draggable={false}
                 className="absolute inset-0 w-full h-full object-cover"
               />
-              {/* Stage B — AutoQC edited */}
+
+              {/* Stage B — AutoQC edited, revealed left → right by a clip
+                  that sweeps as the user scrolls. Looks like the QC
+                  engine actively running across the photo. */}
               <motion.img
                 src={editedSrc}
                 alt="Same room, AutoQC edited"
+                draggable={false}
                 className="absolute inset-0 w-full h-full object-cover"
-                style={{ opacity: editedOpacity }}
+                style={{
+                  clipPath: useTransform(
+                    editedClipRight,
+                    (v: number) => `inset(0 ${v}% 0 0)`
+                  ),
+                }}
               />
-              {/* Stage C — Virtual staged */}
-              <motion.img
-                src={stagedSrc}
-                alt="Same room, virtually staged"
-                className="absolute inset-0 w-full h-full object-cover"
-                style={{ opacity: stagedOpacity, scale: stagedScale }}
+              {/* Glowing seam tracking the scan wipe */}
+              <motion.div
+                aria-hidden
+                className="absolute inset-y-0 w-[3px] pointer-events-none"
+                style={{
+                  left: useTransform(editedSeamPct, (v: number) => `${v}%`),
+                  opacity: scanSeamOpacity,
+                  background:
+                    "linear-gradient(180deg, transparent 0%, #55f19a 50%, transparent 100%)",
+                  boxShadow: "0 0 26px 4px rgba(85,241,154,0.7)",
+                  transform: "translateX(-1.5px)",
+                }}
               />
+
+              {/* Stage C — Virtual staged, drops in from the top. Clip
+                  starts at top:100% (fully clipped from above, invisible)
+                  and animates to 0% (fully revealed). Translate + tiny
+                  rotation give the falling/thud feel. */}
+              <motion.div
+                className="absolute inset-0"
+                style={{
+                  clipPath: useTransform(
+                    stagedClipTop,
+                    (v: number) => `inset(${v}% 0 0 0)`
+                  ),
+                }}
+              >
+                <motion.img
+                  src={stagedSrc}
+                  alt="Same room, virtually staged"
+                  draggable={false}
+                  className="absolute inset-0 w-full h-full object-cover"
+                  style={{
+                    y: stagedTranslateY,
+                    rotate: stagedRotate,
+                  }}
+                />
+              </motion.div>
+
+              {/* Soft drop-shadow band under the falling content — sells
+                  the "landed on the floor" moment. */}
+              <motion.div
+                aria-hidden
+                className="absolute inset-x-0 bottom-0 h-1/3 pointer-events-none"
+                style={{
+                  opacity: stagedShadowOpacity,
+                  background:
+                    "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.35) 100%)",
+                }}
+              />
+
+              {/* Falling-pixel particle hint at the start of stage 3 —
+                  five tiny green dots that drop with stagger when the
+                  furniture starts coming in. */}
+              <FallingDots progress={scrollYProgress} />
 
               {/* Stage label, pinned top-left over the photo */}
               <div className="absolute top-3 left-3 h-7 flex items-center pointer-events-none">
@@ -171,6 +263,47 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
         </div>
       </div>
     </section>
+  );
+}
+
+function FallingDots({ progress }: { progress: any }) {
+  // Five amber dots, each starts above the frame and drops to its
+  // landing position over a slightly different scroll window. Adds
+  // physicality to the "furniture dropping from sky" moment.
+  const dots = [
+    { x: 18, land: 62, fireFrom: 0.56, fireTo: 0.7 },
+    { x: 36, land: 58, fireFrom: 0.58, fireTo: 0.72 },
+    { x: 50, land: 64, fireFrom: 0.6, fireTo: 0.74 },
+    { x: 66, land: 60, fireFrom: 0.62, fireTo: 0.76 },
+    { x: 82, land: 66, fireFrom: 0.64, fireTo: 0.78 },
+  ];
+  return (
+    <>
+      {dots.map((d, i) => {
+        const y = useTransform(
+          progress,
+          [d.fireFrom, d.fireTo],
+          ["-15%", `${d.land}%`]
+        );
+        const opacity = useTransform(
+          progress,
+          [d.fireFrom - 0.01, d.fireFrom + 0.02, d.fireTo, d.fireTo + 0.04],
+          [0, 1, 1, 0]
+        );
+        return (
+          <motion.div
+            key={i}
+            aria-hidden
+            className="absolute w-1.5 h-1.5 rounded-full bg-[#55f19a] shadow-[0_0_10px_rgba(85,241,154,0.9)] pointer-events-none"
+            style={{
+              left: `${d.x}%`,
+              top: y,
+              opacity,
+            }}
+          />
+        );
+      })}
+    </>
   );
 }
 
