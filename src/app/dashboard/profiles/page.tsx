@@ -63,6 +63,20 @@ export default function ProfilesPage() {
     }
   };
 
+  const handleSetDefault = async (profileId: string) => {
+    try {
+      const res = await fetch(`/api/profiles/${profileId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isDefault: true }),
+      });
+      if (!res.ok) throw new Error("Failed to set default");
+      fetchProfiles();
+    } catch (err) {
+      console.error("Failed to set default profile:", err);
+    }
+  };
+
   const handleCreate = async () => {
     try {
       await fetch("/api/profiles", {
@@ -176,7 +190,7 @@ export default function ProfilesPage() {
               <a
                 key={profile.id}
                 href={`/dashboard/profiles/${profile.id}`}
-                className="panel-hover hairline-top p-5 space-y-4 cursor-pointer block group"
+                className="panel-hover hairline-top p-5 space-y-4 cursor-pointer block group relative"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3 min-w-0">
@@ -188,10 +202,23 @@ export default function ProfilesPage() {
                         <h3 className="font-semibold text-sm truncate">
                           {profile.name}
                         </h3>
-                        {profile.isDefault && (
+                        {profile.isDefault ? (
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-primary/15 text-primary">
                             Default
                           </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleSetDefault(profile.id);
+                            }}
+                            title="Make this the default profile for new properties"
+                            className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-[hsl(var(--surface-1))] text-muted-foreground border border-border hover:bg-primary/15 hover:text-primary hover:border-primary/30 transition-colors"
+                          >
+                            Set default
+                          </button>
                         )}
                       </div>
                       <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
