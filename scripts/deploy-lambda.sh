@@ -99,10 +99,13 @@ ENGINE_LAYERS=$(aws lambda get-function-configuration \
     --query 'Layers[].Arn' \
     --output text 2>/dev/null || echo "")
 if [ -n "$ENGINE_LAYERS" ]; then
+    # 6144 MB is the floor for high-res reference sets (50+ photos at
+    # 12-24 MP). 3008 OOM'd on real customer profiles. Don't drop this
+    # without testing against the largest known reference set.
     aws lambda update-function-configuration \
         --function-name photoqc-profile-learner \
         --layers $ENGINE_LAYERS \
-        --memory-size 3008 \
+        --memory-size 6144 \
         --timeout 300 \
         --region $AWS_REGION \
         --no-cli-pager > /dev/null 2>&1 || echo "Note: profile-learner config update skipped"

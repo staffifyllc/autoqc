@@ -60,6 +60,8 @@ export default function ProfileDetailPage({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState("");
+  const [learning, setLearning] = useState(false);
+  const [learnError, setLearnError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProfile();
@@ -437,20 +439,54 @@ export default function ProfileDetailPage({
               {refPhotos.length !== 1 ? "s" : ""}
             </h3>
             {refPhotos.length >= 10 && !isLearned && (
-              <button
-                onClick={async () => {
-                  await fetch(`/api/profiles/${params.id}/learn`, {
-                    method: "POST",
-                  });
-                  alert(
-                    "Learning started! This may take a few minutes. Check back to see updated baseline parameters."
-                  );
-                }}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition glow-sm"
-              >
-                <Sparkles className="w-4 h-4" />
-                Analyze & Learn Style
-              </button>
+              <div className="flex items-center gap-3">
+                {learnError && (
+                  <span className="text-xs text-red-300 max-w-[300px]">
+                    {learnError}
+                  </span>
+                )}
+                <button
+                  disabled={learning}
+                  onClick={async () => {
+                    setLearnError(null);
+                    setLearning(true);
+                    try {
+                      const res = await fetch(
+                        `/api/profiles/${params.id}/learn`,
+                        { method: "POST" }
+                      );
+                      const data = await res.json();
+                      if (!res.ok) {
+                        throw new Error(data?.error ?? `HTTP ${res.status}`);
+                      }
+                      // Pull the freshly written values onto the page so
+                      // the Learned badge + parameter cards update without
+                      // a manual refresh.
+                      await fetchProfile();
+                    } catch (err: any) {
+                      setLearnError(
+                        err?.message ??
+                          "Something went wrong. Try again, or email hello@autoqc.io if it keeps failing."
+                      );
+                    } finally {
+                      setLearning(false);
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl gradient-bg text-white font-medium text-sm hover:opacity-90 transition glow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {learning ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Analyzing {refPhotos.length} photos...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      Analyze & Learn Style
+                    </>
+                  )}
+                </button>
+              </div>
             )}
             {isLearned && (
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-sm">
