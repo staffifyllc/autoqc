@@ -32,96 +32,87 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
     offset: ["start end", "end start"],
   });
 
+  // Animation windows are tightened to the FIRST 70% of scroll so the
+  // last ~30% of the section is pure "linger time" — staged result
+  // pinned in view long enough to actually take it in before the user
+  // moves on. Section height is set to 320vh below to give that linger
+  // ~96vh of pinned scroll.
+
   // === STAGE 1 → 2: photo gets fixed via a left-to-right scan wipe ===
-  // The edited image is revealed behind a clip-path that sweeps from left
-  // to right. A glowing green seam line tracks the wipe edge so the
-  // motion reads as "AutoQC actively running over the photo".
-  // editedClipRight: percentage of the image that's STILL CLIPPED on the
-  // right side. 100 = nothing visible, 0 = fully visible.
   const editedClipRight = useTransform(
     scrollYProgress,
-    [0.2, 0.5],
+    [0.15, 0.38],
     [100, 0]
   );
   const editedSeamPct = useTransform(
     scrollYProgress,
-    [0.2, 0.5],
+    [0.15, 0.38],
     [0, 100]
   );
   const scanSeamOpacity = useTransform(
     scrollYProgress,
-    [0.18, 0.22, 0.5, 0.55],
+    [0.14, 0.18, 0.38, 0.42],
     [0, 1, 1, 0]
   );
 
   // === STAGE 2 → 3: furniture drops from the sky ===
-  // Staged image is clipped from the top, revealing top-down. Plus a
-  // subtle translateY → 0 with a small overshoot for "thud" landing.
-  // Mask edge (% from top). The mask is BLACK above the edge (visible)
-  // and TRANSPARENT below it (hidden), with a feather band straddling
-  // the edge. As scroll advances, the edge moves from -10% (above the
-  // frame, nothing visible yet) down to 110% (past the bottom, fully
-  // revealed). The feather makes the leading edge dissolve into dust
-  // instead of slicing on a hard line.
+  // Drop fully completes by 0.7 of scroll, leaving 0.7→1.0 (~30% of
+  // the 320vh section, ~96vh) for the user to enjoy the finished
+  // staging before the next section comes into view.
   const maskEdge = useTransform(
     scrollYProgress,
-    [0.55, 0.9],
+    [0.45, 0.7],
     [-10, 110]
   );
-  // Position of the leading edge in viewport %, used for spawning dust
-  // and drawing speed streaks just above it.
   const leadingEdgePct = useTransform(
     scrollYProgress,
-    [0.55, 0.9],
+    [0.45, 0.7],
     [-5, 100]
   );
   const stagedTranslateY = useTransform(
     scrollYProgress,
-    [0.55, 0.82, 0.88],
+    [0.45, 0.65, 0.7],
     ["-2.5%", "1.0%", "0%"]
   );
-  // Soft drop shadow under the falling layer to anchor it visually.
   const stagedShadowOpacity = useTransform(
     scrollYProgress,
-    [0.55, 0.85, 0.92],
+    [0.45, 0.68, 0.74],
     [0, 0.6, 0]
   );
-  // Settle puff fires when the drop completes — quick flash of dust at
-  // the floor line.
   const settlePuffOpacity = useTransform(
     scrollYProgress,
-    [0.85, 0.9, 0.95],
+    [0.66, 0.7, 0.76],
     [0, 0.55, 0]
   );
   const settlePuffScale = useTransform(
     scrollYProgress,
-    [0.85, 0.95],
+    [0.66, 0.76],
     [0.6, 1.4]
   );
 
-  // Stage label (one of three) — fades to whichever stage is most
-  // visible. We render all three labels stacked and let opacity pick.
+  // Stage labels — raw, edited, staged. Staged label sticks visible
+  // through the rest of the section (the "linger" window) so the
+  // user always sees what they're looking at.
   const rawLabelOpacity = useTransform(
     scrollYProgress,
-    [0.15, 0.3, 0.4],
+    [0.1, 0.22, 0.3],
     [1, 1, 0]
   );
   const editedLabelOpacity = useTransform(
     scrollYProgress,
-    [0.35, 0.5, 0.65],
+    [0.26, 0.38, 0.5],
     [0, 1, 0]
   );
   const stagedLabelOpacity = useTransform(
     scrollYProgress,
-    [0.6, 0.75, 0.9],
+    [0.46, 0.6, 1],
     [0, 1, 1]
   );
 
-  // Tiny rotation jitter on the falling staged image — adds physicality
-  // to the drop without distracting.
+  // Tiny rotation jitter on the falling staged image
   const stagedRotate = useTransform(
     scrollYProgress,
-    [0.55, 0.82, 0.88],
+    [0.45, 0.65, 0.7],
     [-0.6, 0.4, 0]
   );
 
@@ -181,9 +172,11 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
           </p>
         </motion.div>
 
-        {/* Sticky frame — locks the photo in view as the user scrolls and
-            lets the stages crossfade in place. */}
-        <div className="relative h-[200vh]">
+        {/* Sticky frame — locks the photo in view as the user scrolls.
+            Tall on purpose (320vh) so animations finish in the first
+            ~70% and the last ~30% (~96vh) is pinned linger time on the
+            completed staging. */}
+        <div className="relative h-[320vh]">
           <div className="sticky top-[12vh] mx-auto max-w-5xl">
             <div className="relative aspect-[3/2] w-full rounded-2xl overflow-hidden border border-white/10 shadow-2xl shadow-black/60 bg-black">
               {/* Stage A — Raw (always the base layer) */}
@@ -353,15 +346,18 @@ function buildDust(count: number): DustSpec[] {
     return seed / 233280;
   };
   return Array.from({ length: count }).map(() => {
-    const fireFrom = 0.55 + rand() * 0.18; // start anywhere from 0.55..0.73
-    const fall = 0.12 + rand() * 0.14;     // each particle takes 0.12..0.26 progress to fall
+    // Match the tightened drop window (0.45..0.7). Particles spawn
+    // staggered through 0.45..0.6 and finish hitting the floor by
+    // ~0.74 so the puff + linger reads cleanly afterward.
+    const fireFrom = 0.45 + rand() * 0.15;
+    const fall = 0.08 + rand() * 0.12;
     return {
       x: rand() * 100,
-      size: 1 + rand() * 4,         // 1..5 px
+      size: 1 + rand() * 4,
       fireFrom,
-      fireTo: Math.min(0.95, fireFrom + fall),
-      baseOpacity: 0.25 + rand() * 0.5, // 0.25..0.75
-      drift: (rand() - 0.5) * 14,   // -7..7 % horizontal drift
+      fireTo: Math.min(0.78, fireFrom + fall),
+      baseOpacity: 0.25 + rand() * 0.5,
+      drift: (rand() - 0.5) * 14,
       blur: rand() < 0.4 ? 0.5 + rand() * 1.5 : 0,
     };
   });
