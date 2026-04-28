@@ -71,8 +71,8 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
   );
   const stagedTranslateY = useTransform(
     scrollYProgress,
-    [0.45, 0.65, 0.7],
-    ["-2.5%", "1.0%", "0%"]
+    [0.45, 0.7],
+    ["-2.5%", "0%"]
   );
   const stagedShadowOpacity = useTransform(
     scrollYProgress,
@@ -109,11 +109,13 @@ export function ScrollStagingDemo({ rawSrc, editedSrc, stagedSrc }: Props) {
     [0, 1, 1]
   );
 
-  // Tiny rotation jitter on the falling staged image
+  // Subtle rotation glide — no overshoot, just a gentle straighten as
+  // the staging drops in. Three-keyframe overshoot was reading as a
+  // weird bounce on scroll.
   const stagedRotate = useTransform(
     scrollYProgress,
-    [0.45, 0.65, 0.7],
-    [-0.6, 0.4, 0]
+    [0.45, 0.7],
+    [-0.4, 0]
   );
 
   // CSS string templates — useMotionTemplate is required for non-
