@@ -1,137 +1,170 @@
-# AutoQC V3 — Handoff
+# AutoQC V3 → V4 Handoff
 
-**Read order:** this file first, then [OVERNIGHT_NOTES.md](OVERNIGHT_NOTES.md), then [CLAUDE.md](CLAUDE.md). Skip `HANDOFF.md` — it is from a pre-V2 session and most of its content is stale.
+**Read order:** this file first, then [CLAUDE.md](CLAUDE.md), then `git log --oneline -20`. Skip `HANDOFF.md` (pre-V2, stale).
 
-**Last updated:** 2026-04-24 (session: AutoQC V2, morning)
-**Repo state:** `main` is clean, auto-deploy to autoqc.io is live, latest commit is the staging smoke-test doc.
+**Last updated:** 2026-04-28 (V3 session running out of context, refreshed for V4)
+**Repo state:** `main` is clean, auto-deploy to autoqc.io is live, latest commit `8e0d946`.
+**Branch:** `main`, no local diffs.
 
 ---
 
-## Where we are right now
+## TL;DR for V4 Claude
 
-### Shipped today (afternoon continuation)
-- **Flylisted at-cost pricing** — new nullable `Agency.stagingCreditCost` column overrides the default 3-credit staging cost per agency. Set to 1 on the three @flylisted.com rows. Any other agency, including customers, still pays the default $3.
-- **Virtual Staging landing card** — new Sofa-iconed feature card on the landing page feature grid, flagged New.
-- **Virtual Staging standalone tab** — `/dashboard/staging` route and sidebar entry for customers who want staging without full QC. Creates a flagged Property (`isStandaloneStaging=true`), reuses the existing upload + Lambda-QC pipeline for room_type classification, and filters these sessions out of `/dashboard/properties`.
-- **First-pass staging renders on empty rooms** — ran Modern + Traditional on a clean dining room and a clean bedroom from Paul's Richmond St Dover NH photo set. All key architecture preserved (bay window, chandelier, ceiling fan, trim, floors). Dramatically better than the furnished-room test from the overnight session — confirms the failure mode was "replace existing furniture," not "model can't do staging."
+V3 was a long, productive session. Highlights:
 
-### Just shipped in the current session
-- **Password reset flow** — `/forgot-password`, `/reset-password`, HMAC-signed tokens bound to `passwordSetAt`, 60-min expiry. Linked from login.
-- **`/dashboard/settings`** — Profile (name + email, save immediately, no email verification), Company (agency name), Password. Replaces the old `/dashboard/account` page.
-- **Sign Out button fixed** — was a dead `<button>`; now calls `signOut({ callbackUrl: "/login" })`.
-- **Docs rewritten** — `CLAUDE.md` + `CONTRIBUTING.md` reflect sole-operator direct-push workflow (no more PR gate, no more two-person coordination).
-- **Speed** — `next.config.mjs` enables `optimizePackageImports` for `lucide-react` / `framer-motion` / radix; removed unused `recharts` dep.
-- **Virtual Staging (closed beta, admin-only)** — full end-to-end feature live behind `VIRTUAL_STAGING_ENABLED` env flag.
+1. **Multi-angle Virtual Staging** shipped today (commit `8e0d946`). Same furniture, same position, different camera angle. Closed beta still admin-only.
+2. **Style Profile "3+ day analyze" bug** found + fixed. UI never refetched after kicking off the Lambda. 6 stuck profiles re-run, 3 customers emailed (Chris/Bolor, Lux-immobilier, Realtour Pilot, HelioBook).
+3. **Evan's CRITICAL bug** (the AWS SDK ESM crash) resolved by hotfix `4e6e0fa` shipped earlier. Closed his bug report and emailed him.
+4. **Landing page rebuild** (Lusion-style): manual drag slider hero, scroll-driven QC scan, virtual staging "drop from sky" with construction dust + feathered mask. No more WebGL shaders, no custom cursor.
+5. **Reactivation campaign** to idle signups went out (founder-offer block + lock-in-access).
 
-### Still open / paused
-- **A/B test of `google/nano-banana` vs `black-forest-labs/flux-kontext-pro`** — `scripts/ab-stage.ts` was built and ready to run when Paul pivoted. Deleted from the repo but trivial to rebuild if Paul wants to proceed. ~$0.60 to run on the 4-render test set. Worth doing once the staging UX stabilizes.
-- **MLS "Virtually Staged" watermark** — still not shipped. Paul needs to decide default-on vs off vs export-UI label.
+Open thread Paul's last message attached a screenshot ("lets clean some stuff up, lets remove these guys") — V3 ran out of context before identifying which UI elements he meant. **First thing for V4 Claude: ask Paul to clarify which specific elements he wants removed.**
+
+---
+
+## What shipped in V3 (chronological-ish)
+
+### Multi-angle Virtual Staging — `8e0d946`
+Customer concern: when staging the same room from different angles, furniture identity AND position must match.
+
+- Schema: `Photo.stagingSpatialManifest` (Text), `Photo.stagingAnchorPhotoId` (String). Both nullable, additive. Pushed via `prisma db push --skip-generate`.
+- `src/lib/stagingManifest.ts` — Claude Sonnet 4.6 vision call extracts furniture positions anchored to architectural features. Stored on the anchor photo, reused per angle. ~$0.005-$0.01 per call, idempotent.
+- `src/lib/staging.ts` — `buildStagingPrompt` accepts optional `anchorManifest`. When present, replaces the inspiration clause with a strict "different camera angle of same room" clause, embeds the manifest, forbids inserting off-frame pieces.
+- `src/app/api/photos/[photoId]/staging/preview/route.ts` + `.../purchase/route.ts` — both accept `anchorPhotoId`, lazy-generate manifests, fire-and-forget own manifest gen, persist `stagingAnchorPhotoId`.
+- `src/app/api/photos/[photoId]/staging/anchors/route.ts` (NEW) — GET endpoint returning sibling photos in the same property with at least one ready `STAGING_FINAL` or `STAGING_PREVIEW`. Sorted: same-room first, has-manifest first.
+- `src/components/dashboard/StagingButton.tsx` — anchor thumbnail picker above the style picker. Auto-picks first same-room sibling with manifest. Green dot for same-room, amber border + ring when selected, "Locked to match" hint when active.
+
+Cost analysis: ~$0.22 per non-anchor render (gpt-image-1 high-quality 1536×1024) + ~$0.01 manifest call. Margin per 5-angle room stays ~$8.90+.
+
+**Anchor wins over inspiration** if both passed (only one second image per OpenAI call).
+
+### Style Profile fixes — `4fa867b` + `a4b9350`
+- Lambda `photoqc-profile-learner` bumped from 3008 MB → 6144 MB (3 profiles OOM'd on dense reference sets).
+- UI refactor: real progress + spinner + error states; `fetchProfile()` after success. Was: `alert("Learning started!")` and never refetched, so customers thought it was stuck for 3 days.
+- One-click "Set default" button on profiles list (Chris's request).
+- 6 stuck profiles re-run, all succeeded.
+- Customer emails sent: Chris (Bolor), Lux-immobilier, Realtour Pilot, HelioBook.
+
+### Landing page polish
+- `c4f8cfb` — killed the WebGL shader on hero, replaced with `ManualBeforeAfter` (CSS clip-path drag-to-compare).
+- `2a7859e` — `ScrollStagingDemo` cinematic transitions (not crossfades). Furniture drops from sky as user scrolls; QC fixes happen first, then staging drop.
+- `bcb3c1c` — feathered `mask-image` (linear gradient with `useMotionTemplate`) replaces the hard `clip-path` seam. Construction dust + speed streaks.
+- `776f854` — removed the bouncy translateY/rotate overshoot.
+- `9824513` — extended section to `h-[320vh]`; staging finishes at 0.7 of scroll, leaving 0.7→1.0 as pinned linger.
+
+Removed: Lenis SmoothScroll, CursorReticle, `ogl` package.
+
+### Reactivation campaigns
+- `47de90a` — idle-user reactivation blast, lock-in-access copy.
+- `b320d50` — founder-offer block + grant script + preview tool.
+- All sent via Resend from `Paul Chareth <hello@autoqc.io>`, reply-to `pchareth@gmail.com`.
+
+### Hotfixes
+- `4e6e0fa` — pin `@aws-sdk/xml-builder@3.972.18` (ESM mismatch crash). Resolved Evan's CRITICAL bug.
+- `62d4c18` — force `prisma generate` during Vercel build (`stagingUnlockedAt unknown` error after schema bump).
+- `d72b01e` — Style Profile learning actually invokes the Lambda (was stubbed).
+
+---
+
+## Open / pending threads (V4 should pick from these)
+
+### Most recent — needs immediate clarification
+- **"lets clean some stuff up, lets remove these guys"** with attached screenshot. V3 ran out of context before identifying which elements. Ask Paul to point at them again, or re-share the screenshot. Most likely candidates given recent work:
+  - StagingButton modal (just shipped multi-angle picker)
+  - Anchor thumbnail strip if he changed his mind
+  - Sidebar items
+  - Landing page sections
+  - Dashboard widgets
+
+### Infrastructure
+- **MX records for autoqc.io** — Paul still needs to choose Cloudflare Email Routing vs ImprovMX. Cold emails to `hello@autoqc.io` currently bounce.
+- **Delete `AUTOQC_LOGIN_ACCESS_CODE` from Vercel env** — verified zero code references months ago. Never removed.
+- **Health audit residual** — 1 lockout (`hello@gostaffify.com`), 2 abandoned uploads (4d + 14d old), 6 zero-photo virtual-staging shells. Not blocking, sweep when convenient.
+
+### Virtual Staging
+- **MLS "Virtually Staged" watermark** — recommended default-on for compliance. ~30 min via sharp overlay on purchase route. Paul has not green-lit.
+- **A/B test of `google/nano-banana` vs `flux-kontext-pro`** — `scripts/ab-stage.ts` was built then deleted. ~$0.60 to rebuild + run on the 4-render test set. Worth doing once UX stabilizes.
 - **Model-agnostic abstraction** — if we A/B to a different model, `geminiEditImage()` should be renamed + the model configurable per feature.
+- **Multi-angle anchor picker UX** — not yet customer-tested. Closed beta still admin-only via `VIRTUAL_STAGING_ENABLED` env flag.
 
-### The open decision we were on when V2 ran out
-Smoke-tested Virtual Staging on a real photo and showed Paul 6 style renders. **4 of 6 renders lost the fireplace**, plus the wall sconces and mirror above it. Root cause: the preservation clause in `src/lib/staging.ts` says "walls, windows, doors, floors, light fixtures, ceiling" but does not name fireplaces, sconces, mirrors, built-ins, or ceiling fans explicitly. Nano Banana treats unnamed focal-wall features as swappable content.
-
-**Paul needs to choose in V3 (or this session if not yet answered):**
-1. Tighten the preservation clause (adds ~10 min of work, rerun the 6 styles on same photo)
-2. Re-test on a truly empty room (neutralizes the "replace furniture" complication)
-3. Both
-
-See the renders at `/tmp/autoqc-staging-test/` (may not survive a reboot — if gone, rerun via `scripts/test-staging.ts` pattern).
-
-### What is paused, not dropped
-- **MLS "Virtually Staged" watermark** — recommended default-on for compliance. ~30 min to add via sharp overlay on purchase route. Not shipped; waiting on Paul go-ahead.
-- **Demo image → WebP/next/image migration** — modest speed win, medium risk (compare-slider has its own rendering). Flagged in OVERNIGHT_NOTES.md.
-- **Delete `AUTOQC_LOGIN_ACCESS_CODE` from Vercel env** — verified zero code references. Paul needs to say "go" or do it himself.
-- **Property Lines on drone photos** — feasibility doc in HANDOFF.md "Open" section. Still waiting on Regrid account + sample drone photos from Paul. Not touched in V2.
-- **False-positive horizon detector accuracy** — known issue in Lambda, out of scope for V2 (Lambda is high blast radius).
+### Other paused work
+- **Property Lines on drone photos** — feasibility doc in stale `HANDOFF.md`. Still waiting on Regrid account + sample drone photos from Paul.
+- **Demo image → WebP/next/image migration** — modest speed win, medium risk (compare-slider has its own rendering).
 
 ---
 
-## Current product state
+## What V3 Claude tried that didn't ship
 
-- **Brand:** AutoQC, live at [autoqc.io](https://www.autoqc.io)
-- **Repo brand:** `photoqc/`
-- **Version:** 1.7.0 (shipping Virtual Staging, admin-only)
-- **Shipped features:**
-  - 14 QC checks on every photo, auto-fixes where safe
-  - Virtual Twilight ($1/exterior)
-  - Virtual Staging (closed beta, $3/room, 6 styles, admin-only via env flag)
-  - Self-serve signup with 5-credit welcome bonus
-  - Password auth with self-serve reset
-  - Settings page
-  - Feedback widget (bugs + feature requests)
-  - Admin announcements tool (used once to blast What's New)
-  - Dashboard with updates changelog, credits, billing, integrations
-
-- **Live customers with credits:** 10 agencies, plus 2 admin accounts. Last known balances in `/tmp/autoqc-staging-test/...` no wait, check with a live DB query in V3.
-
-### Pricing model in effect right now
-- **Pay-as-you-go:** $12/property standard, $20/property premium
-- **Volume packs:** 10/$100 → 100/$800 (20% off at top)
-- **Virtual Twilight:** $1/exterior (preview free)
-- **Virtual Staging:** $3/room (preview free) — closed beta
-- **Signup bonus:** 5 free credits, PROMO type, does not inflate `totalCreditsPurchased`
+- **Ad-hoc audit scripts** — `scripts/_health-audit.ts` and `scripts/_close-evan-and-audit.ts` were one-shot, used, and deleted. Don't expect them in repo. Pattern: prefix one-shot scripts with `_`, delete after use.
+- **`STAGING_KEEPER` typo** — wrote it in 3 places before catching that the actual Prisma enum is `STAGING_FINAL`. Fixed via sed before push. **The enum is `PhotoVariantType { STAGING_PREVIEW | STAGING_FINAL | TWILIGHT_PREVIEW | TWILIGHT_FINAL }`.** Don't invent KEEPER.
+- **`prisma.bugReport.user` relation** — does not exist. `BugReport.reporterUserId` is a String, not a relation. Query users separately if you need them.
+- **`BugReport.status` enum** — is `NEW | TRIAGED | IN_PROGRESS | FIXED | WONT_FIX`. Not `RESOLVED`.
+- **`Integration.type`** — does not exist. Real field is `Integration.platform`.
 
 ---
 
-## Memory rules established across sessions
+## Memory rules (re-stated; loaded automatically from `~/.claude/projects/.../memory/` but worth repeating)
 
-These are stored in `~/.claude/projects/-Users-paulchareth-Desktop-Claude-Code/memory/` and auto-loaded in every new session, but repeating them here so V3 Claude has them in-thread too:
-
-1. **Do it yourself via API** — if a token or CLI cred exists locally, execute directly. Do not generate click-through instructions for Paul.
-2. **"Remove [user]" = zero credits, NOT delete** — established after I hard-deleted luximmophoto when Paul only wanted their credits zeroed. Only hard-delete if Paul says "delete." If ambiguous, re-ask explicitly; silence on a yes/no question ≠ yes.
-3. **No em dashes, ever** — periods / commas / restructure. Em dashes read as AI-generated.
-4. **Preview before UI changes** — on design feedback, propose the approach first and get alignment. Don't rewrite blind.
-5. **Recruiter UX is foolproof by default** (for Staffify projects, not AutoQC-specific).
+1. **Do it yourself via API** — if a token/CLI cred exists locally, execute directly. Don't generate click-through instructions for Paul.
+2. **"Remove [user]" = zero credits, NOT delete.** Only hard-delete if Paul says "delete." Silence on a yes/no question ≠ yes.
+3. **No em dashes, ever.** Periods / commas / restructure. Em dashes read as AI-generated.
+4. **Preview before UI changes** — propose the approach on design feedback and get alignment. Don't rewrite blind.
+5. **`scripts/grant-credits.sh` is broken for promo use** — it bumps `totalCreditsPurchased`. Use the in-route PROMO pattern from `src/app/api/onboarding/route.ts`.
 
 ---
 
-## High-risk zones (do not touch without Paul's explicit go)
+## High-risk zones (don't touch without Paul's explicit go)
 
 From `CLAUDE.md`:
 - `prisma/schema.prisma` — additive only, never rename/drop existing fields
 - `lambda/qc_engine/handler.py` main flow
-- `lambda/qc_engine/checks/composition.py` prompt (emits room_type, fix_actions, privacy — downstream depends on exact keys)
+- `lambda/qc_engine/checks/composition.py` prompt (emits `room_type`, `fix_actions`, `privacy` — downstream depends on exact keys)
 - `Agency.totalCreditsPurchased` — must stay accurate for the paying pill
 - `src/app/api/webhooks/stripe/` — real money
 - `.env.local` — never commit
 
 ---
 
-## Current session scratch notes
+## Current product state (snapshot 2026-04-28)
 
-- Landing page: new stats bar, 14/9/3 numbered feature headline, step timing pills
-- Email blasts: Resend via `hello@autoqc.io`, DKIM+SPF verified on autoqc.io via Vercel DNS
-- Unsubscribe tokens: HMAC userId, no expiry (idempotent)
-- Password reset tokens: HMAC(userId + passwordSetAt + exp), 60min TTL; invalidates once passwordSetAt changes
-- The `scripts/` directory has a few one-off utilities (set-user-password, grant-credits.sh). `grant-credits.sh` is broken for promo use (also updates totalCreditsPurchased). Always use the in-route PROMO pattern.
+- **Brand:** AutoQC, live at [autoqc.io](https://www.autoqc.io)
+- **Repo brand:** `photoqc/`
+- **Version:** 1.7.x (Virtual Staging closed beta + multi-angle anchor mode)
+- **Closed-beta env flag:** `VIRTUAL_STAGING_ENABLED` (admin-only otherwise; admins always bypass)
+- **Pricing:**
+  - Pay-as-you-go $12/property standard, $20 premium
+  - Volume packs 10/$100 → 100/$800
+  - Virtual Twilight $1/exterior (preview free)
+  - Virtual Staging $3/room one-time unlock per photo (preview free; "Keep" is free after first preview unlocks)
+  - Signup bonus 5 PROMO credits
+- **Email infra:** Resend, sender `hello@autoqc.io`, DKIM+SPF verified via Vercel DNS. MX still missing (inbound bounces).
+- **Active customers:** ~10 paying agencies + 2 admin accounts.
 
 ---
 
-## How V3 Claude should pick up
+## How V4 Claude should pick up
 
 First 60 seconds:
 ```bash
 cd "/Users/paulchareth/Desktop/Claude Code/photoqc"
 git status
-git log --oneline -10
+git log --oneline -15
 cat HANDOFF_V3.md       # this file
-cat OVERNIGHT_NOTES.md  # what shipped last night
-vercel ls --yes autoqc | head -6    # current deploy state
+vercel ls --yes autoqc | head -6
 ```
 
 Then ask Paul:
-> "Picking up from V2. Last open thread was the staging prompt fidelity — 4 of 6 renders lost the fireplace in the test set. Want me to tighten the preservation clause and rerun, test on an empty room, or pivot to something else?"
+> "Picking up from V3. Your last message attached a screenshot saying 'lets remove these guys' but V3 ran out of context. Can you point at the elements again? Also: multi-angle staging shipped clean, want me to verify it on a real customer photo set or move on?"
 
-If Paul has moved on, just start from wherever he is. Don't replay.
+If Paul has moved on, start from wherever he is. Don't replay.
 
 ---
 
 ## Keeping this file fresh
 
-V2 Claude will update this file:
+V4 Claude updates this file:
 - Before any context-compression event it can detect
 - Whenever a significant decision is made or a feature ships
 - At Paul's explicit request
 
-V3 Claude should update it the same way. Keep it short (under 250 lines) and pointer-heavy — detailed history belongs in git log, not here.
+Keep it short (under 300 lines) and pointer-heavy. Detailed history belongs in `git log`, not here. When V4 hands off, rename to `HANDOFF_V4.md` (or just update the heading + dates and keep filename `HANDOFF_V3.md` if Paul prefers a single rolling handoff).
