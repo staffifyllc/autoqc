@@ -104,7 +104,7 @@ export function renderFeaturePowerEmail({
             ${featureBlock({
               accent: "#55f19a",
               title: "9 auto-fixes that just happen",
-              copy: "Verticals corrected up to 5 degrees. Horizon levelled up to 3 degrees. Color casts neutralized. Subtle blur restored with AI deblur. White balance tightened to your preferred range. Personal photos blurred for privacy. Distractions inpainted out of frame. You see the corrected photo first; the original is one click away.",
+              copy: "Verticals corrected up to 7 degrees. Horizon levelled up to 5 degrees. Color casts neutralized. Subtle blur restored with AI deblur. White balance tightened to your preferred range. Personal photos blurred for privacy. Distractions inpainted out of frame. You see the corrected photo first; the original is one click away.",
             })}
 
             ${featureBlock({

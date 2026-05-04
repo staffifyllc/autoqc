@@ -36,9 +36,8 @@ _CHANNEL_HUE_RANGES = {
 }
 
 
-# Magnitude caps per op. Any value outside gets clamped. Claude is told
-# about these caps in the prompt but we enforce them anyway.
-_CAPS = {
+# Hard caps per op. Absolute backstop, will never be exceeded.
+_HARD_CAPS = {
     "exposure":            (-0.5, 0.5),
     "highlights":          (-25, 25),
     "shadows":             (-25, 25),
@@ -49,14 +48,43 @@ _CAPS = {
     "tint":                (-10, 10),
 }
 
+# Soft caps. Applied UNCONDITIONALLY before _HARD_CAPS so even a
+# Claude-recommended adjustment that's "within spec" gets pulled to a
+# conservative magnitude. Set tighter than the prompt's stated range so
+# Claude over-recommendation doesn't translate into washed-out output.
+#
+# Background: Realtour Pilot reported washed-out output 2026-05-03.
+# Diagnostic showed the engine was applying highlights=-15 + shadows=+8
+# + exposure=-0.2 on ~90% of photos regardless of need. That trio
+# compresses the dynamic range and produces the classic flat HDR look.
+# Halving the magnitudes keeps real fixes effective while preventing
+# pile-on flattening when Claude over-recommends.
+_SOFT_CAPS = {
+    "exposure":            (-0.15, 0.15),
+    "highlights":          (-8, 8),
+    "shadows":             (-5, 5),
+    "contrast":            (-10, 10),
+    "saturation_global":   (-10, 10),
+    "saturation_channel":  (-10, 10),
+    "temperature":         (-5, 5),
+    "tint":                (-5, 5),
+}
+
 
 def _clamp(value, op: str):
-    lo, hi = _CAPS.get(op, (-100, 100))
+    """Clamp to soft cap first (conservative), then hard cap as a backstop."""
     try:
         v = float(value)
     except (TypeError, ValueError):
         return 0.0
-    return max(lo, min(hi, v))
+    soft_lo, soft_hi = _SOFT_CAPS.get(op, (-100, 100))
+    v = max(soft_lo, min(soft_hi, v))
+    hard_lo, hard_hi = _HARD_CAPS.get(op, (-100, 100))
+    return max(hard_lo, min(hard_hi, v))
+
+
+# Backwards-compat alias. Some downstream code paths import _CAPS.
+_CAPS = _HARD_CAPS
 
 
 def _apply_exposure(img_f32: np.ndarray, stops: float) -> np.ndarray:

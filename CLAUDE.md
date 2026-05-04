@@ -160,8 +160,8 @@ Lives in `lambda/qc_engine/checks/`. Each returns issue severity (and often a fi
 
 | Check | Method | Auto-fix? |
 |---|---|---|
-| `verticals.py` | OpenCV Hough lines | ✓ up to 5° |
-| `horizon.py` | OpenCV Hough lines | ✓ up to 3° |
+| `verticals.py` | OpenCV Hough lines | ✓ up to 7° |
+| `horizon.py` | OpenCV Hough lines | ✓ up to 5° |
 | `color.py` | B/R channel ratio + cast detection | ✓ |
 | `exposure.py` | Histogram analysis | flag only |
 | `window_blowout.py` | Bright region detection | flag only |

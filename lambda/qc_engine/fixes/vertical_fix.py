@@ -5,9 +5,13 @@ Applies perspective correction to straighten vertical lines.
 Uses OpenCV's warpPerspective to correct tilted verticals without
 introducing excessive distortion.
 
-Important: only corrects deviations up to 5 degrees.
+Important: only corrects deviations up to 7 degrees.
 Beyond that, the image quality loss from warping is too significant
 and it should be flagged for manual correction (reshoot or manual edit).
+The cap was raised from 5 to 7 in May 2026 after a customer hit a
+property where 14 of 98 photos had verticals beyond the old cap and
+went uncorrected. 7 degrees still keeps the perspective-transform
+edge-shift under 7% of frame height, which is acceptable crop loss.
 """
 
 import cv2
@@ -29,7 +33,7 @@ def fix_verticals(
     Returns:
         Path to the corrected image, or None if correction failed
     """
-    if deviation > 5.0:
+    if deviation > 7.0:
         return None  # Too much correction needed
 
     img = cv2.imread(image_path)
@@ -60,7 +64,7 @@ def fix_verticals(
         corrected = rotated[crop_y : crop_y + h, crop_x : crop_x + w]
 
     else:
-        # For larger corrections (2-5 degrees), use perspective transform
+        # For larger corrections (2-7 degrees), use perspective transform
         # to correct converging verticals
         angle_rad = np.radians(deviation)
 

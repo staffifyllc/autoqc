@@ -3,7 +3,10 @@ Horizon Level Auto-Fix
 
 Rotates the image to level the horizon.
 Applies a simple rotation correction for tilted horizons
-up to 3 degrees.
+up to 5 degrees. Cap raised from 3 to 5 in May 2026 after a
+customer property had ~14 of 98 photos with horizon tilt
+beyond the old cap; the rotation+crop math scales fine to 5
+(extra_crop stays under 5% of the longer dimension).
 """
 
 import cv2
@@ -22,7 +25,7 @@ def fix_horizon(image_path: str, deviation: float) -> str | None:
     Returns:
         Path to the corrected image, or None if correction failed
     """
-    if deviation > 3.0:
+    if deviation > 5.0:
         return None  # Too much tilt, needs manual correction
 
     img = cv2.imread(image_path)

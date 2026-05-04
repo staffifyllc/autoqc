@@ -114,14 +114,14 @@ USER_PROMPT = """Analyze this real estate photograph and return ONE JSON object 
     "Human-readable action, short, present tense. e.g. 'Pull highlights -8 to recover ceiling detail'"
   ],
   "structured_actions": [
-    { "op": "exposure", "amount": -0.3, "reason": "Ceiling slightly over-bright" },
-    { "op": "highlights", "amount": -10, "reason": "Recover window detail" },
-    { "op": "shadows", "amount": 8, "reason": "Lift dark floor corners" },
-    { "op": "contrast", "amount": -5, "reason": "Soften harsh midtone contrast" },
-    { "op": "saturation_global", "amount": -4, "reason": "Slight overprocessing" },
-    { "op": "saturation_channel", "channel": "greens", "amount": -6, "reason": "Grass oversaturated" },
-    { "op": "temperature", "amount": -3, "reason": "Cool slightly toward neutral" },
-    { "op": "tint", "amount": 2, "reason": "Neutralize green cast" }
+    { "op": "exposure", "amount": -0.10, "reason": "Ceiling clearly over-bright" },
+    { "op": "highlights", "amount": -6, "reason": "Visible window blowout" },
+    { "op": "shadows", "amount": 4, "reason": "Crushed shadows in floor corner" },
+    { "op": "contrast", "amount": -4, "reason": "Genuinely flat HDR midtones" },
+    { "op": "saturation_global", "amount": -4, "reason": "Over-processed look" },
+    { "op": "saturation_channel", "channel": "greens", "amount": -6, "reason": "Lawn reads neon" },
+    { "op": "temperature", "amount": -3, "reason": "Strong amber cast on white walls" },
+    { "op": "tint", "amount": 2, "reason": "Visible green cast" }
   ],
   "room_type": "kitchen" | "living_room" | "bedroom" | "bathroom" | "exterior_front" | "exterior_back" | "exterior_pool" | "dining_room" | "office" | "hallway" | "basement" | "other",
   "confidence": 0-1.0,
@@ -160,10 +160,30 @@ Calibration: most professional photos should land PASS_HIGH (88-94) or PASS (80-
 STRUCTURED ACTIONS are what the system executes automatically. Rules:
 - Use them for anything you would adjust in Lightroom global panels. Skip "fix_actions" that require local brush work.
 - Supported ops: exposure, highlights, shadows, contrast, saturation_global, saturation_channel (with channel in reds, oranges, yellows, greens, aquas, blues, purples, magentas), temperature, tint.
-- Magnitudes are clamped. Stay conservative: exposure +/- 0.5 max, highlights/shadows/contrast/saturation in -20 to +20 range, temperature/tint in -10 to +10. Real RE adjustments rarely need big moves.
-- Only emit an action when the photo actually needs it. An empty array is a valid answer for a clean photo.
-- Every action MUST have a short "reason" (under 80 chars) so the agent knows why it was applied.
-- "fix_actions" is the human-readable version for the UI. "structured_actions" is what the fixer runs. Keep them consistent; every structured action should have a matching fix_actions line when an adjustment is executed.
+
+DEFAULT POSTURE: empty structured_actions. Most professional real estate photos are already well-exposed, well-balanced, and need no automatic adjustment. Only emit an action when there is a SPECIFIC, VISIBLE, NAMEABLE defect in this exact photo — not a generic "could be improved" feeling. A clean photo getting an empty array is the correct, expected outcome.
+
+GATES (must be true to emit the action):
+- highlights pull (negative): only when there is real clipping or near-clipping on a specific surface (window, sky patch, recessed light, white quartz). Generic "ceiling is bright" is NOT enough. If you cannot point at a specific blown surface, do NOT emit highlights.
+- shadows lift (positive): only when crushed-black detail is genuinely lost in a specific area. Stylistic dark floors / moody interiors are NOT defects. If you cannot point at a specific crushed area, do NOT emit shadows.
+- exposure: only for a globally too-bright or too-dark frame, not for ceiling-only or wall-only brightness. If only one zone is hot, use highlights instead.
+- temperature / tint: only when there is a clear, named cast (amber on a white wall, green on the ceiling, etc.). Subtle warmth is often the photographer's intent.
+- saturation_channel: only for genuinely neon / electric channels (lawn that looks fluorescent, sky that looks cyan-cartoon).
+
+CONSERVATIVE MAGNITUDES — these are TYPICAL values, not "max":
+- exposure: +/- 0.05 to +/- 0.10. Hard ceiling +/- 0.15. If a photo needs more, it needs reshoot, not auto-edit.
+- highlights: -4 to -8 typical. Hard ceiling -8. Pulling -10 or more flattens skies and brick contrast and produces washed-out output. Do not exceed -8.
+- shadows: +3 to +5 typical. Hard ceiling +5. Lifting +8 or more produces muddy midtones.
+- contrast: +/- 4 to +/- 8 typical. Hard ceiling +/- 10.
+- saturation channels: -4 to -8 typical when pulling back oversaturation. Hard ceiling -10.
+- temperature: +/- 2 to +/- 4 typical. Hard ceiling +/- 5.
+- tint: +/- 1 to +/- 3 typical. Hard ceiling +/- 5.
+
+The downstream system will clamp anything you emit to the hard ceilings above, but stacked moderate adjustments still flatten an image. The right move on a clean photo is no action at all.
+
+Every action MUST have a short "reason" (under 80 chars) that names the specific defect. Generic reasons like "slight over-bright" or "general improvement" are not acceptable; if the only available reason is generic, do not emit the action.
+
+"fix_actions" is the human-readable version for the UI. "structured_actions" is what the fixer runs. Keep them consistent; every structured action should have a matching fix_actions line when an adjustment is executed.
 
 HARD RULES on saturation:
 - NEVER emit a positive saturation_global action. Flat or desaturated looks (common on overcast winter exteriors) are truthful. Pumping global saturation turns subtle blue sky tints into fake cyan skies, which violates MLS sky-replacement ethics and looks amateur. If a scene truly reads as undersaturated, leave it. The system will ignore positive saturation_global values anyway.
