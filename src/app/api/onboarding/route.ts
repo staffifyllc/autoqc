@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { recordEvent } from "@/lib/events";
 
 // POST /api/onboarding - complete the onboarding flow
 // Creates or updates user profile + agency with full business data
@@ -146,6 +147,13 @@ export async function POST(req: NextRequest) {
         console.error("[onboarding referral credit] non-fatal:", refErr);
       }
     }
+
+    // Funnel event: onboarding complete. Fire-and-forget.
+    void recordEvent({
+      userId: session.user.id,
+      agencyId,
+      name: "signup_completed",
+    });
 
     return NextResponse.json({ success: true, agencyId });
   } catch (error: any) {

@@ -9,6 +9,7 @@ import {
   sanitizePhotoSortOrder,
   sortPhotosByRoomType,
 } from "@/lib/photoSort";
+import { recordEvent, recordFirstEvent } from "@/lib/events";
 
 // GET /api/properties/[id] - get property with photos
 export async function GET(
@@ -132,6 +133,15 @@ export async function POST(
     }
 
     if (action === "run_qc") {
+      // Funnel event: first run_qc attempt per agency. Fires before the
+      // payment check so we capture intent independent of outcome.
+      void recordFirstEvent({
+        userId: session.user.id,
+        agencyId: session.user.agencyId!,
+        name: "first_run_qc_attempted",
+        properties: { propertyId: params.id, photoCount: property.photos.length },
+      });
+
       // PAYMENT GATE: Must charge BEFORE processing
       const chargeResult = await chargeForProperty(
         session.user.agencyId!,
@@ -140,6 +150,17 @@ export async function POST(
       );
 
       if (!chargeResult.success) {
+        // Funnel event: 402 path. Captures the silent-failure mode where
+        // the auto-trigger from UploadContext quietly hits this branch.
+        void recordFirstEvent({
+          userId: session.user.id,
+          agencyId: session.user.agencyId!,
+          name: "first_run_qc_blocked_402",
+          properties: {
+            propertyId: params.id,
+            error: chargeResult.error ?? "no credits / no payment method",
+          },
+        });
         return NextResponse.json(
           {
             error: "Payment required",

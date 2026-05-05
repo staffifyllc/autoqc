@@ -25,6 +25,7 @@ import { DistractionCategoriesPanel } from "@/components/dashboard/DistractionCa
 import { prettyDistractionLabel } from "@/lib/distractionCategories";
 import { TwilightButton } from "@/components/dashboard/TwilightButton";
 import { StagingButton } from "@/components/dashboard/StagingButton";
+import { ConsistencyBadge } from "@/components/dashboard/ConsistencyBadge";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -417,6 +418,13 @@ export default function PropertyDetailPage({
               )}
           </div>
         </div>
+
+        {/* Cross-shoot consistency report card. Renders only when at least
+            two photos have been measured. The set median is computed from
+            colorTemp/exposure/saturation that the QC engine writes back. */}
+        {property.photos.length >= 2 && (
+          <ConsistencyBadge photos={property.photos} />
+        )}
       </motion.div>
 
       {/* Upload section - shows when user clicks upload OR property has no photos yet */}

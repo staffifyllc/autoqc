@@ -130,6 +130,11 @@ model Agency {
   autoSortEnabled Boolean @default(false)
   photoSortOrder  String[] @default(["exterior_front", "exterior_back", "exterior_pool", "living_room", "dining_room", "kitchen", "bedroom", "bathroom", "office", "hallway", "basement", "other"])
 
+  // Last time the stuck-PENDING recovery cron emailed this agency. Used
+  // to dedup the email so we don't blast the same agency every day.
+  // Null = never emailed. Set by /api/cron/stuck-pending-recovery.
+  lastStuckRecoveryEmailAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -487,6 +492,34 @@ model CreditPackage {
   isActive    Boolean @default(true)
   stripePriceId String?
   displayOrder Int @default(0)
+}
+
+// Funnel-instrumentation event log. One row per recorded event. Read
+// from /dashboard/admin/funnel to see signup -> first property ->
+// first run_qc -> first download conversion.
+//
+// Intentionally schemaless on the body so we can add new event types
+// (or new properties on existing types) without a migration. Names
+// follow snake_case verb_noun. Examples:
+//   signup_completed
+//   first_property_created
+//   first_upload_started
+//   first_run_qc_attempted
+//   first_run_qc_blocked_402
+//   first_property_approved
+//   first_download
+//
+// Indexed on (name, createdAt) and (agencyId) for the funnel queries.
+model Event {
+  id         String   @id @default(cuid())
+  userId     String?
+  agencyId   String?
+  name       String
+  properties Json?
+  createdAt  DateTime @default(now())
+
+  @@index([name, createdAt])
+  @@index([agencyId])
 }
 
 // Customer-submitted bug reports. Logged via the in-app "Report a bug"

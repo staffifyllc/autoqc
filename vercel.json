@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/dropbox-autohdr",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/stuck-pending-recovery",
+      "schedule": "0 14 * * *"
     }
   ]
 }

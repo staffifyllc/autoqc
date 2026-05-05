@@ -25,6 +25,7 @@ import {
   MessageSquarePlus,
   Menu,
   X as XIcon,
+  Activity,
 } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
 import { BugReportWidget } from "@/components/dashboard/BugReportWidget";
@@ -129,6 +130,7 @@ export default function DashboardLayout({
           label: "Admin",
           items: [
             { href: "/dashboard/admin", label: "Platform usage", icon: ShieldCheck },
+            { href: "/dashboard/admin/funnel", label: "Funnel", icon: Activity },
             { href: "/dashboard/admin/staging-insights", label: "Staging insights", icon: BarChart3 },
             { href: "/dashboard/admin/bugs", label: "Feedback", icon: MessageSquarePlus },
             { href: "/dashboard/admin/announce", label: "Announcements", icon: Mail },

@@ -6,6 +6,7 @@ import {
   ALL_DISTRACTION_CATEGORIES,
   filterValidDistractionCategories,
 } from "@/lib/distractionCategories";
+import { recordFirstEvent } from "@/lib/events";
 
 // GET /api/properties - list properties for agency
 export async function GET() {
@@ -115,6 +116,15 @@ export async function POST(req: NextRequest) {
         tier: propertyTier,
         distractionCategories: finalDistractionCategories,
       },
+    });
+
+    // Funnel event: first time this agency creates a property. Fires
+    // exactly once per agency thanks to recordFirstEvent dedup.
+    void recordFirstEvent({
+      userId: session.user.id,
+      agencyId: session.user.agencyId!,
+      name: "first_property_created",
+      properties: { propertyId: property.id, tier: propertyTier },
     });
 
     return NextResponse.json({
