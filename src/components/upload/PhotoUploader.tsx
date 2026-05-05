@@ -1,18 +1,43 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { useDropzone } from "react-dropzone";
+import { useDropzone, type FileRejection } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload,
   X,
   Zap,
   ArrowRight,
+  AlertCircle,
 } from "lucide-react";
 import { useUpload } from "@/lib/upload/UploadContext";
 
 interface FileWithPreview extends File {
   preview?: string;
+}
+
+interface RejectionRecord {
+  fileName: string;
+  reason: string;
+}
+
+// Friendly explanations for the format rejections we see most often.
+// HEIC is the iPhone default and was previously rejected silently.
+function explainRejection(file: File, code: string): string {
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  if (code === "file-too-large") {
+    return `Over the 50MB cap. Try exporting at a lower JPEG quality.`;
+  }
+  if (code === "file-invalid-type") {
+    if (["heic", "heif"].includes(ext)) {
+      return `HEIC isn't supported yet. Open in Photos and export as JPEG, or set your iPhone camera to "Most Compatible".`;
+    }
+    if (["arw", "cr2", "cr3", "nef", "dng", "raf", "orf", "rw2"].includes(ext)) {
+      return `RAW (.${ext}) isn't supported yet. Export as JPEG or TIFF first.`;
+    }
+    return `.${ext} isn't a supported format. Use JPEG, PNG, TIFF, or WebP.`;
+  }
+  return `Couldn't accept this file (${code}).`;
 }
 
 export function PhotoUploader({
@@ -27,6 +52,7 @@ export function PhotoUploader({
   const { startUpload, jobs } = useUpload();
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [rejections, setRejections] = useState<RejectionRecord[]>([]);
 
   // Find this property's active job (if any)
   const activeJob = jobs.find(
@@ -44,12 +70,30 @@ export function PhotoUploader({
     }
   }, [jobs, currentJobId, onComplete]);
 
-  const onDrop = useCallback((accepted: File[]) => {
-    const newFiles = accepted.map((file) =>
-      Object.assign(file, { preview: URL.createObjectURL(file) })
-    );
-    setFiles((prev) => [...prev, ...newFiles]);
-  }, []);
+  const onDrop = useCallback(
+    (accepted: File[], rejected: FileRejection[]) => {
+      const newFiles = accepted.map((file) =>
+        Object.assign(file, { preview: URL.createObjectURL(file) }),
+      );
+      setFiles((prev) => [...prev, ...newFiles]);
+      // Surface why files were rejected. Previously we silently dropped
+      // HEIC/RAW which made customers think their upload was working.
+      if (rejected.length > 0) {
+        const records: RejectionRecord[] = rejected.map((r) => ({
+          fileName: r.file.name,
+          reason: explainRejection(r.file, r.errors[0]?.code ?? "unknown"),
+        }));
+        setRejections((prev) => [...prev, ...records]);
+      }
+    },
+    [],
+  );
+
+  const dismissRejection = (index: number) => {
+    setRejections((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const clearRejections = () => setRejections([]);
 
   const removeFile = (index: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== index));
@@ -142,11 +186,57 @@ export function PhotoUploader({
                 : "Drag and drop photos, or click to browse"}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1 font-mono">
-              JPEG · PNG · TIFF · WebP, up to 50MB each
+              JPEG · PNG · TIFF · WebP, up to 50MB each. HEIC and RAW need
+              to be exported first.
             </p>
           </div>
         </div>
       </div>
+
+      {/* Rejection feedback. Renders only when at least one file got
+          dropped that we can't accept. Tells the user exactly which file
+          and why (HEIC → export as JPEG, RAW → unsupported, etc.). */}
+      {rejections.length > 0 && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/[0.06] p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-mono uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5" strokeWidth={2} />
+              {rejections.length} file{rejections.length !== 1 ? "s" : ""} not accepted
+            </p>
+            <button
+              onClick={clearRejections}
+              className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground hover:text-foreground transition"
+            >
+              Dismiss
+            </button>
+          </div>
+          <ul className="space-y-1.5">
+            {rejections.slice(0, 5).map((r, i) => (
+              <li
+                key={`${r.fileName}-${i}`}
+                className="flex items-start gap-2 text-[12px]"
+              >
+                <span className="font-mono text-amber-200/90 truncate max-w-[180px] shrink-0">
+                  {r.fileName}
+                </span>
+                <span className="text-muted-foreground flex-1">{r.reason}</span>
+                <button
+                  onClick={() => dismissRejection(i)}
+                  className="p-0.5 rounded hover:bg-[hsl(var(--surface-3))] transition shrink-0"
+                  aria-label={`Dismiss ${r.fileName}`}
+                >
+                  <X className="w-3 h-3 text-muted-foreground" />
+                </button>
+              </li>
+            ))}
+            {rejections.length > 5 && (
+              <li className="text-[11px] text-muted-foreground font-mono pl-1">
+                ...and {rejections.length - 5} more.
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
 
       {/* File list */}
       {files.length > 0 && (

@@ -23,6 +23,8 @@ import {
   ArrowDownUp,
   Rocket,
   MessageSquarePlus,
+  Menu,
+  X as XIcon,
 } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
 import { BugReportWidget } from "@/components/dashboard/BugReportWidget";
@@ -83,6 +85,15 @@ export default function DashboardLayout({
   const [credits, setCredits] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [hasUnseenUpdates, setHasUnseenUpdates] = useState(false);
+  // Mobile drawer state. Sidebar is always visible on md+; on smaller
+  // viewports it slides in from the left when the hamburger is tapped.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Close the mobile drawer whenever the route changes so the user
+  // never lands on a new page with the menu still covering it.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
 
   const latestUpdateVersion = updates[0]?.version;
 
@@ -131,8 +142,63 @@ export default function DashboardLayout({
       {/* Faint scanline texture, sits behind everything */}
       <div className="pointer-events-none fixed inset-0 scanlines z-0" />
 
-      {/* Sidebar */}
-      <aside className="w-60 surface-chrome border-r border-border flex flex-col fixed h-full z-30">
+      {/* Mobile top bar — only visible below md. Holds the brand mark,
+          a credits readout (so customers don't lose sight of their
+          balance when the sidebar is hidden), and the hamburger that
+          toggles the drawer. Desktop layout is unchanged. */}
+      <header className="md:hidden h-14 surface-chrome border-b border-border flex items-center justify-between px-4 fixed top-0 left-0 right-0 z-40">
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-md accent-bg flex items-center justify-center">
+            <Camera className="w-3.5 h-3.5" strokeWidth={2.5} />
+          </div>
+          <span className="font-semibold text-[15px] tracking-tight">
+            AutoQC
+          </span>
+        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/credits"
+            className="flex items-center gap-1.5 text-[12px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Credits"
+          >
+            <Coins className="w-3.5 h-3.5" />
+            <span className="stat-num">
+              {credits === null ? "--" : credits.toLocaleString()}
+            </span>
+          </Link>
+          <button
+            onClick={() => setMobileNavOpen((v) => !v)}
+            className="p-2 rounded-md hover:bg-[hsl(var(--surface-3))] transition-colors"
+            aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+          >
+            {mobileNavOpen ? (
+              <XIcon className="w-5 h-5" strokeWidth={2} />
+            ) : (
+              <Menu className="w-5 h-5" strokeWidth={2} />
+            )}
+          </button>
+        </div>
+      </header>
+
+      {/* Backdrop behind the open mobile drawer. Click anywhere outside
+          the sidebar to close. Hidden on md+ so it never affects desktop. */}
+      {mobileNavOpen && (
+        <div
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden="true"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden"
+        />
+      )}
+
+      {/* Sidebar. On md+ it is always visible (md:translate-x-0). On
+          smaller viewports it sits off-screen left and slides in when
+          the drawer is open. The width and visual styling are
+          unchanged on desktop. */}
+      <aside
+        className={`w-60 surface-chrome border-r border-border flex flex-col fixed h-full z-50 transition-transform duration-200 ease-out md:translate-x-0 ${
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         {/* Logo */}
         <div className="h-14 flex items-center gap-2.5 px-5 border-b border-border">
           <div className="w-7 h-7 rounded-md accent-bg flex items-center justify-center">
@@ -243,9 +309,13 @@ export default function DashboardLayout({
         </div>
       </aside>
 
-      {/* Main */}
-      <main className="flex-1 ml-60 relative z-10">
-        <div className="max-w-7xl mx-auto px-8 py-8">{children}</div>
+      {/* Main. md+ leaves room for the fixed sidebar (ml-60). Below md
+          the sidebar is off-screen, so we only reserve space for the
+          mobile top bar (pt-14). Padding tightens on small viewports. */}
+      <main className="flex-1 md:ml-60 pt-14 md:pt-0 relative z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8">
+          {children}
+        </div>
       </main>
 
       {/* Floating upload status - persists across all dashboard pages */}
