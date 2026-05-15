@@ -53,6 +53,28 @@ export function paygPriceForTier(tier: "STANDARD" | "PREMIUM"): number {
   return tier === "PREMIUM" ? PAYG_PREMIUM_CENTS : PAYG_STANDARD_CENTS;
 }
 
+// Per-credit price for a given agency. Null override falls back to the
+// default tier pricing baked into CREDIT_PACKAGES (each pack has its
+// own pricePerCredit derived from priceCents/credits).
+//
+// When an override IS set we ignore the volume-discount curve entirely
+// and price every pack at customCreditPriceCents × credits. This is the
+// "partner rate" shape: pay this much per credit, regardless of pack
+// size, instead of the public-facing tiered discount.
+export function packagesForAgency(
+  customCreditPriceCents: number | null | undefined,
+): typeof CREDIT_PACKAGES {
+  if (customCreditPriceCents == null) return CREDIT_PACKAGES;
+  return CREDIT_PACKAGES.map((pkg) => ({
+    ...pkg,
+    priceCents: customCreditPriceCents * pkg.credits,
+    // Savings vs PAYG card-rate (the public discount badge becomes
+    // meaningless on a custom flat rate; clear it so we don't show
+    // misleading "Save 10%" labels for a partner price).
+    savingsPct: 0,
+  }));
+}
+
 /**
  * Check if an agency has sufficient means to process a property.
  * Returns { canProcess: boolean, method: 'credits' | 'payg' | null, reason?: string }
@@ -295,7 +317,18 @@ export async function createCreditPurchaseSession(
   successUrl: string,
   cancelUrl: string
 ) {
-  const pkg = CREDIT_PACKAGES.find((p) => p.id === packageId);
+  // Resolve the package against the agency's effective price list. If
+  // the agency has a custom per-credit rate (partner pricing) we use
+  // that instead of the public tiered prices so the Stripe Checkout
+  // line item charges the negotiated amount.
+  const agencyPricing = await prisma.agency.findUnique({
+    where: { id: agencyId },
+    select: { customCreditPriceCents: true },
+  });
+  const effectivePackages = packagesForAgency(
+    agencyPricing?.customCreditPriceCents,
+  );
+  const pkg = effectivePackages.find((p) => p.id === packageId);
   if (!pkg) throw new Error("Invalid package");
 
   const owner = await prisma.agencyMember.findFirst({

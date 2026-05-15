@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAgency } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { CREDIT_PACKAGES } from "@/lib/credits";
+import { packagesForAgency } from "@/lib/credits";
 
 // GET /api/credits - get credit balance and transaction history
 export async function GET() {
@@ -15,6 +15,7 @@ export async function GET() {
         hasPaymentMethod: true,
         billingMode: true,
         totalCreditsPurchased: true,
+        customCreditPriceCents: true,
       },
     });
 
@@ -29,8 +30,12 @@ export async function GET() {
       hasPaymentMethod: agency?.hasPaymentMethod || false,
       billingMode: agency?.billingMode || "CREDITS",
       totalPurchased: agency?.totalCreditsPurchased || 0,
+      // Effective per-credit price in cents if a partner override is in
+      // play (null otherwise). Page uses this to render the right
+      // headline price on the "Credits" summary card.
+      customCreditPriceCents: agency?.customCreditPriceCents ?? null,
       transactions,
-      packages: CREDIT_PACKAGES,
+      packages: packagesForAgency(agency?.customCreditPriceCents),
     });
   } catch (error) {
     return NextResponse.json(

@@ -113,6 +113,14 @@ model Agency {
   // anyone else.
   stagingCreditCost  Int?
 
+  // Per-agency credit price override, in CENTS per credit. Null = use
+  // the default tiered pricing from CREDIT_PACKAGES. Non-null = every
+  // credit pack this agency buys is priced at this rate per credit
+  // regardless of pack size. Used for partner-rate deals (e.g. TJ at
+  // Architectural Storytelling locked in at $6/credit). Does NOT
+  // affect any other agency; same pattern as stagingCreditCost.
+  customCreditPriceCents Int?
+
 
   // Default tier applied when creating new properties
   defaultTier        PropertyTier @default(STANDARD)

@@ -43,6 +43,13 @@ export default function CreditsPage() {
   const [packages, setPackages] = useState<CreditPackage[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [purchasing, setPurchasing] = useState<string | null>(null);
+  // When the agency has a partner-rate override, every pack has the
+  // same per-credit cost and the public "from $10/property or less"
+  // headline is wrong. Track it explicitly so the headline card can
+  // render the actual locked-in rate.
+  const [customCreditPriceCents, setCustomCreditPriceCents] = useState<
+    number | null
+  >(null);
 
   useEffect(() => {
     fetchData();
@@ -67,6 +74,11 @@ export default function CreditsPage() {
       setHasPaymentMethod(data.hasPaymentMethod);
       setPackages(data.packages);
       setTransactions(data.transactions);
+      setCustomCreditPriceCents(
+        typeof data.customCreditPriceCents === "number"
+          ? data.customCreditPriceCents
+          : null,
+      );
     } catch (err) {
       console.error("Failed to fetch credits:", err);
     }
@@ -148,14 +160,22 @@ export default function CreditsPage() {
           <div>
             <p className="font-semibold">Credits</p>
             <p className="text-xs text-muted-foreground">
-              Buy upfront, save up to 20%
+              {customCreditPriceCents != null
+                ? "Partner rate locked in"
+                : "Buy upfront, save up to 20%"}
             </p>
             <p className="text-sm font-bold mt-1">
-              $10/property
-              <span className="text-xs font-normal text-muted-foreground">
-                {" "}
-                or less
-              </span>
+              {customCreditPriceCents != null ? (
+                <>${(customCreditPriceCents / 100).toFixed(0)}/property</>
+              ) : (
+                <>
+                  $10/property
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {" "}
+                    or less
+                  </span>
+                </>
+              )}
             </p>
           </div>
         </div>
