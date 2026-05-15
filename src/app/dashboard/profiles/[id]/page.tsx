@@ -88,9 +88,27 @@ export default function ProfileDetailPage({
       setUploadError(null);
 
       try {
-        const filesPayload = accepted.map((f) => ({
+        // Safari/iOS occasionally leaves File.type empty (especially on
+        // photos coming from iCloud Photos or that have been
+        // re-encoded by Photos.app). An empty Content-Type makes the
+        // SigV4 presign on the server bind to "" which then doesn't
+        // match the PUT request's Content-Type. Result: every photo
+        // 403s. Infer MIME from extension as the fallback so the
+        // signed URL and the PUT agree.
+        const mimeFor = (f: File): string => {
+          if (f.type && f.type.length > 0) return f.type;
+          const ext = (f.name.split(".").pop() || "").toLowerCase();
+          if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+          if (ext === "png") return "image/png";
+          if (ext === "webp") return "image/webp";
+          if (ext === "tif" || ext === "tiff") return "image/tiff";
+          return "application/octet-stream";
+        };
+
+        const resolvedTypes = accepted.map(mimeFor);
+        const filesPayload = accepted.map((f, i) => ({
           name: f.name,
-          type: f.type,
+          type: resolvedTypes[i],
         }));
         const signRes = await fetch(
           `/api/profiles/${params.id}/upload-reference`,
@@ -110,16 +128,40 @@ export default function ProfileDetailPage({
         // Upload each in parallel (4 concurrent). Track failures explicitly so
         // we can surface a clear error and not silently leave broken keys.
         const uploadedKeys: string[] = [];
-        const failed: string[] = [];
-        const queue = accepted.map((f, i) => ({ file: f, info: uploads[i] }));
+        const failed: Array<{ name: string; reason: string }> = [];
+        const queue = accepted.map((f, i) => ({
+          file: f,
+          info: uploads[i],
+          mime: resolvedTypes[i],
+        }));
 
-        const putOnce = async (job: { file: File; info: any }) => {
+        // S3 returns an XML error body on failure. Grab the <Code>
+        // tag so the user sees "AccessDenied" or "SignatureDoesNotMatch"
+        // instead of a bare HTTP status.
+        const extractS3Error = async (res: Response): Promise<string> => {
+          try {
+            const text = await res.text();
+            const match = text.match(/<Code>([^<]+)<\/Code>/);
+            return match ? `${res.status} ${match[1]}` : `${res.status}`;
+          } catch {
+            return `${res.status}`;
+          }
+        };
+
+        const putOnce = async (job: {
+          file: File;
+          info: any;
+          mime: string;
+        }) => {
           const res = await fetch(job.info.uploadUrl, {
             method: "PUT",
             body: job.file,
-            headers: { "Content-Type": job.file.type },
+            headers: { "Content-Type": job.mime },
           });
-          if (!res.ok) throw new Error(`S3 PUT ${res.status}`);
+          if (!res.ok) {
+            const reason = await extractS3Error(res);
+            throw new Error(`S3 PUT ${reason}`);
+          }
         };
 
         const worker = async () => {
@@ -136,11 +178,12 @@ export default function ProfileDetailPage({
               }
               uploadedKeys.push(job.info.s3Key);
             } catch (err: any) {
+              const reason = err?.message || String(err);
               console.error(
                 `Reference upload failed for ${job.file.name}:`,
-                err?.message || err
+                reason,
               );
-              failed.push(job.file.name);
+              failed.push({ name: job.file.name, reason });
             } finally {
               setUploadProgress((p) => ({ ...p, done: p.done + 1 }));
             }
@@ -165,8 +208,16 @@ export default function ProfileDetailPage({
         }
 
         if (failed.length > 0) {
+          // Surface the actual S3 error code so the recovery path is
+          // obvious. SignatureDoesNotMatch / AccessDenied / EntityTooLarge
+          // each need different responses; "check your network" was
+          // wrong advice for a SigV4 mismatch and made customers retry
+          // the exact same thing forever.
+          const sample = failed[0]?.reason ?? "";
+          const allSame = failed.every((f) => f.reason === sample);
+          const detail = allSame ? sample : `mixed: e.g. ${sample}`;
           setUploadError(
-            `${failed.length} of ${accepted.length} photos failed to upload. Check your network and try again.`
+            `${failed.length} of ${accepted.length} photos failed to upload (${detail}). Try refreshing the page; if it keeps happening, email hello@autoqc.io and we'll look at it directly.`,
           );
         }
 
