@@ -88,20 +88,25 @@ export default function ProfileDetailPage({
       setUploadError(null);
 
       try {
-        // Safari/iOS occasionally leaves File.type empty (especially on
-        // photos coming from iCloud Photos or that have been
-        // re-encoded by Photos.app). An empty Content-Type makes the
-        // SigV4 presign on the server bind to "" which then doesn't
-        // match the PUT request's Content-Type. Result: every photo
-        // 403s. Infer MIME from extension as the fallback so the
-        // signed URL and the PUT agree.
+        // Belt-and-suspenders: trust the file EXTENSION, ignore
+        // File.type entirely. Safari/iOS reports inconsistent values
+        // for File.type (sometimes empty, sometimes a slightly
+        // different MIME like "image/jpg" vs "image/jpeg") on photos
+        // coming from iCloud Photos or that have been re-encoded by
+        // Photos.app. SigV4 binds the exact ContentType used to sign,
+        // so any drift between sign-time and PUT-time = a
+        // SignatureDoesNotMatch on every photo. By deriving MIME from
+        // the extension on both sides we remove the drift surface
+        // entirely. The dropzone whitelist below restricts to
+        // JPEG/PNG/WebP so this small mapping covers every valid
+        // case, with a defensive fallback for the unreachable path.
         const mimeFor = (f: File): string => {
-          if (f.type && f.type.length > 0) return f.type;
           const ext = (f.name.split(".").pop() || "").toLowerCase();
           if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
           if (ext === "png") return "image/png";
           if (ext === "webp") return "image/webp";
           if (ext === "tif" || ext === "tiff") return "image/tiff";
+          if (f.type && f.type.length > 0) return f.type;
           return "application/octet-stream";
         };
 
