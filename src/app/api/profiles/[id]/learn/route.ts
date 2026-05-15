@@ -3,18 +3,23 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { requireAgency } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
-// POST /api/profiles/[id]/learn — analyze reference photos and write
-// learned style parameters back onto the profile.
+// POST /api/profiles/[id]/learn — kick off reference-photo analysis.
 //
-// Invokes the photoqc-profile-learner Lambda synchronously (RequestResponse)
-// so the user sees a real result rather than a "we'll get back to you" lie.
-// The Lambda timeout is 300s, well within the 60s default Vercel function
-// budget if invoked Async, but the Lambda finishes in seconds for typical
-// reference sets so we just wait.
+// Invokes the photoqc-profile-learner Lambda ASYNCHRONOUSLY (Event mode)
+// and returns 202 immediately. The Lambda writes learned values back to
+// the StyleProfile row directly (psycopg2), so the client polls the
+// profile endpoint until colorTempAvg flips non-null to know it's done.
 //
-// Was previously a stub that returned status:"learning" without ever
-// invoking the Lambda — that's why uploaded reference photos sat there
-// forever without any learned values.
+// Why async: real-world reference sets routinely take 90-120s through
+// the Claude Vision pass plus aggregation. The Vercel function ceiling
+// is 60s (Hobby) or 300s (Pro) and Safari aborts long idle fetches at
+// roughly 60-90s regardless. Async + polling means Safari users see a
+// consistent UX whether the Lambda takes 5s or 4 minutes, and a closed
+// tab no longer kills the analysis.
+//
+// Previously this was synchronous (RequestResponse). Customers on
+// Safari reported "load failed" / 504s every time the Lambda crossed
+// 60s. Switched 2026-05-13.
 
 const LEARNER_FUNCTION =
   process.env.PROFILE_LEARNER_FUNCTION ?? "photoqc-profile-learner";
@@ -27,7 +32,9 @@ const lambda = new LambdaClient({
   },
 });
 
-export const maxDuration = 60;
+// Validation + the async Lambda invoke both finish in well under 5s.
+// We only need the default Vercel timeout here.
+export const maxDuration = 10;
 
 export async function POST(
   _req: NextRequest,
@@ -49,55 +56,49 @@ export async function POST(
       );
     }
 
+    // Async invocation. The Lambda runs on its own thread, writes the
+    // learned values back to the StyleProfile row when it finishes.
+    // The client polls /api/profiles/[id] (refetch via fetchProfile())
+    // and sees the learned-state flip when colorTempAvg goes non-null.
     const cmd = new InvokeCommand({
       FunctionName: LEARNER_FUNCTION,
-      InvocationType: "RequestResponse",
+      InvocationType: "Event",
       Payload: Buffer.from(
         JSON.stringify({ body: JSON.stringify({ profileId: profile.id }) })
       ),
     });
 
     const result = await lambda.send(cmd);
-    const payloadText = result.Payload
-      ? Buffer.from(result.Payload).toString("utf8")
-      : "";
-    let parsed: { statusCode?: number; body?: string } = {};
-    try {
-      parsed = JSON.parse(payloadText);
-    } catch {
-      parsed = {};
-    }
 
-    if (result.FunctionError) {
-      console.error("[profile/learn] Lambda error", result.FunctionError, payloadText);
+    // Event-mode invokes return StatusCode 202 when accepted. Anything
+    // else means the SDK couldn't even hand the job off — that's the
+    // only failure mode worth surfacing here. Per-photo errors and
+    // database writes happen inside the Lambda after we have already
+    // told the client we're working on it.
+    if (result.StatusCode !== 202) {
+      console.error(
+        "[profile/learn] Lambda invoke returned",
+        result.StatusCode,
+        result.FunctionError,
+      );
       return NextResponse.json(
         {
           error:
-            "We hit an error analyzing your photos. The team has been notified.",
+            "Couldn't hand off the analysis job. Try again, or email hello@autoqc.io if it keeps failing.",
         },
-        { status: 502 }
+        { status: 502 },
       );
     }
 
-    if (parsed.statusCode && parsed.statusCode >= 400) {
-      return NextResponse.json(
-        { error: parsed.body ?? "Profile learning failed" },
-        { status: parsed.statusCode }
-      );
-    }
-
-    let learned: any = null;
-    try {
-      learned = parsed.body ? JSON.parse(parsed.body) : null;
-    } catch {
-      learned = null;
-    }
-
-    return NextResponse.json({
-      status: "completed",
-      photosAnalyzed: learned?.photos_analyzed ?? profile.referencePhotos.length,
-      learned,
-    });
+    return NextResponse.json(
+      {
+        status: "started",
+        photoCount: profile.referencePhotos.length,
+        message:
+          "Analysis running in the background. This page will update when it finishes (usually 30s to 3 min).",
+      },
+      { status: 202 },
+    );
   } catch (err: any) {
     console.error("[profile/learn] error", err);
     return NextResponse.json(

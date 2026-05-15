@@ -451,17 +451,62 @@ export default function ProfileDetailPage({
                     setLearnError(null);
                     setLearning(true);
                     try {
+                      // Kick off the analysis. The route is now async
+                      // (202 Accepted, Lambda runs separately) so this
+                      // POST returns in under a second regardless of
+                      // how long the analysis itself takes. That fixes
+                      // the Safari "load failed" we were seeing when
+                      // the analysis ran 60-120s on dense reference
+                      // sets and Safari aborted the long fetch.
                       const res = await fetch(
                         `/api/profiles/${params.id}/learn`,
                         { method: "POST" }
                       );
                       const data = await res.json();
-                      if (!res.ok) {
+                      if (!res.ok && res.status !== 202) {
                         throw new Error(data?.error ?? `HTTP ${res.status}`);
                       }
-                      // Pull the freshly written values onto the page so
-                      // the Learned badge + parameter cards update without
-                      // a manual refresh.
+
+                      // Poll the profile endpoint until colorTempAvg
+                      // flips non-null (the Lambda writes learned
+                      // values straight to the DB). Up to 5 minutes,
+                      // covers the p99 case. Closing the tab is fine
+                      // either way — the Lambda finishes on its own
+                      // and the learned values are there next visit.
+                      const POLL_INTERVAL_MS = 4000;
+                      const MAX_POLL_MS = 5 * 60 * 1000;
+                      const deadline = Date.now() + MAX_POLL_MS;
+                      let learnedOk = false;
+                      while (Date.now() < deadline) {
+                        await new Promise((r) =>
+                          setTimeout(r, POLL_INTERVAL_MS),
+                        );
+                        try {
+                          const r = await fetch(
+                            `/api/profiles/${params.id}`,
+                            { cache: "no-store" },
+                          );
+                          if (r.ok) {
+                            const p = await r.json();
+                            if (p?.colorTempAvg != null) {
+                              learnedOk = true;
+                              break;
+                            }
+                          }
+                        } catch {
+                          // Transient network blip is fine, keep polling.
+                        }
+                      }
+
+                      if (!learnedOk) {
+                        throw new Error(
+                          "Analysis is taking longer than expected. It will finish in the background. Refresh the page in a minute to see results, or email hello@autoqc.io if values still don't appear."
+                        );
+                      }
+
+                      // Refetch via the page's helper so the Learned
+                      // badge + parameter cards update without a hard
+                      // page reload.
                       await fetchProfile();
                     } catch (err: any) {
                       setLearnError(
