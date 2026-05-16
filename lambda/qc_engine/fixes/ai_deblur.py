@@ -24,10 +24,17 @@ import replicate
 
 # Model: NAFNet trained for deblurring
 # https://replicate.com/megvii-research/nafnet
-NAFNET_MODEL = "megvii-research/nafnet:faf6a49a2a9aea9ff8cb3bbfe4e66a52a45f9d1f4a9c3e89aaaa0f70e3ea3b8d"
+#
+# Note: omit the :hash pin so Replicate resolves to the latest
+# published version. We previously pinned a specific hash
+# (faf6a49a...) which Replicate deprecated; every call started
+# returning 422 Unprocessable Entity and the lambda spammed
+# CloudWatch with "Replicate deblur failed: ReplicateError" for
+# every soft photo. Unpinning lets the model upgrade gracefully.
+NAFNET_MODEL = "megvii-research/nafnet"
 
 # Alternative: Restormer (higher quality but 2x cost)
-RESTORMER_MODEL = "jingyunliang/swinir:660d922d33153019e8c263a3bba265de882e7f4f70396546b6c9c8f9d47a021a"
+RESTORMER_MODEL = "jingyunliang/swinir"
 
 
 def ai_deblur(image_path: str, current_sharpness: float) -> tuple[str | None, str]:
@@ -97,8 +104,13 @@ def ai_deblur(image_path: str, current_sharpness: float) -> tuple[str | None, st
         )
 
     except Exception as e:
-        print(f"Replicate deblur failed: {e}")
-        return None, f"AI deblur error: {str(e)[:50]}"
+        # Replicate occasionally deprecates model versions and returns
+        # 422 Unprocessable Entity for every call. We see the full
+        # error in CloudWatch and the photo proceeds without deblur.
+        # Truncated to keep the log readable.
+        err_text = str(e)[:200] or repr(e)[:200]
+        print(f"Replicate deblur failed: {err_text}")
+        return None, f"AI deblur error: {err_text[:80]}"
 
 
 def estimate_deblur_cost(num_photos: int) -> float:

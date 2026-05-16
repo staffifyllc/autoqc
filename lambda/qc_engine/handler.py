@@ -778,16 +778,86 @@ def handler(event, context):
                     print(f"Photo {photo_id} not found, skipping")
                     continue
 
-                # Process this photo
-                result = process_photo(
-                    row[0],
-                    row[1],
-                    thresholds,
-                    tier=tier,
-                    distraction_categories=distraction_categories,
-                )
-                update_photo_in_db(db, result)
-                db.commit()
+                # ----- HARD SAFETY NET -----
+                # process_photo's internal try/except only covers the
+                # main processing block. If anything past it raises
+                # (qc_score float() on a malformed value, ai notes
+                # builder, status calculation with unexpected keys),
+                # the photo would otherwise stay PROCESSING forever
+                # while the SQS message retries through to DLQ. This
+                # outer wrap guarantees the photo gets a terminal
+                # status, an error trail in issues, and the next
+                # photo in the batch continues.
+                #
+                # Customers seeing PROCESSING for 24+ hours was a real
+                # symptom (Chris's 27 + TJ's 45 stranded photos
+                # 2026-05). Don't remove this wrap.
+                try:
+                    result = process_photo(
+                        row[0],
+                        row[1],
+                        thresholds,
+                        tier=tier,
+                        distraction_categories=distraction_categories,
+                    )
+                except Exception as photo_err:
+                    print(f"Uncaught error in process_photo({photo_id}): {photo_err}")
+                    traceback.print_exc()
+                    # Fall back to a minimal FLAGGED result so the photo
+                    # leaves PROCESSING. The customer sees it in their
+                    # FLAGGED bucket with a clear error note and can
+                    # manually re-run if needed.
+                    result = {
+                        "photo_id": photo_id,
+                        "s3_key_fixed": None,
+                        "status": "FLAGGED",
+                        "qc_score": 0.0,
+                        "issues": {
+                            "processing_error": {
+                                "severity": 1.0,
+                                "error": str(photo_err)[:500],
+                            }
+                        },
+                        "ai_notes": f"Auto-flagged after engine error: {str(photo_err)[:200]}",
+                        "fixes_applied": [],
+                        "vertical_dev": None,
+                        "horizon_dev": None,
+                        "color_temp": None,
+                        "exposure": None,
+                        "sharpness": None,
+                        "saturation": None,
+                    }
+
+                try:
+                    update_photo_in_db(db, result)
+                    db.commit()
+                except Exception as db_err:
+                    # Final safety: if the DB write itself fails, force
+                    # status=FLAGGED via a minimal direct UPDATE so the
+                    # photo doesn't stay PROCESSING. Worst case we lose
+                    # the rich fix details but the user can act on it.
+                    print(f"update_photo_in_db failed for {photo_id}: {db_err}")
+                    db.rollback()
+                    try:
+                        cursor = db.cursor()
+                        cursor.execute(
+                            """
+                            UPDATE "Photo"
+                            SET status = 'FLAGGED',
+                                "aiNotes" = %s,
+                                "updatedAt" = NOW()
+                            WHERE id = %s AND status = 'PROCESSING'
+                            """,
+                            (
+                                f"Auto-flagged: DB write failed ({str(db_err)[:140]})",
+                                photo_id,
+                            ),
+                        )
+                        cursor.close()
+                        db.commit()
+                    except Exception as final_err:
+                        print(f"Final fallback also failed for {photo_id}: {final_err}")
+                        db.rollback()
 
                 # Atomically check if this is the last photo to finish
                 # If yes, run finalization (consistency check + property status)
