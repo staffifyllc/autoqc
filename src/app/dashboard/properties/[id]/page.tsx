@@ -22,6 +22,7 @@ import { ReactCompareSlider, ReactCompareSliderImage } from "react-compare-slide
 import { PhotoUploader } from "@/components/upload/PhotoUploader";
 import { downloadPhotoZip, downloadFile } from "@/lib/photoZip";
 import { DistractionCategoriesPanel } from "@/components/dashboard/DistractionCategoriesPanel";
+import { toast } from "sonner";
 import { prettyDistractionLabel } from "@/lib/distractionCategories";
 import { TwilightButton } from "@/components/dashboard/TwilightButton";
 import { StagingButton } from "@/components/dashboard/StagingButton";
@@ -228,19 +229,53 @@ export default function PropertyDetailPage({
     }
   };
 
+  const [pushing, setPushing] = useState(false);
   const handlePush = async (platform: string) => {
+    // Previously this function silently swallowed every error path:
+    // no res.ok check, no error toast, no loading state, no success
+    // feedback. From the customer's seat the button looked dead even
+    // when the request fired. TJ Romero filed a NORMAL bug for this
+    // 2026-05-16. Fix: full request lifecycle visible — pushing
+    // state on the button, error toasts for !ok, success toast on
+    // good response.
+    if (pushing) return;
+    setPushing(true);
     try {
-      await fetch("/api/integrations/push", {
+      const res = await fetch("/api/integrations/push", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          propertyId: params.id,
-          platform,
-        }),
+        body: JSON.stringify({ propertyId: params.id, platform }),
       });
-      fetchProperty();
-    } catch (err) {
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+      if (!res.ok) {
+        const msg =
+          data?.error ??
+          data?.message ??
+          `Push failed (HTTP ${res.status}). Try again or email hello@autoqc.io.`;
+        toast.error(msg);
+        return;
+      }
+      const pushedCount =
+        typeof data?.pushedCount === "number" ? data.pushedCount : undefined;
+      toast.success(
+        pushedCount != null
+          ? `Pushed ${pushedCount} photo${pushedCount !== 1 ? "s" : ""} to ${platform}.`
+          : `Pushed to ${platform}.`,
+      );
+      await fetchProperty();
+    } catch (err: any) {
       console.error("Failed to push:", err);
+      toast.error(
+        err?.message ??
+          "Couldn't reach the push endpoint. Check your connection and try again.",
+      );
+    } finally {
+      setPushing(false);
     }
   };
 
@@ -325,10 +360,11 @@ export default function PropertyDetailPage({
             {property.status === "APPROVED" && (
               <button
                 onClick={() => handlePush("ARYEO")}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md accent-bg text-sm font-medium hover:opacity-90 transition glow-sm"
+                disabled={pushing}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md accent-bg text-sm font-medium hover:opacity-90 transition glow-sm disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <Send className="w-3.5 h-3.5" />
-                Push to Platform
+                {pushing ? "Pushing..." : "Push to Platform"}
               </button>
             )}
             {property.photos.length > 0 &&
