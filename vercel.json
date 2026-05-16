@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/stuck-pending-recovery",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/bug-triage",
+      "schedule": "0 12 * * *"
     }
   ]
 }
