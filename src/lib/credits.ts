@@ -39,6 +39,11 @@ export const PAYG_STANDARD_CENTS = 1200; // $12 / standard property
 export const PAYG_PREMIUM_CENTS = 2000; // $20 / premium property
 export const PAYG_PRICE_CENTS = PAYG_STANDARD_CENTS; // backward compat
 
+// Staffify partner flat rate: 50% off the base $10/credit -> $5/credit.
+// Applied automatically when Agency.isStaffifyClient = true and no
+// explicit customCreditPriceCents override is set.
+export const STAFFIFY_CREDIT_PRICE_CENTS = 500;
+
 // Credit costs per property tier
 export const CREDITS_PER_PROPERTY = {
   STANDARD: 1,
@@ -49,25 +54,50 @@ export function creditsForTier(tier: "STANDARD" | "PREMIUM"): number {
   return CREDITS_PER_PROPERTY[tier] || 1;
 }
 
-export function paygPriceForTier(tier: "STANDARD" | "PREMIUM"): number {
-  return tier === "PREMIUM" ? PAYG_PREMIUM_CENTS : PAYG_STANDARD_CENTS;
+export function paygPriceForTier(
+  tier: "STANDARD" | "PREMIUM",
+  isStaffifyClient: boolean = false,
+): number {
+  const base =
+    tier === "PREMIUM" ? PAYG_PREMIUM_CENTS : PAYG_STANDARD_CENTS;
+  // Staffify partners pay half on property processing. Round to whole
+  // cents - 1200 / 2 = 600, 2000 / 2 = 1000, both clean.
+  return isStaffifyClient ? Math.round(base / 2) : base;
+}
+
+// Resolve the effective per-credit price for an agency, in cents. The
+// precedence is:
+//   1. explicit customCreditPriceCents override (negotiated rate)
+//   2. Staffify partner auto-discount ($5/credit)
+//   3. null = no flat rate, fall back to tiered CREDIT_PACKAGES
+export function effectiveCreditPriceCents(
+  customCreditPriceCents: number | null | undefined,
+  isStaffifyClient: boolean | null | undefined,
+): number | null {
+  if (customCreditPriceCents != null) return customCreditPriceCents;
+  if (isStaffifyClient) return STAFFIFY_CREDIT_PRICE_CENTS;
+  return null;
 }
 
 // Per-credit price for a given agency. Null override falls back to the
 // default tier pricing baked into CREDIT_PACKAGES (each pack has its
 // own pricePerCredit derived from priceCents/credits).
 //
-// When an override IS set we ignore the volume-discount curve entirely
-// and price every pack at customCreditPriceCents × credits. This is the
-// "partner rate" shape: pay this much per credit, regardless of pack
-// size, instead of the public-facing tiered discount.
+// When an override IS set (either explicit customCreditPriceCents OR
+// the Staffify partner auto-50%-off flag) we ignore the volume-discount
+// curve entirely and price every pack at the flat per-credit rate.
 export function packagesForAgency(
   customCreditPriceCents: number | null | undefined,
+  isStaffifyClient: boolean | null | undefined = false,
 ): typeof CREDIT_PACKAGES {
-  if (customCreditPriceCents == null) return CREDIT_PACKAGES;
+  const flatRate = effectiveCreditPriceCents(
+    customCreditPriceCents,
+    isStaffifyClient,
+  );
+  if (flatRate == null) return CREDIT_PACKAGES;
   return CREDIT_PACKAGES.map((pkg) => ({
     ...pkg,
-    priceCents: customCreditPriceCents * pkg.credits,
+    priceCents: flatRate * pkg.credits,
     // Savings vs PAYG card-rate (the public discount badge becomes
     // meaningless on a custom flat rate; clear it so we don't show
     // misleading "Save 10%" labels for a partner price).
@@ -87,6 +117,7 @@ export async function checkPaymentCapability(agencyId: string) {
       hasPaymentMethod: true,
       billingMode: true,
       isAdmin: true,
+      isStaffifyClient: true,
     },
   });
 
@@ -96,17 +127,29 @@ export async function checkPaymentCapability(agencyId: string) {
 
   // Admin agencies bypass all payment checks
   if (agency.isAdmin) {
-    return { canProcess: true, method: "admin" as const };
+    return {
+      canProcess: true,
+      method: "admin" as const,
+      isStaffifyClient: agency.isStaffifyClient,
+    };
   }
 
   // Check credits first
   if (agency.creditBalance > 0) {
-    return { canProcess: true, method: "credits" as const };
+    return {
+      canProcess: true,
+      method: "credits" as const,
+      isStaffifyClient: agency.isStaffifyClient,
+    };
   }
 
   // Fall back to PAYG if they have a payment method
   if (agency.hasPaymentMethod) {
-    return { canProcess: true, method: "payg" as const };
+    return {
+      canProcess: true,
+      method: "payg" as const,
+      isStaffifyClient: agency.isStaffifyClient,
+    };
   }
 
   return {
@@ -143,7 +186,13 @@ export async function chargeForProperty(
   });
   const tier = (property?.tier || "STANDARD") as "STANDARD" | "PREMIUM";
   const creditsNeeded = creditsForTier(tier);
-  const paygCents = paygPriceForTier(tier);
+  // Staffify partners get 50% off PAYG on property processing only.
+  // Virtual staging keeps its own creditCost - the discount lives in the
+  // per-credit price, not in how many credits a property burns.
+  const paygCents = paygPriceForTier(
+    tier,
+    Boolean((capability as { isStaffifyClient?: boolean }).isStaffifyClient),
+  );
 
   // Admin accounts: track usage but don't charge
   if (capability.method === "admin") {
@@ -320,13 +369,18 @@ export async function createCreditPurchaseSession(
   // Resolve the package against the agency's effective price list. If
   // the agency has a custom per-credit rate (partner pricing) we use
   // that instead of the public tiered prices so the Stripe Checkout
-  // line item charges the negotiated amount.
+  // line item charges the negotiated amount. Staffify partners get an
+  // auto-50%-off flat rate when no explicit override is set.
   const agencyPricing = await prisma.agency.findUnique({
     where: { id: agencyId },
-    select: { customCreditPriceCents: true },
+    select: {
+      customCreditPriceCents: true,
+      isStaffifyClient: true,
+    },
   });
   const effectivePackages = packagesForAgency(
     agencyPricing?.customCreditPriceCents,
+    agencyPricing?.isStaffifyClient,
   );
   const pkg = effectivePackages.find((p) => p.id === packageId);
   if (!pkg) throw new Error("Invalid package");

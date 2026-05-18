@@ -16,6 +16,7 @@ export async function GET() {
         billingMode: true,
         totalCreditsPurchased: true,
         customCreditPriceCents: true,
+        isStaffifyClient: true,
       },
     });
 
@@ -34,8 +35,14 @@ export async function GET() {
       // play (null otherwise). Page uses this to render the right
       // headline price on the "Credits" summary card.
       customCreditPriceCents: agency?.customCreditPriceCents ?? null,
+      // Staffify partner gets 50% off ($5/credit, $6/property PAYG)
+      // unless they also have a hand-negotiated customCreditPriceCents.
+      isStaffifyClient: agency?.isStaffifyClient ?? false,
       transactions,
-      packages: packagesForAgency(agency?.customCreditPriceCents),
+      packages: packagesForAgency(
+        agency?.customCreditPriceCents,
+        agency?.isStaffifyClient,
+      ),
     });
   } catch (error) {
     return NextResponse.json(

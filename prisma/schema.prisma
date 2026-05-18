@@ -121,6 +121,15 @@ model Agency {
   // affect any other agency; same pattern as stagingCreditCost.
   customCreditPriceCents Int?
 
+  // Staffify partner flag. When true the agency automatically gets
+  // 50% off property processing: $5/credit on every credit pack and
+  // $6/property on pay-as-you-go (vs the public $10/credit and
+  // $12/property). Does NOT discount virtual staging - staging still
+  // charges its normal credit cost. Explicit customCreditPriceCents
+  // always wins (e.g. a Staffify client with a hand-negotiated rate
+  // keeps that rate, not the auto-50%-off).
+  isStaffifyClient Boolean @default(false)
+
 
   // Default tier applied when creating new properties
   defaultTier        PropertyTier @default(STANDARD)

@@ -50,6 +50,10 @@ export default function CreditsPage() {
   const [customCreditPriceCents, setCustomCreditPriceCents] = useState<
     number | null
   >(null);
+  // Staffify partners get auto-50%-off on property processing.
+  // When this is true and there's no explicit customCreditPriceCents,
+  // the page shows the Staffify badge + $5/credit, $6/property pricing.
+  const [isStaffifyClient, setIsStaffifyClient] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -79,6 +83,7 @@ export default function CreditsPage() {
           ? data.customCreditPriceCents
           : null,
       );
+      setIsStaffifyClient(Boolean(data.isStaffifyClient));
     } catch (err) {
       console.error("Failed to fetch credits:", err);
     }
@@ -138,7 +143,9 @@ export default function CreditsPage() {
               {balance > 0
                 ? `Process up to ${balance} propert${balance === 1 ? "y" : "ies"}`
                 : hasPaymentMethod
-                ? "Running on pay-as-you-go at $12/property"
+                ? `Running on pay-as-you-go at ${
+                    isStaffifyClient ? "$6" : "$12"
+                  }/property`
                 : "Buy credits or add a payment method to start processing"}
             </p>
           </div>
@@ -152,7 +159,9 @@ export default function CreditsPage() {
       <motion.div variants={fadeUp} className="grid grid-cols-2 gap-4 mb-8">
         <div className="glass-card p-5 flex items-center gap-4 relative overflow-hidden">
           <div className="absolute top-0 right-0 px-2 py-1 rounded-bl-lg bg-green-500/20 text-green-400 text-xs font-bold">
-            BEST VALUE
+            {isStaffifyClient && customCreditPriceCents == null
+              ? "STAFFIFY 50% OFF"
+              : "BEST VALUE"}
           </div>
           <div className="w-12 h-12 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
             <Coins className="w-6 h-6 text-green-400" />
@@ -162,11 +171,15 @@ export default function CreditsPage() {
             <p className="text-xs text-muted-foreground">
               {customCreditPriceCents != null
                 ? "Partner rate locked in"
+                : isStaffifyClient
+                ? "Staffify partner rate, 50% off"
                 : "Buy upfront, save up to 20%"}
             </p>
             <p className="text-sm font-bold mt-1">
               {customCreditPriceCents != null ? (
                 <>${(customCreditPriceCents / 100).toFixed(0)}/property</>
+              ) : isStaffifyClient ? (
+                <>$5/property</>
               ) : (
                 <>
                   $10/property
@@ -189,7 +202,9 @@ export default function CreditsPage() {
             <p className="text-xs text-muted-foreground">
               Card charged per property
             </p>
-            <p className="text-sm font-bold mt-1">$12/property</p>
+            <p className="text-sm font-bold mt-1">
+              {isStaffifyClient ? "$6/property" : "$12/property"}
+            </p>
           </div>
         </div>
       </motion.div>
@@ -241,7 +256,7 @@ export default function CreditsPage() {
                   {pkg.savingsPct > 0 && (
                     <li className="flex items-center gap-1.5">
                       <Check className="w-3 h-3 text-green-400" />
-                      Save ${((1200 - perCredit * 100) * pkg.credits / 100).toFixed(0)} vs PAYG
+                      Save ${(((isStaffifyClient ? 600 : 1200) - perCredit * 100) * pkg.credits / 100).toFixed(0)} vs PAYG
                     </li>
                   )}
                 </ul>
@@ -280,7 +295,9 @@ export default function CreditsPage() {
               Or add a card for pay-as-you-go
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Charged $12 per property processed. Higher rate but no upfront commitment.
+              {isStaffifyClient
+                ? "Charged $6 per property processed (Staffify partner rate). Higher than credits but no upfront commitment."
+                : "Charged $12 per property processed. Higher rate but no upfront commitment."}
             </p>
           </div>
           <button className="px-4 py-2 rounded-xl glass hover:bg-white/10 text-sm font-medium transition">
