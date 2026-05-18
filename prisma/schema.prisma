@@ -128,7 +128,15 @@ model Agency {
   // charges its normal credit cost. Explicit customCreditPriceCents
   // always wins (e.g. a Staffify client with a hand-negotiated rate
   // keeps that rate, not the auto-50%-off).
+  //
+  // The /api/cron/sync-staffify-clients job mirrors Staffify's
+  // talent-console roster onto this flag (additive AND removing
+  // when a client churns). When Paul manually flips the flag via
+  // the admin picker we set staffifyClientLockedManually = true so
+  // the cron leaves that row alone afterwards.
   isStaffifyClient Boolean @default(false)
+  staffifyClientLockedManually Boolean @default(false)
+  staffifyLastSyncedAt DateTime?
 
 
   // Default tier applied when creating new properties

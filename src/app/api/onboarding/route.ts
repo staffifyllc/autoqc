@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { recordEvent } from "@/lib/events";
+import { autoFlagOnSignup } from "@/lib/staffify/syncFlags";
 
 // POST /api/onboarding - complete the onboarding flow
 // Creates or updates user profile + agency with full business data
@@ -90,6 +91,19 @@ export async function POST(req: NextRequest) {
         },
       });
       agencyId = agency.id;
+
+      // If this signup is from a Staffify client (their email is in the
+      // talent-console roster) auto-flip isStaffifyClient before the
+      // user lands on /dashboard. Non-fatal: a sync error or missing
+      // env just falls back to the next hourly cron run.
+      try {
+        await autoFlagOnSignup({
+          agencyId,
+          ownerEmail: session.user.email || "",
+        });
+      } catch (e) {
+        console.error("[onboarding staffify auto-flag] non-fatal:", e);
+      }
 
       // If this user came in through a ?ref=CODE link, signup recorded
       // a ReferralInvite with signedUpUserId set but no agency yet

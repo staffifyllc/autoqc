@@ -19,6 +19,8 @@ export async function GET() {
         id: true,
         name: true,
         isStaffifyClient: true,
+        staffifyClientLockedManually: true,
+        staffifyLastSyncedAt: true,
         creditBalance: true,
         members: {
           where: { role: "owner" },
@@ -36,6 +38,10 @@ export async function GET() {
       name: a.name,
       email: a.members[0]?.user.email ?? null,
       isStaffifyClient: a.isStaffifyClient,
+      lockedManually: a.staffifyClientLockedManually,
+      lastSyncedAt: a.staffifyLastSyncedAt
+        ? a.staffifyLastSyncedAt.toISOString()
+        : null,
       creditBalance: a.creditBalance,
     }));
 
@@ -81,13 +87,22 @@ export async function POST(req: Request) {
       );
     }
 
+    // Manual flips lock the row so the hourly Staffify sync never
+    // overrides Paul's intent. To re-enable auto-sync on a row, the
+    // admin can pass { unlock: true } separately (handled below) -
+    // for the main toggle path we always set lock = true.
     const updated = await prisma.agency.update({
       where: { id: body.agencyId },
-      data: { isStaffifyClient: body.isStaffify },
+      data: {
+        isStaffifyClient: body.isStaffify,
+        staffifyClientLockedManually: true,
+        staffifyLastSyncedAt: new Date(),
+      },
       select: {
         id: true,
         name: true,
         isStaffifyClient: true,
+        staffifyClientLockedManually: true,
       },
     });
 

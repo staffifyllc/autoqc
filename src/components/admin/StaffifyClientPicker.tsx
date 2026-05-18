@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Search, Sparkles, X as XIcon } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  Lock,
+  RefreshCw,
+  Search,
+  Sparkles,
+  X as XIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 type Row = {
@@ -9,8 +17,22 @@ type Row = {
   name: string;
   email: string | null;
   isStaffifyClient: boolean;
+  lockedManually: boolean;
+  lastSyncedAt: string | null;
   creditBalance: number;
 };
+
+function relTime(iso: string | null): string {
+  if (!iso) return "never";
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
 
 export function StaffifyClientPicker() {
   const [rows, setRows] = useState<Row[]>([]);
@@ -18,29 +40,69 @@ export function StaffifyClientPicker() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Load the full agency list on mount. Cheap - same dataset feeding
   // the admin table next door.
+  const reload = async () => {
+    try {
+      const res = await fetch("/api/admin/staffify-clients");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as { agencies: Row[] };
+      setRows(json.agencies);
+    } catch (err) {
+      toast.error("Failed to load agencies");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const res = await fetch("/api/admin/staffify-clients");
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = (await res.json()) as { agencies: Row[] };
-        if (!cancelled) setRows(json.agencies);
-      } catch (err) {
-        if (!cancelled) toast.error("Failed to load agencies");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const runSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/cron/sync-staffify-clients", {
+        method: "POST",
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        stats?: {
+          staffifyClients: number;
+          added: number;
+          removed: number;
+          unchanged: number;
+          manualLocks: number;
+          configured: boolean;
+        };
+        error?: string;
+      };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      const s = data.stats!;
+      if (!s.configured) {
+        toast.error("Staffify sync not configured (Supabase env missing)");
+      } else if (s.added === 0 && s.removed === 0) {
+        toast.success(
+          `Already in sync. ${s.staffifyClients} Staffify clients, ${s.manualLocks} manual locks.`,
+        );
+      } else {
+        toast.success(
+          `Synced. +${s.added} flagged, -${s.removed} unflagged. ${s.manualLocks} manual locks left alone.`,
+        );
+      }
+      await reload();
+    } catch (e) {
+      toast.error("Sync failed: " + (e as Error).message);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Close the dropdown when the user clicks outside of it.
   useEffect(() => {
@@ -76,9 +138,13 @@ export function StaffifyClientPicker() {
     const desired = !row.isStaffifyClient;
     setSavingId(row.id);
     // Optimistic flip so the checkbox doesn't lag behind the click.
+    // We also flag it as manually-locked on the client - manual flips
+    // tell the hourly Staffify sync "leave me alone."
     setRows((prev) =>
       prev.map((r) =>
-        r.id === row.id ? { ...r, isStaffifyClient: desired } : r,
+        r.id === row.id
+          ? { ...r, isStaffifyClient: desired, lockedManually: true }
+          : r,
       ),
     );
     try {
@@ -106,6 +172,17 @@ export function StaffifyClientPicker() {
     }
   };
 
+  // Newest sync timestamp across all rows. "(never)" until the first
+  // sync run hits this row OR Paul manually toggles it.
+  const lastSyncIso = useMemo(() => {
+    let newest: string | null = null;
+    for (const r of rows) {
+      if (!r.lastSyncedAt) continue;
+      if (!newest || r.lastSyncedAt > newest) newest = r.lastSyncedAt;
+    }
+    return newest;
+  }, [rows]);
+
   return (
     <div className="panel p-5">
       <div className="flex items-start justify-between mb-3 gap-4">
@@ -117,13 +194,32 @@ export function StaffifyClientPicker() {
             Mark agencies as Staffify clients
           </h2>
           <p className="text-[12px] text-muted-foreground mt-0.5">
-            Flagged agencies automatically pay $5/credit and $6/property
-            (50% off). Toggle as many as you like from the dropdown.
+            Auto-synced hourly from the Staffify talent-console roster.
+            Manual toggles below lock the row so the sync leaves it alone.
+            Flagged agencies pay $5/credit and $6/property (50% off).
           </p>
         </div>
-        <span className="text-[11px] font-mono uppercase tracking-wider text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5 whitespace-nowrap">
-          {flagged.length} flagged
-        </span>
+        <div className="flex flex-col items-end gap-1.5 whitespace-nowrap">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5">
+            {flagged.length} flagged
+          </span>
+          <button
+            type="button"
+            onClick={runSync}
+            disabled={syncing}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[hsl(var(--surface-1))] border border-border hover:border-white/20 text-[11px] font-mono uppercase tracking-wider disabled:opacity-50 transition-colors"
+            title="Pull latest from Staffify talent console"
+          >
+            <RefreshCw
+              className={`w-3 h-3 ${syncing ? "animate-spin" : ""}`}
+              strokeWidth={2}
+            />
+            {syncing ? "Syncing" : "Sync now"}
+          </button>
+          <span className="text-[10px] font-mono text-muted-foreground">
+            last: {relTime(lastSyncIso)}
+          </span>
+        </div>
       </div>
 
       {/* Currently-flagged chips. Click X to unflag inline. */}
@@ -230,8 +326,15 @@ export function StaffifyClientPicker() {
                       )}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium truncate">
-                        {r.name}
+                      <p className="text-[13px] font-medium truncate flex items-center gap-1.5">
+                        <span className="truncate">{r.name}</span>
+                        {r.lockedManually && (
+                          <Lock
+                            className="w-3 h-3 text-amber-300 flex-shrink-0"
+                            strokeWidth={2.25}
+                            aria-label="Manually locked - auto-sync will leave this row alone"
+                          />
+                        )}
                       </p>
                       <p className="text-[11px] font-mono text-muted-foreground truncate">
                         {r.email || "(no owner email)"}
