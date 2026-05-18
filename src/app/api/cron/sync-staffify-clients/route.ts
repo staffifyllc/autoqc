@@ -34,10 +34,15 @@ async function isAdminCaller(): Promise<boolean> {
 export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization") ?? "";
   const expected = process.env.CRON_SECRET;
-  const cronAuthed = Boolean(expected) && auth === `Bearer ${expected}`;
-  const adminAuthed = !cronAuthed && (await isAdminCaller());
-  if (!cronAuthed && !adminAuthed) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  // Match the bug-triage / stuck-pending convention: when CRON_SECRET
+  // is not set, allow any caller (Vercel's cron platform invokes it
+  // directly from inside the deployment). When the secret IS set, the
+  // bearer must match. Admin session cookie path is also accepted.
+  if (expected && auth !== `Bearer ${expected}`) {
+    const adminAuthed = await isAdminCaller();
+    if (!adminAuthed) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
   }
 
   const url = new URL(req.url);
