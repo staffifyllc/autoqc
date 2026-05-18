@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/next";
 import { AuthProvider } from "@/components/providers/SessionProvider";
 import { JsonLd } from "@/components/JsonLd";
+import { AnnouncementBar } from "@/components/AnnouncementBar";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -101,6 +102,7 @@ export default function RootLayout({
     >
       <body className={`${inter.className} font-sans`}>
         <JsonLd />
+        <AnnouncementBar />
         <AuthProvider>{children}</AuthProvider>
         <Analytics />
         <Toaster
