@@ -12,6 +12,7 @@ import {
   Clock,
   ShieldAlert,
 } from "lucide-react";
+import { StaffifyClientPicker } from "@/components/admin/StaffifyClientPicker";
 
 type Row = {
   id: string;
@@ -202,6 +203,9 @@ export default function AdminUsagePage() {
           sub={`${s.creditsPurchased} credits purchased`}
         />
       </div>
+
+      {/* Staffify-partner picker */}
+      <StaffifyClientPicker />
 
       {/* Agencies table */}
       <div className="panel overflow-hidden">
