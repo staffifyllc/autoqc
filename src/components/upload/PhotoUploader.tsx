@@ -108,6 +108,13 @@ export function PhotoUploader({
       "image/webp": [".webp"],
     },
     maxSize: 50 * 1024 * 1024,
+    // react-dropzone v14 enables the File System Access API by default.
+    // That breaks drag-and-drop silently in some Chrome configurations -
+    // the customer drags photos in and nothing happens, only the click
+    // -> file picker route works. Falling back to the classic input
+    // listener makes drag-drop reliable across Chrome / Safari / Edge
+    // / Firefox. Reported by TJ Romero at Architectural Storytelling.
+    useFsAccessApi: false,
   });
 
   const startUploadJob = () => {

@@ -729,7 +729,20 @@ export default function PropertyDetailPage({
           (a, b) => a + b,
           0
         );
-        if (totalFixes === 0 && blurredCount === 0) return null;
+
+        // Photos that went through QC, passed, and required no edits.
+        // Surfacing this explicitly stops customers from thinking the
+        // QC engine "did nothing" - it inspected the photo and chose
+        // to leave it alone because nothing needed adjustment. TJ at
+        // Architectural Storytelling reported confusion about this.
+        const cleanCount = property.photos.filter(
+          (p: Photo) =>
+            (p.status === "PASSED" || p.status === "APPROVED") &&
+            (!p.fixesApplied || p.fixesApplied.length === 0)
+        ).length;
+
+        if (totalFixes === 0 && blurredCount === 0 && cleanCount === 0)
+          return null;
 
         return (
           <motion.div variants={fadeUp} className="panel hairline-top p-5 mb-5">
@@ -745,6 +758,7 @@ export default function PropertyDetailPage({
                 }{" "}
                 photos
                 {blurredCount > 0 ? ` · ${blurredCount} blurred` : ""}
+                {cleanCount > 0 ? ` · ${cleanCount} clean` : ""}
               </span>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -761,6 +775,19 @@ export default function PropertyDetailPage({
                   </span>
                 </div>
               ))}
+              {cleanCount > 0 && (
+                <div
+                  className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded border border-emerald-500/25 bg-emerald-500/5"
+                  title="QC ran on these and chose to leave them alone because nothing needed adjustment"
+                >
+                  <span className="font-mono stat-num text-xs font-semibold text-emerald-300">
+                    {cleanCount}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    passed inspection, no edits needed
+                  </span>
+                </div>
+              )}
             </div>
           </motion.div>
         );
@@ -1505,8 +1532,12 @@ export default function PropertyDetailPage({
                     </div>
                   )}
 
-                {/* Fixes applied */}
-                {selectedPhoto.fixesApplied?.length > 0 && (
+                {/* Fixes applied. When zero fixes ran on a passing photo,
+                    surface that explicitly so customers don't think QC
+                    skipped it - they did, intentionally, because nothing
+                    needed adjustment. Customers reported the absence of
+                    feedback here made them think the export was broken. */}
+                {selectedPhoto.fixesApplied?.length > 0 ? (
                   <div>
                     <h4 className="text-sm font-medium mb-3">
                       Auto-Fixes Applied
@@ -1523,7 +1554,27 @@ export default function PropertyDetailPage({
                       ))}
                     </div>
                   </div>
-                )}
+                ) : (selectedPhoto.status === "PASSED" ||
+                    selectedPhoto.status === "APPROVED") ? (
+                  <div>
+                    <h4 className="text-sm font-medium mb-3">
+                      QC Decision
+                    </h4>
+                    <div className="flex items-start gap-2 py-2.5 px-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs text-emerald-200 font-medium">
+                          Passed inspection. No edits needed.
+                        </p>
+                        <p className="text-[11px] text-emerald-200/70 mt-0.5">
+                          Verticals, color, exposure, and composition were
+                          all within tolerance. Export matches the original
+                          because the original was already clean.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
                 {/* AI Notes */}
                 {selectedPhoto.aiNotes && (
