@@ -35,7 +35,7 @@ export async function PATCH(
 
     const update: Prisma.BugReportUpdateInput = {};
     if (body.status !== undefined) {
-      if (!["NEW", "TRIAGED", "IN_PROGRESS", "FIXED", "WONT_FIX"].includes(body.status)) {
+      if (!["NEW", "TRIAGED", "IN_PROGRESS", "FIXED", "WONT_FIX", "ARCHIVED"].includes(body.status)) {
         return NextResponse.json({ error: "Invalid status" }, { status: 400 });
       }
       update.status = body.status as BugStatus;

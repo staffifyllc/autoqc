@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   MessageSquarePlus,
   ThumbsUp,
+  Archive,
 } from "lucide-react";
 
 type Reporter = { id: string; name: string | null; email: string } | null;
@@ -23,7 +24,7 @@ type BugReport = {
   title: string;
   description: string;
   severity: "MINOR" | "NORMAL" | "CRITICAL";
-  status: "NEW" | "TRIAGED" | "IN_PROGRESS" | "FIXED" | "WONT_FIX";
+  status: "NEW" | "TRIAGED" | "IN_PROGRESS" | "FIXED" | "WONT_FIX" | "ARCHIVED";
   screenshotKey: string | null;
   pageUrl: string | null;
   prUrl: string | null;
@@ -35,7 +36,7 @@ type BugReport = {
 
 type Filter = "ALL" | FeedbackType;
 
-const STATUSES = ["NEW", "TRIAGED", "IN_PROGRESS", "FIXED", "WONT_FIX"] as const;
+const STATUSES = ["NEW", "TRIAGED", "IN_PROGRESS", "FIXED", "WONT_FIX", "ARCHIVED"] as const;
 
 const SEVERITY_COLOR: Record<BugReport["severity"], string> = {
   CRITICAL: "bg-red-500/20 border-red-500/40 text-red-200",
@@ -49,6 +50,7 @@ const STATUS_COLOR: Record<BugReport["status"], string> = {
   IN_PROGRESS: "bg-blue-500/10 border-blue-500/30 text-blue-200",
   FIXED: "bg-green-500/10 border-green-500/30 text-green-200",
   WONT_FIX: "bg-white/5 border-white/10 text-muted-foreground",
+  ARCHIVED: "bg-white/3 border-white/10 text-muted-foreground/60",
 };
 
 export default function AdminBugsPage() {
@@ -58,6 +60,9 @@ export default function AdminBugsPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("ALL");
+  // ARCHIVED bugs are hidden by default - the board should show what's
+  // actionable. Toggle this to see the historical archive.
+  const [showArchived, setShowArchived] = useState(false);
 
   const load = async () => {
     try {
@@ -77,10 +82,16 @@ export default function AdminBugsPage() {
     load();
   }, []);
 
+  // Visible set: type filter + archive toggle. Counts on the filter pills
+  // reflect the visible set so they match what the user sees.
+  const visibleBugs = showArchived
+    ? bugs
+    : bugs.filter((b) => b.status !== "ARCHIVED");
   const filteredBugs =
-    filter === "ALL" ? bugs : bugs.filter((b) => b.type === filter);
-  const bugCount = bugs.filter((b) => b.type === "BUG").length;
-  const featureCount = bugs.filter((b) => b.type === "FEATURE_REQUEST").length;
+    filter === "ALL" ? visibleBugs : visibleBugs.filter((b) => b.type === filter);
+  const bugCount = visibleBugs.filter((b) => b.type === "BUG").length;
+  const featureCount = visibleBugs.filter((b) => b.type === "FEATURE_REQUEST").length;
+  const archivedCount = bugs.filter((b) => b.status === "ARCHIVED").length;
 
   const update = async (id: string, patch: Partial<BugReport>) => {
     setSaving(id);
@@ -116,7 +127,7 @@ export default function AdminBugsPage() {
 
   const newCount = filteredBugs.filter((b) => b.status === "NEW").length;
   const openCount = filteredBugs.filter(
-    (b) => !["FIXED", "WONT_FIX"].includes(b.status)
+    (b) => !["FIXED", "WONT_FIX", "ARCHIVED"].includes(b.status)
   ).length;
 
   return (
@@ -131,12 +142,29 @@ export default function AdminBugsPage() {
             {newCount} new &middot; {openCount} open &middot; {filteredBugs.length} shown
           </p>
         </div>
-        <button
-          onClick={load}
-          className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {archivedCount > 0 && (
+            <button
+              onClick={() => setShowArchived((v) => !v)}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition flex items-center gap-1.5 ${
+                showArchived
+                  ? "bg-white/10 border-white/20 text-foreground"
+                  : "bg-white/5 border-white/10 text-muted-foreground hover:bg-white/10"
+              }`}
+              title="Toggle archived items visibility"
+            >
+              <Archive className="w-3 h-3" />
+              {showArchived ? "Hide" : "Show"} archived
+              <span className="opacity-60">{archivedCount}</span>
+            </button>
+          )}
+          <button
+            onClick={load}
+            className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Filter pills */}
@@ -357,18 +385,45 @@ export default function AdminBugsPage() {
                             : "Mark fixed (notify reporter)"}
                         </button>
                       )}
-                      {bug.status !== "WONT_FIX" && bug.status !== "FIXED" && (
+                      {bug.status !== "WONT_FIX" &&
+                        bug.status !== "FIXED" &&
+                        bug.status !== "ARCHIVED" && (
+                          <button
+                            onClick={() =>
+                              update(bug.id, { status: "WONT_FIX" } as any)
+                            }
+                            disabled={saving === bug.id}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition flex items-center gap-1.5 disabled:opacity-50"
+                          >
+                            <XCircle className="w-3 h-3" />
+                            {bug.type === "FEATURE_REQUEST"
+                              ? "Deny (notify reporter)"
+                              : "Won't fix"}
+                          </button>
+                        )}
+                      {(bug.status === "FIXED" || bug.status === "WONT_FIX") && (
                         <button
                           onClick={() =>
-                            update(bug.id, { status: "WONT_FIX" } as any)
+                            update(bug.id, { status: "ARCHIVED" } as any)
                           }
                           disabled={saving === bug.id}
-                          className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition flex items-center gap-1.5 disabled:opacity-50"
+                          className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-muted-foreground hover:bg-white/10 transition flex items-center gap-1.5 disabled:opacity-50"
+                          title="Hide from the default board. Toggle 'Show archived' to find it again."
                         >
-                          <XCircle className="w-3 h-3" />
-                          {bug.type === "FEATURE_REQUEST"
-                            ? "Deny (notify reporter)"
-                            : "Won't fix"}
+                          <Archive className="w-3 h-3" />
+                          Archive
+                        </button>
+                      )}
+                      {bug.status === "ARCHIVED" && (
+                        <button
+                          onClick={() =>
+                            update(bug.id, { status: "FIXED" } as any)
+                          }
+                          disabled={saving === bug.id}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-muted-foreground hover:bg-white/10 transition flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          <Archive className="w-3 h-3" />
+                          Unarchive
                         </button>
                       )}
                     </div>

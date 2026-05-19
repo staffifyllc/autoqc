@@ -631,4 +631,5 @@ enum BugStatus {
   IN_PROGRESS
   FIXED
   WONT_FIX
+  ARCHIVED
 }
