@@ -17,6 +17,12 @@ const KEY = process.env.STAFFIFY_SUPABASE_SERVICE_KEY ?? "";
 
 const DISCOVERY_STAGE_ID = "discovery";
 
+// Internal Staffify / Flylisted addresses sometimes show up in the
+// talent-console roster (we use Staffify ourselves). They're the same
+// company, not "clients getting 50% off" - exclude them so the sync
+// never flags Paul's own internal AutoQC agencies as Staffify partners.
+const INTERNAL_DOMAINS = new Set(["gostaffify.com", "flylisted.com"]);
+
 let _client: SupabaseClient | null = null;
 
 function admin(): SupabaseClient | null {
@@ -75,6 +81,8 @@ export async function fetchActiveStaffifyClientEmails(): Promise<{
       .trim()
       .toLowerCase();
     if (!email) continue;
+    const domain = email.split("@")[1] ?? "";
+    if (INTERNAL_DOMAINS.has(domain)) continue;
     const business =
       row.business_name_override ?? row.business_name ?? null;
     // First occurrence wins for dedup. Talent console roster shouldn't
