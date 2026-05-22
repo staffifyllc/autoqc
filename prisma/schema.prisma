@@ -633,3 +633,16 @@ enum BugStatus {
   WONT_FIX
   ARCHIVED
 }
+
+// Hard suppression list: any email here is skipped by EVERY future
+// outbound blast / ad-hoc send. Populated from explicit reply-STOP
+// requests AND from in-product opt-outs. Independent of User.marketingOptIn
+// because most blast recipients are not AutoQC users yet (Staffify roster,
+// cold lists, etc.) - we still need to honor their opt-out.
+model EmailSuppression {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  reason    String?  // free-form: "replied STOP", "manual", "bounce", etc.
+  source    String?  // which campaign / context the unsub came from
+  createdAt DateTime @default(now())
+}
