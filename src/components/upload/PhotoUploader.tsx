@@ -180,35 +180,18 @@ export function PhotoUploader({
   const startUploadJob = () => {
     if (files.length === 0) return;
 
-    // In HDR mode we only upload files that belong to a true bracket
-    // set (2+ frames). Singleton RAWs would fail downstream because
-    // cv2.imread can't decode ARW directly. Filter them out and warn
-    // the agent if any were dropped.
-    let filesToUpload = files;
+    // HDR mode sends EVERY detected group through the API, including
+    // singletons. The Lambda routes:
+    //   len >= 2 → Mertens fuse
+    //   len == 1 → rawpy decode (drone hero shots, dropped frames)
+    // So no client-side filtering is needed; the server decides what
+    // to do with each bracket set.
     let bracketPayload:
       | { sceneName: string; files: string[]; thumbnailFile: string }[]
       | undefined;
 
-    if (hdrMode && brackets) {
-      const multiBracket = brackets.filter((b) => b.files.length >= 2);
-      const droppedSingletons = brackets.filter((b) => b.files.length === 1);
-      if (droppedSingletons.length > 0) {
-        const names = droppedSingletons.map((b) => b.files[0].name);
-        setRejections((prev) => [
-          ...prev,
-          ...names.map((n) => ({
-            fileName: n,
-            reason:
-              "No matching bracket partners found within the time window. Switch HDR off to upload solo frames.",
-          })),
-        ]);
-      }
-      if (multiBracket.length === 0) return;
-      const allowedFileNames = new Set(
-        multiBracket.flatMap((b) => b.files.map((f) => f.name))
-      );
-      filesToUpload = files.filter((f) => allowedFileNames.has(f.name));
-      bracketPayload = multiBracket.map((b) => ({
+    if (hdrMode && brackets && brackets.length > 0) {
+      bracketPayload = brackets.map((b) => ({
         sceneName: b.sceneName,
         files: b.files.map((f) => f.name),
         thumbnailFile: b.thumbnail.name,
@@ -218,7 +201,7 @@ export function PhotoUploader({
     const jobId = startUpload(
       propertyId,
       propertyAddress,
-      filesToUpload,
+      files,
       bracketPayload
     );
     setCurrentJobId(jobId);
@@ -328,7 +311,8 @@ export function PhotoUploader({
                 <>
                   {bracketSceneCount > 0 ? " " : ""}
                   {bracketSingles} single frame
-                  {bracketSingles === 1 ? "" : "s"} will upload without merging.
+                  {bracketSingles === 1 ? "" : "s"} will be RAW-decoded
+                  individually and edited (no merge).
                 </>
               )}
             </p>

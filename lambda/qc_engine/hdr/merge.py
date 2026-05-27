@@ -189,3 +189,38 @@ def merge_brackets_from_s3(
                 os.unlink(p)
             except OSError:
                 pass
+
+
+def decode_single_raw_from_s3(
+    s3_client,
+    bucket: str,
+    raw_key: str,
+) -> tuple[Optional[str], dict]:
+    """
+    Single-frame RAW path: pull one RAW from S3, demosaic via rawpy,
+    write to a JPEG temp file. Used when a Photo has bracketKeys with
+    a single entry (drone hero shots, missed brackets, etc.) so the
+    standard composition + smart_editor pipeline can still process it.
+
+    Returns (path_to_decoded_jpeg, metadata_dict) or (None, {"error":...}).
+    """
+    ext = "." + raw_key.split(".")[-1].lower()
+    raw_tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+    try:
+        s3_client.download_file(bucket, raw_key, raw_tmp.name)
+        raw_tmp.close()
+        arr = _decode_raw(raw_tmp.name)
+        if arr is None:
+            return None, {"error": f"rawpy could not decode {raw_key}"}
+        out = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+        cv2.imwrite(out.name, arr, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        out.close()
+        return out.name, {
+            "frame_count": 1,
+            "operations": ["RAW decoded (single frame, no merge)"],
+        }
+    finally:
+        try:
+            os.unlink(raw_tmp.name)
+        except OSError:
+            pass

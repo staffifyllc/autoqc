@@ -37,7 +37,7 @@ from fixes.blur_personal import apply_privacy_blur
 from fixes.apply_actions import apply_recommended_actions
 from fixes.remove_distractions import remove_distractions
 
-from hdr.merge import merge_brackets_from_s3
+from hdr.merge import merge_brackets_from_s3, decode_single_raw_from_s3
 
 s3 = boto3.client("s3")
 BUCKET = os.environ["AWS_S3_BUCKET"]
@@ -793,12 +793,15 @@ def handler(event, context):
                     print(f"Photo {photo_id} not found, skipping")
                     continue
 
-                # HDR bracket merge runs BEFORE the standard pipeline.
-                # When bracketKeys is non-empty, pull all brackets from S3,
-                # fuse with Mertens, and hand the merged JPEG to
-                # process_photo via pre_processed_local_path. Everything
-                # downstream (composition vision, smart_editor, fixes)
-                # then runs unchanged on the merged frame.
+                # HDR / RAW pre-processing runs BEFORE the standard pipeline.
+                # Three cases depending on Photo.bracketKeys:
+                #   len >= 2: Mertens-fuse the brackets into one JPEG.
+                #   len == 1: decode the single RAW via rawpy (drone
+                #             hero shots, dropped frames, mixed shoots).
+                #   empty:    fall through to the standard JPEG path.
+                # In the first two cases we hand a JPEG to process_photo
+                # via pre_processed_local_path so the existing
+                # composition + smart_editor stack runs unchanged.
                 hdr_local_path: str | None = None
                 hdr_meta: dict = {}
                 bracket_keys = row[2] or []
@@ -812,6 +815,15 @@ def handler(event, context):
                     if hdr_local_path is None:
                         print(
                             f"HDR merge failed for {photo_id}: {hdr_meta.get('error')}"
+                        )
+                elif bracket_keys and len(bracket_keys) == 1:
+                    print(f"Single RAW decode: photo={photo_id}")
+                    hdr_local_path, hdr_meta = decode_single_raw_from_s3(
+                        s3, BUCKET, bracket_keys[0]
+                    )
+                    if hdr_local_path is None:
+                        print(
+                            f"Single RAW decode failed for {photo_id}: {hdr_meta.get('error')}"
                         )
 
                 # ----- HARD SAFETY NET -----
