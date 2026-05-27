@@ -343,6 +343,13 @@ model Property {
   // eligible rooms once classification completes.
   isStandaloneStaging Boolean @default(false)
 
+  // True for HDR bracket-merge shoots created from /dashboard/hdr.
+  // Lives separately from the standard Properties list so agencies
+  // using both flows (or only HDR, like Flylisted) get a clean section
+  // dedicated to the auto-editing workflow. Photos still go through
+  // the same Lambda pipeline; the routing is purely UI.
+  hdrMode Boolean @default(false)
+
   // AutoHDR-via-Dropbox ingest tracking. When a property is auto-created
   // by the Dropbox watcher we record the source folder path and the
   // integration id here. After QC finishes we use these to push the

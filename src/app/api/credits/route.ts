@@ -17,6 +17,7 @@ export async function GET() {
         totalCreditsPurchased: true,
         customCreditPriceCents: true,
         isStaffifyClient: true,
+        hdrMergeEnabled: true,
       },
     });
 
@@ -38,6 +39,10 @@ export async function GET() {
       // Staffify partner gets 50% off ($5/credit, $6/property PAYG)
       // unless they also have a hand-negotiated customCreditPriceCents.
       isStaffifyClient: agency?.isStaffifyClient ?? false,
+      // Surfaces to the dashboard sidebar so the "Auto-Edit (HDR)"
+      // nav item shows up only for agencies with the flag flipped
+      // (currently Flylisted only).
+      hdrMergeEnabled: agency?.hdrMergeEnabled ?? false,
       transactions,
       packages: packagesForAgency(
         agency?.customCreditPriceCents,

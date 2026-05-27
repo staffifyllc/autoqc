@@ -26,6 +26,7 @@ import {
   Menu,
   X as XIcon,
   Activity,
+  Layers,
 } from "lucide-react";
 import { UploadStatusPanel } from "@/components/upload/UploadStatusPanel";
 import { BugReportWidget } from "@/components/dashboard/BugReportWidget";
@@ -85,6 +86,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [credits, setCredits] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [hdrEnabled, setHdrEnabled] = useState(false);
   const [hasUnseenUpdates, setHasUnseenUpdates] = useState(false);
   // Mobile drawer state. Sidebar is always visible on md+; on smaller
   // viewports it slides in from the left when the hamburger is tapped.
@@ -101,7 +103,10 @@ export default function DashboardLayout({
   useEffect(() => {
     fetch("/api/credits")
       .then((r) => r.json())
-      .then((d) => setCredits(typeof d.balance === "number" ? d.balance : 0))
+      .then((d) => {
+        setCredits(typeof d.balance === "number" ? d.balance : 0);
+        setHdrEnabled(Boolean(d.hdrMergeEnabled));
+      })
       .catch(() => setCredits(0));
     // Ping the admin endpoint. 200 => admin. 403 => not.
     fetch("/api/admin/usage")
@@ -123,9 +128,28 @@ export default function DashboardLayout({
     return () => window.removeEventListener("autoqc:updates-seen", check);
   }, [latestUpdateVersion, pathname]);
 
+  // Inject the Auto-Edit (HDR) entry into the Workspace section for
+  // agencies that have hdrMergeEnabled. Sits next to Properties so
+  // the two flows live side-by-side without burying the new one.
+  const workspaceSections = hdrEnabled
+    ? navSections.map((s) =>
+        s.label === "Workspace"
+          ? {
+              ...s,
+              items: [
+                s.items[0], // Overview
+                s.items[1], // Properties
+                { href: "/dashboard/hdr", label: "Auto-Edit (HDR)", icon: Layers },
+                ...s.items.slice(2),
+              ],
+            }
+          : s
+      )
+    : navSections;
+
   const sections = isAdmin
     ? [
-        ...navSections,
+        ...workspaceSections,
         {
           label: "Admin",
           items: [
@@ -137,7 +161,7 @@ export default function DashboardLayout({
           ],
         },
       ]
-    : navSections;
+    : workspaceSections;
 
   return (
     <div className="min-h-screen bg-background flex relative">

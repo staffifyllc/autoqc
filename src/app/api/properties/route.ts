@@ -9,13 +9,27 @@ import {
 import { recordFirstEvent } from "@/lib/events";
 
 // GET /api/properties - list properties for agency
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await requireAgency();
+    const url = new URL(req.url);
+    // Filter accepts: "hdr" (only HDR auto-edit shoots), "standard"
+    // (only non-HDR), or omitted (everything non-HDR — the original
+    // /dashboard/properties view, which keeps HDR shoots out of the
+    // standard QC list).
+    const filter = url.searchParams.get("filter");
+    const hdrWhere =
+      filter === "hdr"
+        ? { hdrMode: true }
+        : { hdrMode: false };
 
     const properties = await prisma.property.findMany({
       // Exclude staging-only sessions; they live under their own tab.
-      where: { agencyId: session.user.agencyId, isStandaloneStaging: false },
+      where: {
+        agencyId: session.user.agencyId,
+        isStandaloneStaging: false,
+        ...hdrWhere,
+      },
       include: {
         client: { select: { clientName: true } },
         _count: { select: { photos: true } },
@@ -70,7 +84,8 @@ export async function POST(req: NextRequest) {
   try {
     const session = await requireAgency();
     const body = await req.json();
-    const { address, clientProfileId, tier, distractionCategories } = body;
+    const { address, clientProfileId, tier, distractionCategories, hdrMode } =
+      body;
 
     if (!address) {
       return NextResponse.json(
@@ -83,8 +98,24 @@ export async function POST(req: NextRequest) {
     let propertyTier: "STANDARD" | "PREMIUM" = "STANDARD";
     const agency = await prisma.agency.findUnique({
       where: { id: session.user.agencyId! },
-      select: { defaultTier: true, distractionCategoriesDefault: true },
+      select: {
+        defaultTier: true,
+        distractionCategoriesDefault: true,
+        hdrMergeEnabled: true,
+      },
     });
+
+    // Reject HDR requests from agencies that aren't flagged on. Belt
+    // and suspenders: the UI only shows the HDR section when the flag
+    // is on, but the API should hold the line in case the request is
+    // crafted by hand.
+    const wantsHdr = hdrMode === true;
+    if (wantsHdr && !agency?.hdrMergeEnabled) {
+      return NextResponse.json(
+        { error: "HDR mode is not enabled for this agency" },
+        { status: 403 }
+      );
+    }
 
     if (tier === "PREMIUM" || tier === "STANDARD") {
       propertyTier = tier;
@@ -115,6 +146,7 @@ export async function POST(req: NextRequest) {
         clientProfileId: clientProfileId || null,
         tier: propertyTier,
         distractionCategories: finalDistractionCategories,
+        hdrMode: wantsHdr,
       },
     });
 
