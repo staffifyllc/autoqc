@@ -22,9 +22,6 @@ import numpy as np
 import psycopg2
 
 from checks.color import estimate_color_temperature
-from checks.verticals import check_verticals
-from checks.sharpness import check_sharpness
-from checks.exposure import check_exposure
 from hdr.style_transfer import compute_lab_percentiles, aggregate_profile
 
 s3 = boto3.client("s3")
@@ -40,47 +37,47 @@ def download_photo(s3_key: str) -> str:
 
 
 def analyze_reference_photo(image_path: str) -> dict:
-    """Extract style parameters from a single reference photo."""
-    img = cv2.imread(image_path)
-    if img is None:
+    """
+    Extract style parameters from a single reference photo.
+
+    Style-transfer track: LAB percentiles + cheap whole-image stats.
+    Verticals / sharpness / exposure (the slow per-pixel Hough +
+    Laplacian work) is intentionally skipped here. Those are QC
+    tolerances, not style targets, and their cost (~3-5s per photo)
+    made the learner time out on 200+ refs. If we ever want those
+    tolerances learned we can add a separate "deep" mode.
+    """
+    try:
+        img = cv2.imread(image_path)
+        if img is None:
+            return {}
+
+        # Color temperature (vectorized; fast)
+        color_temp = estimate_color_temperature(img)
+
+        # Saturation (single HSV convert, mean)
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        saturation = float(np.mean(hsv[:, :, 1]) / 255 * 100)
+
+        # Contrast (single luminance convert, std)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        contrast = float(np.std(gray))
+
+        # LAB percentile snapshot — the actual style-transfer target.
+        # 99 percentiles per channel x 3 channels = 297 floats.
+        lab_percentiles = compute_lab_percentiles(img)
+
+        return {
+            "color_temp": color_temp,
+            "saturation": saturation,
+            "contrast": contrast,
+            "lab_percentiles": lab_percentiles,
+        }
+    except Exception as e:
+        # Never let one bad photo poison the whole learn run. Skip and
+        # log; aggregate over whatever ended up valid.
+        print(f"analyze_reference_photo({image_path}) failed: {e}")
         return {}
-
-    # Color temperature
-    color_temp = estimate_color_temperature(img)
-
-    # Saturation
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    saturation = float(np.mean(hsv[:, :, 1]) / 255 * 100)
-
-    # Contrast (standard deviation of luminance)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    contrast = float(np.std(gray))
-
-    # Exposure
-    exp_result = check_exposure(image_path)
-    exposure = exp_result["exposure"]
-
-    # Sharpness
-    sharp_result = check_sharpness(image_path)
-    sharpness = sharp_result["sharpness"]
-
-    # Vertical precision
-    vert_result = check_verticals(image_path)
-    vertical_dev = vert_result["deviation"]
-
-    # LAB percentile snapshot for histogram-match style transfer.
-    # 99 percentiles per channel x 3 channels = 297 floats; tiny.
-    lab_percentiles = compute_lab_percentiles(img)
-
-    return {
-        "color_temp": color_temp,
-        "saturation": saturation,
-        "contrast": contrast,
-        "exposure": exposure,
-        "sharpness": sharpness,
-        "vertical_dev": vertical_dev,
-        "lab_percentiles": lab_percentiles,
-    }
 
 
 def learn_profile(profile_id: str, reference_keys: list) -> dict:
@@ -120,13 +117,6 @@ def learn_profile(profile_id: str, reference_keys: list) -> dict:
     ct_avg, ct_min, ct_max, ct_std = stat("color_temp")
     sat_avg, sat_min, sat_max, sat_std = stat("saturation")
     con_avg, con_min, con_max, con_std = stat("contrast")
-    exp_avg, exp_min, exp_max, exp_std = stat("exposure")
-    sharp_avg, _, _, _ = stat("sharpness")
-    vert_avg, _, vert_max, _ = stat("vertical_dev")
-
-    # Set tolerances based on the std dev of reference photos
-    # (wider variance in references = more tolerant QC)
-    vertical_tolerance = max(vert_max or 1.0, 0.5)
 
     # Aggregate LAB percentiles into a single target distribution.
     # This is the histogram-match target that style_transfer.py
@@ -135,6 +125,11 @@ def learn_profile(profile_id: str, reference_keys: list) -> dict:
         p.get("lab_percentiles") for p in all_params if p.get("lab_percentiles")
     ]
     style_histogram = aggregate_profile(lab_percentile_dicts)
+    print(
+        f"learn_profile: {len(all_params)} params, "
+        f"{len(lab_percentile_dicts)} with lab_percentiles, "
+        f"histogram keys: {list(style_histogram.keys()) if style_histogram else 'EMPTY'}"
+    )
 
     return {
         "color_temp_avg": ct_avg,
@@ -146,11 +141,13 @@ def learn_profile(profile_id: str, reference_keys: list) -> dict:
         "contrast_avg": con_avg,
         "contrast_min": con_min,
         "contrast_max": con_max,
-        "exposure_avg": exp_avg,
-        "exposure_min": exp_min - 0.5 if exp_min else None,
-        "exposure_max": exp_max + 0.5 if exp_max else None,
-        "sharpness_threshold": sharp_avg * 0.6 if sharp_avg else 100.0,
-        "vertical_tolerance": round(vertical_tolerance, 2),
+        # exposure / sharpness / verticals dropped from this fast path.
+        # Leaving fields null so the QC pipeline falls back to defaults.
+        "exposure_avg": None,
+        "exposure_min": None,
+        "exposure_max": None,
+        "sharpness_threshold": 100.0,
+        "vertical_tolerance": 1.5,
         "photos_analyzed": len(all_params),
         "style_histogram": style_histogram,
     }
