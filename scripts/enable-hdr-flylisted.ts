@@ -14,6 +14,9 @@ async function main() {
       OR: [
         { name: { contains: "Flylisted", mode: "insensitive" } },
         { name: { contains: "Fly listed", mode: "insensitive" } },
+        // Paul's personal test agency. Keeps the dev / test loop tight
+        // so we don't have to log in/out of Flylisted to try a change.
+        { name: { contains: "pchareth", mode: "insensitive" } },
       ],
     },
     select: {

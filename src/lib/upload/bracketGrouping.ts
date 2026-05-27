@@ -22,10 +22,16 @@ import exifr from "exifr";
 
 const RAW_EXTENSIONS = ["arw", "cr2", "cr3", "nef", "dng", "raf", "orf", "rw2"];
 
-// A new scene starts when the time gap exceeds this. Real bracket
-// sequences fire within ~2s; anything longer is the photographer
-// moving the tripod or pausing.
-const GAP_THRESHOLD_SECONDS = 3.5;
+// A new scene starts when the time gap between consecutive captures
+// exceeds this. Empirically 10s captures both:
+//   - Sony A7III/A7IV interior brackets, which fire within ~2s
+//   - DJI Mavic / Air AEB brackets, which can be slower because the
+//     drone has to settle between frames
+// If two real scenes accidentally merge because the photographer
+// moved on faster than expected, raise this; if singletons appear
+// from one scene because there's a long pause mid-set, lower it.
+// Paul's call after observing real Flylisted shoots.
+const GAP_THRESHOLD_SECONDS = 10;
 
 export interface BracketFile {
   file: File;
