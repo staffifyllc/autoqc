@@ -23,7 +23,9 @@
  * image for that agency.
  */
 import { promises as fs } from "fs";
-import { resolve, basename, extname } from "path";
+import { execSync } from "child_process";
+import { tmpdir } from "os";
+import { resolve, basename, extname, join } from "path";
 import {
   S3Client,
   PutObjectCommand,
@@ -60,8 +62,25 @@ function parseArgs() {
     dropboxLinks,
     profileName: get("--profile") ?? "Default",
     limit: get("--limit") ? parseInt(get("--limit")!, 10) : Infinity,
+    // Per-link sampling cap. When set, each Dropbox link contributes at
+    // most N images (randomly sampled across the extracted set). Keeps
+    // total references manageable when ingesting many large folders.
+    perLinkLimit: get("--per-link-limit")
+      ? parseInt(get("--per-link-limit")!, 10)
+      : Infinity,
     dryRun: args.includes("--dry-run"),
   };
+}
+
+function sampleN<T>(arr: T[], n: number): T[] {
+  if (arr.length <= n) return arr;
+  // Fisher-Yates partial shuffle to get a random n-sample.
+  const a = [...arr];
+  for (let i = 0; i < n; i++) {
+    const j = i + Math.floor(Math.random() * (a.length - i));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, n);
 }
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".tif", ".tiff"];
@@ -179,6 +198,70 @@ async function fetchDropboxBytes(
   throw new Error(`Unexpected Dropbox response for ${path}`);
 }
 
+// Anonymous Dropbox zip download path. No token required — just hits
+// the public `?dl=1` URL the Dropbox web UI uses for "Download as zip".
+// Saves the zip to a temp file, unzips it flat, returns a list of
+// extracted image file paths for the standard upload pipeline.
+async function dlOneAsZip(
+  sharedLink: string,
+  label: string
+): Promise<string[]> {
+  // Force dl=1 in the URL regardless of how the link is shaped.
+  const u = new URL(sharedLink);
+  u.searchParams.set("dl", "1");
+  const url = u.toString();
+
+  const workDir = join(tmpdir(), `dbx-ingest-${label}-${Date.now()}`);
+  await fs.mkdir(workDir, { recursive: true });
+  const zipPath = join(workDir, "folder.zip");
+  const extracted = join(workDir, "extracted");
+
+  console.log(`Downloading ${label} -> ${zipPath}`);
+  execSync(`curl -L --fail --silent --show-error -o "${zipPath}" "${url}"`, {
+    stdio: ["ignore", "inherit", "inherit"],
+  });
+
+  // Run unzip without throwing on non-zero exit. unzip returns 1 for
+  // warnings like "stripped absolute path spec" even when ~all files
+  // extracted successfully. We check the extracted folder afterwards
+  // to decide if the run was actually useful.
+  try {
+    execSync(`unzip -j -o -q "${zipPath}" -d "${extracted}"`, {
+      stdio: ["ignore", "inherit", "inherit"],
+    });
+  } catch {
+    /* tolerate non-zero exit; checked below */
+  }
+
+  // Drop the zip itself so we don't accidentally walk it later.
+  try {
+    await fs.unlink(zipPath);
+  } catch {}
+
+  // Recurse the extracted folder for images. -j flag was supposed to
+  // flatten but some zips still come out nested. fs.readdir with
+  // withFileTypes handles both cases.
+  const found: string[] = [];
+  const walk = async (dir: string) => {
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) {
+        await walk(p);
+      } else if (e.isFile() && isImage(e.name)) {
+        found.push(p);
+      }
+    }
+  };
+  await walk(extracted);
+  return found;
+}
+
 async function uploadOne(
   agencyId: string,
   profileId: string,
@@ -211,7 +294,7 @@ async function uploadOne(
 }
 
 async function main() {
-  const { agency, folder, dropboxLinks, profileName, limit, dryRun } =
+  const { agency, folder, dropboxLinks, profileName, limit, perLinkLimit, dryRun } =
     parseArgs();
   if (!agency || (!folder && dropboxLinks.length === 0)) {
     console.error(
@@ -242,25 +325,57 @@ async function main() {
 
   if (dropboxLinks.length > 0) {
     const token = process.env.DROPBOX_ACCESS_TOKEN;
-    if (!token) {
-      console.error(
-        "DROPBOX_ACCESS_TOKEN env var is required when using --dropbox-link.\n" +
-          "Get one from https://www.dropbox.com/developers/apps (your app → Generate access token)."
+    if (token) {
+      // Authenticated path. Better for huge folders (no zip download)
+      // and recurses subfolders cleanly.
+      const dbx = new Dropbox({ accessToken: token, fetch });
+      for (const link of dropboxLinks) {
+        try {
+          const found = await listDropboxImages(dbx, link);
+          sources.push(...found);
+          console.log(
+            `Dropbox API: ${found.length} images at ${link.slice(0, 80)}...`
+          );
+        } catch (e) {
+          console.error(
+            `Failed to list Dropbox link ${link}: ${
+              e instanceof Error ? e.message : e
+            }`
+          );
+        }
+      }
+    } else {
+      // No token. Fall back to anonymous "Download as zip" — Dropbox's
+      // public `?dl=1` URL returns the entire shared folder as a zip.
+      // We extract locally and treat the resulting JPEGs as a local
+      // folder source. Trade-off: needs disk space for the zip + extract,
+      // and only sees files at the TOP LEVEL of the share (unzip -j
+      // flattens, so subfolder contents get pulled in too, just with
+      // their nesting lost).
+      console.log(
+        "No DROPBOX_ACCESS_TOKEN set — using anonymous zip download path."
       );
-      process.exit(1);
-    }
-    const dbx = new Dropbox({ accessToken: token, fetch });
-    for (const link of dropboxLinks) {
-      try {
-        const found = await listDropboxImages(dbx, link);
-        sources.push(...found);
-        console.log(`Dropbox: ${found.length} images at ${link.slice(0, 80)}...`);
-      } catch (e) {
-        console.error(
-          `Failed to list Dropbox link ${link}: ${
-            e instanceof Error ? e.message : e
-          }`
-        );
+      for (let i = 0; i < dropboxLinks.length; i++) {
+        const link = dropboxLinks[i];
+        try {
+          const paths = await dlOneAsZip(link, String(i + 1).padStart(2, "0"));
+          // Per-link cap keeps the style profile diverse across many
+          // folders without ballooning when one folder has thousands.
+          const sampled =
+            perLinkLimit < paths.length ? sampleN(paths, perLinkLimit) : paths;
+          for (const p of sampled) {
+            sources.push({ kind: "local", path: p, displayName: basename(p) });
+          }
+          console.log(
+            `Dropbox zip ${i + 1}/${dropboxLinks.length}: ${paths.length} extracted, ${sampled.length} kept`
+          );
+        } catch (e) {
+          console.error(
+            `Failed to fetch link ${i + 1}: ${
+              e instanceof Error ? e.message : e
+            }`
+          );
+        }
       }
     }
   }
