@@ -70,7 +70,14 @@ else
     exit 1
 fi
 
-# Update environment variables from .env.local
+# Update environment variables from .env.local. Wait for the
+# preceding update-function-code to settle first — AWS rejects
+# update-function-configuration while a code update is "InProgress"
+# with ResourceConflictException, which would kill the script under
+# set -e and skip the profile-learner deploy. The wait + the trailing
+# `|| true` make this resilient even when AWS is slow to settle.
+aws lambda wait function-updated --function-name photoqc-engine --region $AWS_REGION || true
+
 if [ -f ../../.env.local ]; then
     echo "Updating Lambda environment variables..."
 
@@ -83,8 +90,11 @@ if [ -f ../../.env.local ]; then
         --function-name photoqc-engine \
         --environment "Variables={DATABASE_URL=$DATABASE_URL,AWS_S3_BUCKET=$AWS_S3_BUCKET,ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY,REPLICATE_API_TOKEN=$REPLICATE_API_TOKEN}" \
         --region $AWS_REGION \
-        --no-cli-pager > /dev/null
+        --no-cli-pager > /dev/null || echo "Note: env var update skipped (still in progress)"
 fi
+
+# Make sure the engine settles before the next code update target.
+aws lambda wait function-updated --function-name photoqc-engine --region $AWS_REGION || true
 
 # Bump engine memory + timeout for the HDR bracket-merge path. Sony A7IV
 # 33MP × 5 brackets demosaiced to uint8 RGB sits around 2GB resident
