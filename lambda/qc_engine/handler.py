@@ -384,11 +384,19 @@ def process_photo(
                 fixes_applied.append(f"Horizon leveled ({horiz_dev:.1f} deg)")
                 needs_fix = True
 
+        # HDR shoots have already been color-matched to the agency's
+        # learned style histogram earlier in the handler. The generic
+        # WB / color-cast fixer here would pull them back toward neutral
+        # and undo that match. Skip color_fix when we are on the HDR
+        # path (pre_processed_local_path was set by the caller).
+        is_hdr_pass = pre_processed_local_path is not None
+
         # Fix WB - ANY detected cast on interior photo (not just fluorescent).
         # Exteriors and already-neutral photos are gated inside fix_color() itself.
         # The clamped scale (+/- 10%) prevents the destructive magenta disaster.
         if (
-            color_result.get("color_cast")
+            not is_hdr_pass
+            and color_result.get("color_cast")
             and color_result.get("cast_strength", 0) > 0.04
             and not color_result.get("is_exterior", False)
             and not color_result.get("already_neutral", False)
@@ -421,7 +429,12 @@ def process_photo(
         # here: exposure, highlights, shadows, contrast, saturation (global
         # and per-channel), temperature, tint. Magnitudes are clamped inside
         # the executor so Claude cannot over-do it even if the prompt drifts.
-        if structured_actions:
+        #
+        # Skip on the HDR path: the LAB histogram match already pushed
+        # the merged image toward the agency's learned aesthetic, and
+        # Claude Vision evaluates against generic standards so its
+        # nudges would partially undo that match.
+        if structured_actions and not is_hdr_pass:
             adjusted_path, applied = apply_recommended_actions(
                 local_path, structured_actions
             )
