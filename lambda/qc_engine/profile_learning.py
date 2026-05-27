@@ -25,6 +25,7 @@ from checks.color import estimate_color_temperature
 from checks.verticals import check_verticals
 from checks.sharpness import check_sharpness
 from checks.exposure import check_exposure
+from hdr.style_transfer import compute_lab_percentiles, aggregate_profile
 
 s3 = boto3.client("s3")
 BUCKET = os.environ["AWS_S3_BUCKET"]
@@ -67,6 +68,10 @@ def analyze_reference_photo(image_path: str) -> dict:
     vert_result = check_verticals(image_path)
     vertical_dev = vert_result["deviation"]
 
+    # LAB percentile snapshot for histogram-match style transfer.
+    # 99 percentiles per channel x 3 channels = 297 floats; tiny.
+    lab_percentiles = compute_lab_percentiles(img)
+
     return {
         "color_temp": color_temp,
         "saturation": saturation,
@@ -74,6 +79,7 @@ def analyze_reference_photo(image_path: str) -> dict:
         "exposure": exposure,
         "sharpness": sharpness,
         "vertical_dev": vertical_dev,
+        "lab_percentiles": lab_percentiles,
     }
 
 
@@ -122,6 +128,14 @@ def learn_profile(profile_id: str, reference_keys: list) -> dict:
     # (wider variance in references = more tolerant QC)
     vertical_tolerance = max(vert_max or 1.0, 0.5)
 
+    # Aggregate LAB percentiles into a single target distribution.
+    # This is the histogram-match target that style_transfer.py
+    # applies to Mertens output on the HDR Lambda path.
+    lab_percentile_dicts = [
+        p.get("lab_percentiles") for p in all_params if p.get("lab_percentiles")
+    ]
+    style_histogram = aggregate_profile(lab_percentile_dicts)
+
     return {
         "color_temp_avg": ct_avg,
         "color_temp_min": ct_min - (ct_std or 0) if ct_min else None,
@@ -138,6 +152,7 @@ def learn_profile(profile_id: str, reference_keys: list) -> dict:
         "sharpness_threshold": sharp_avg * 0.6 if sharp_avg else 100.0,
         "vertical_tolerance": round(vertical_tolerance, 2),
         "photos_analyzed": len(all_params),
+        "style_histogram": style_histogram,
     }
 
 
@@ -186,6 +201,7 @@ def handler(event, context):
                 "exposureMax" = %s,
                 "sharpnessThreshold" = %s,
                 "verticalTolerance" = %s,
+                "styleHistogram" = %s::jsonb,
                 "updatedAt" = NOW()
             WHERE id = %s
             """,
@@ -204,6 +220,7 @@ def handler(event, context):
                 result["exposure_max"],
                 result["sharpness_threshold"],
                 result["vertical_tolerance"],
+                json.dumps(result.get("style_histogram") or {}),
                 profile_id,
             ),
         )

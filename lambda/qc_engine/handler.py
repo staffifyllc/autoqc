@@ -38,6 +38,7 @@ from fixes.apply_actions import apply_recommended_actions
 from fixes.remove_distractions import remove_distractions
 
 from hdr.merge import merge_brackets_from_s3, decode_single_raw_from_s3
+from hdr.style_transfer import deserialize_profile, match_image_path
 
 s3 = boto3.client("s3")
 BUCKET = os.environ["AWS_S3_BUCKET"]
@@ -825,6 +826,47 @@ def handler(event, context):
                         print(
                             f"Single RAW decode failed for {photo_id}: {hdr_meta.get('error')}"
                         )
+
+                # Style transfer: when the HDR pipeline ran (merge or
+                # single decode) AND the agency has a default style
+                # profile with a learned histogram, push the image
+                # toward the agency's finished look via LAB
+                # histogram matching. This is what gets the output
+                # from "generic Mertens" to "looks like Lightroom-
+                # finished work." Skips silently if no histogram is
+                # trained yet.
+                if hdr_local_path:
+                    try:
+                        cursor = db.cursor()
+                        cursor.execute(
+                            """
+                            SELECT "styleHistogram"
+                            FROM "StyleProfile"
+                            WHERE "agencyId" = %s AND "isDefault" = true
+                            LIMIT 1
+                            """,
+                            (agency_id,),
+                        )
+                        row_sp = cursor.fetchone()
+                        cursor.close()
+                        if row_sp and row_sp[0]:
+                            profile = deserialize_profile(row_sp[0])
+                            if profile:
+                                styled = match_image_path(
+                                    hdr_local_path,
+                                    profile,
+                                    hdr_local_path,
+                                    strength=0.85,
+                                )
+                                if styled:
+                                    hdr_meta.setdefault("operations", []).append(
+                                        f"Style matched to {profile.get('sample_size', '?')} reference photos"
+                                    )
+                                    print(
+                                        f"Style transfer applied for {photo_id}"
+                                    )
+                    except Exception as st_err:
+                        print(f"Style transfer skipped for {photo_id}: {st_err}")
 
                 # ----- HARD SAFETY NET -----
                 # process_photo's internal try/except only covers the

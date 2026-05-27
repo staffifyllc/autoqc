@@ -126,17 +126,40 @@ export function groupIntoBrackets(meta: BracketFile[]): BracketGroup[] {
     current = [];
   };
 
+  // Group break logic: any of
+  //   - time gap > GAP_THRESHOLD_SECONDS
+  //   - EV ladder reset: a sharp drop in ExposureBiasValue from the
+  //     previous shot (>= 1.5 stops down). AEB sequences fire
+  //     monotonically increasing EV; when the bias jumps back DOWN
+  //     by more than a stop, that's a new sequence starting, even
+  //     if it happened within the time window. This is the actual
+  //     signal that catches DJI and Sony bracketing — time alone
+  //     misses fast-paced shoots where scenes are <10s apart.
   for (const m of sorted) {
     if (current.length === 0) {
       current.push(m);
       continue;
     }
     const prev = current[current.length - 1];
-    const gap =
-      (m.capturedAt.getTime() - prev.capturedAt.getTime()) / 1000;
-    if (gap > GAP_THRESHOLD_SECONDS) {
-      flush();
+    const gap = (m.capturedAt.getTime() - prev.capturedAt.getTime()) / 1000;
+
+    let shouldBreak = gap > GAP_THRESHOLD_SECONDS;
+
+    if (
+      !shouldBreak &&
+      typeof prev.exposureBias === "number" &&
+      typeof m.exposureBias === "number"
+    ) {
+      // EV reset detection. Allow small wobble; only treat a drop of
+      // 1.5 stops or more as a new bracket set starting. Within a
+      // ladder EV always goes UP, never down.
+      const evDelta = m.exposureBias - prev.exposureBias;
+      if (evDelta <= -1.5) {
+        shouldBreak = true;
+      }
     }
+
+    if (shouldBreak) flush();
     current.push(m);
   }
   flush();

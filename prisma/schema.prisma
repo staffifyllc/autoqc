@@ -291,6 +291,21 @@ model StyleProfile {
   // Reference photo S3 keys
   referencePhotos String[] // S3 keys of approved reference photos
 
+  // Target LAB-space distribution learned from references. Stored as
+  // { L: [p1..p99], a: [p1..p99], b: [p1..p99] } where each list is
+  // 99 percentile values per CIELAB channel. Used by style_transfer.py
+  // on the HDR Lambda path to histogram-match Mertens output to the
+  // agency's finished aesthetic. Null = no histogram trained yet
+  // (Lambda falls back to the existing smart_editor nudges).
+  styleHistogram Json?
+
+  // Per-room-type histograms keyed by room_type ("kitchen",
+  // "living_room", etc). Optional second layer of fidelity: when the
+  // composition.py classifier returns a room type that has its own
+  // histogram learned here, style_transfer prefers it over the global
+  // styleHistogram. Same percentile shape per room type.
+  styleHistogramByRoom Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
