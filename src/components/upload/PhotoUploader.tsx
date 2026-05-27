@@ -9,8 +9,15 @@ import {
   Zap,
   ArrowRight,
   AlertCircle,
+  Layers,
 } from "lucide-react";
 import { useUpload } from "@/lib/upload/UploadContext";
+import {
+  groupIntoBrackets,
+  isRawFile,
+  readBracketMetadata,
+  type BracketGroup,
+} from "@/lib/upload/bracketGrouping";
 
 interface FileWithPreview extends File {
   preview?: string;
@@ -43,16 +50,27 @@ function explainRejection(file: File, code: string): string {
 export function PhotoUploader({
   propertyId,
   propertyAddress = "this property",
+  hdrEnabled = false,
   onComplete,
 }: {
   propertyId: string;
   propertyAddress?: string;
+  // When true the dropzone accepts RAW files and exposes the HDR
+  // bracket-merge toggle. Driven by Agency.hdrMergeEnabled — flagged
+  // on for Flylisted only.
+  hdrEnabled?: boolean;
   onComplete?: () => void;
 }) {
   const { startUpload, jobs } = useUpload();
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [rejections, setRejections] = useState<RejectionRecord[]>([]);
+  // hdrMode is the user-facing toggle. Defaults on whenever the
+  // agency has HDR enabled; agents can flip it off for the rare
+  // single-frame property without losing the option entirely.
+  const [hdrMode, setHdrMode] = useState<boolean>(hdrEnabled);
+  const [brackets, setBrackets] = useState<BracketGroup[] | null>(null);
+  const [groupingBusy, setGroupingBusy] = useState(false);
 
   // Find this property's active job (if any)
   const activeJob = jobs.find(
@@ -99,15 +117,35 @@ export function PhotoUploader({
     setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const acceptedFormats: Record<string, string[]> = hdrMode
+    ? {
+        // RAW formats for the HDR pipeline. Sony A7III/A7IV (.arw)
+        // is the primary target; the others come for free since
+        // rawpy handles them with no Lambda code change.
+        "image/x-sony-arw": [".arw"],
+        "image/x-canon-cr2": [".cr2"],
+        "image/x-canon-cr3": [".cr3"],
+        "image/x-nikon-nef": [".nef"],
+        "image/x-adobe-dng": [".dng"],
+        "image/x-fuji-raf": [".raf"],
+        "image/jpeg": [".jpg", ".jpeg"],
+        "image/png": [".png"],
+        "image/tiff": [".tiff", ".tif"],
+      }
+    : {
+        "image/jpeg": [".jpg", ".jpeg"],
+        "image/png": [".png"],
+        "image/tiff": [".tiff", ".tif"],
+        "image/webp": [".webp"],
+      };
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: {
-      "image/jpeg": [".jpg", ".jpeg"],
-      "image/png": [".png"],
-      "image/tiff": [".tiff", ".tif"],
-      "image/webp": [".webp"],
-    },
-    maxSize: 50 * 1024 * 1024,
+    accept: acceptedFormats,
+    // RAW files routinely exceed 50MB (Sony A7IV uncompressed ARW is
+    // ~50-80MB). Raise to 120MB for HDR mode and keep 50MB for the
+    // standard JPEG flow.
+    maxSize: (hdrMode ? 120 : 50) * 1024 * 1024,
     // react-dropzone v14 enables the File System Access API by default.
     // That breaks drag-and-drop silently in some Chrome configurations -
     // the customer drags photos in and nothing happens, only the click
@@ -117,9 +155,72 @@ export function PhotoUploader({
     useFsAccessApi: false,
   });
 
+  // Whenever the file set or mode changes, recompute bracket grouping
+  // from EXIF so the agent sees "X scenes × N brackets" before kicking
+  // off the upload. Cheap because exifr only pulls the small tag set
+  // we need.
+  useEffect(() => {
+    if (!hdrMode || files.length === 0) {
+      setBrackets(null);
+      return;
+    }
+    let cancelled = false;
+    setGroupingBusy(true);
+    (async () => {
+      const meta = await readBracketMetadata(files);
+      if (cancelled) return;
+      setBrackets(groupIntoBrackets(meta));
+      setGroupingBusy(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [files, hdrMode]);
+
   const startUploadJob = () => {
     if (files.length === 0) return;
-    const jobId = startUpload(propertyId, propertyAddress, files);
+
+    // In HDR mode we only upload files that belong to a true bracket
+    // set (2+ frames). Singleton RAWs would fail downstream because
+    // cv2.imread can't decode ARW directly. Filter them out and warn
+    // the agent if any were dropped.
+    let filesToUpload = files;
+    let bracketPayload:
+      | { sceneName: string; files: string[]; thumbnailFile: string }[]
+      | undefined;
+
+    if (hdrMode && brackets) {
+      const multiBracket = brackets.filter((b) => b.files.length >= 2);
+      const droppedSingletons = brackets.filter((b) => b.files.length === 1);
+      if (droppedSingletons.length > 0) {
+        const names = droppedSingletons.map((b) => b.files[0].name);
+        setRejections((prev) => [
+          ...prev,
+          ...names.map((n) => ({
+            fileName: n,
+            reason:
+              "No matching bracket partners found within the time window. Switch HDR off to upload solo frames.",
+          })),
+        ]);
+      }
+      if (multiBracket.length === 0) return;
+      const allowedFileNames = new Set(
+        multiBracket.flatMap((b) => b.files.map((f) => f.name))
+      );
+      filesToUpload = files.filter((f) => allowedFileNames.has(f.name));
+      bracketPayload = multiBracket.map((b) => ({
+        sceneName: b.sceneName,
+        files: b.files.map((f) => f.name),
+        thumbnailFile: b.thumbnail.name,
+      }));
+    }
+
+    const jobId = startUpload(
+      propertyId,
+      propertyAddress,
+      filesToUpload,
+      bracketPayload
+    );
     setCurrentJobId(jobId);
   };
 
@@ -159,8 +260,82 @@ export function PhotoUploader({
     );
   }
 
+  const bracketSceneCount = brackets?.filter((b) => b.files.length >= 2).length ?? 0;
+  const bracketSingles = brackets?.filter((b) => b.files.length === 1).length ?? 0;
+
   return (
     <div className="space-y-5">
+      {hdrEnabled && (
+        <div className="flex items-center gap-3 p-3 rounded-md bg-[hsl(var(--surface-1))] border border-border">
+          <div
+            className={`w-9 h-9 rounded-md flex items-center justify-center shrink-0 border ${
+              hdrMode
+                ? "bg-primary/15 border-primary/30 text-primary"
+                : "bg-[hsl(var(--surface-2))] border-border text-muted-foreground"
+            }`}
+          >
+            <Layers className="w-4 h-4" strokeWidth={2.25} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-medium">HDR bracket merge</p>
+            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+              {hdrMode
+                ? "Drop RAW brackets. Scenes group automatically by EXIF capture time."
+                : "Standard upload. Toggle on to upload RAW bracket sets."}
+            </p>
+          </div>
+          <button
+            onClick={() => setHdrMode((v) => !v)}
+            role="switch"
+            aria-checked={hdrMode}
+            className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
+              hdrMode ? "bg-primary" : "bg-[hsl(var(--surface-3))]"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                hdrMode ? "translate-x-4" : ""
+              }`}
+            />
+          </button>
+        </div>
+      )}
+
+      {hdrMode && files.length > 0 && (
+        <div className="rounded-md border border-primary/25 bg-primary/[0.04] p-3 space-y-1.5">
+          <p className="text-[11px] font-mono uppercase tracking-wider text-primary flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5" strokeWidth={2} />
+            {groupingBusy
+              ? "Reading EXIF to group brackets..."
+              : `${bracketSceneCount} scene${bracketSceneCount === 1 ? "" : "s"} detected`}
+          </p>
+          {!groupingBusy && brackets && (
+            <p className="text-[12px] text-muted-foreground">
+              {bracketSceneCount > 0 && (
+                <>
+                  {bracketSceneCount} bracket set
+                  {bracketSceneCount === 1 ? "" : "s"} (avg{" "}
+                  {(
+                    brackets
+                      .filter((b) => b.files.length >= 2)
+                      .reduce((acc, b) => acc + b.files.length, 0) /
+                      Math.max(1, bracketSceneCount)
+                  ).toFixed(1)}{" "}
+                  brackets each).
+                </>
+              )}
+              {bracketSingles > 0 && (
+                <>
+                  {bracketSceneCount > 0 ? " " : ""}
+                  {bracketSingles} single frame
+                  {bracketSingles === 1 ? "" : "s"} will upload without merging.
+                </>
+              )}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Dropzone */}
       <div
         {...getRootProps()}
@@ -193,8 +368,9 @@ export function PhotoUploader({
                 : "Drag and drop photos, or click to browse"}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1 font-mono">
-              JPEG · PNG · TIFF · WebP, up to 50MB each. HEIC and RAW need
-              to be exported first.
+              {hdrMode
+                ? "ARW · CR3 · NEF · DNG · JPEG · TIFF, up to 120MB each. Drop all brackets together."
+                : "JPEG · PNG · TIFF · WebP, up to 50MB each. HEIC and RAW need to be exported first."}
             </p>
           </div>
         </div>

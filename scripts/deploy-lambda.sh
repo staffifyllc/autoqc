@@ -37,10 +37,18 @@ rm -rf build package.zip
 mkdir -p build
 pip3 install -r requirements.txt -t build/ --quiet --platform manylinux2014_x86_64 --only-binary=:all: --python-version 3.12
 
+# rawpy pulls numpy as a transitive dep, but the existing OpenCV
+# Lambda layer already ships numpy. Shipping it again puts us over the
+# 250MB function-plus-layers limit. Strip numpy from the function
+# package; LibRaw native bindings inside rawpy.libs stay (those are
+# specific to RAW decode and not in the layer).
+rm -rf build/numpy build/numpy.libs build/numpy-*.dist-info
+
 # Copy source files
 cp -r *.py build/
 cp -r checks build/
 cp -r fixes build/
+cp -r hdr build/
 
 # Create zip
 cd build
@@ -77,6 +85,21 @@ if [ -f ../../.env.local ]; then
         --region $AWS_REGION \
         --no-cli-pager > /dev/null
 fi
+
+# Bump engine memory + timeout for the HDR bracket-merge path. Sony A7IV
+# 33MP × 5 brackets demosaiced to uint8 RGB sits around 2GB resident
+# during Mertens fusion; 4096 MB gives comfortable headroom for that
+# and a small efficiency win on standard single-photo jobs too. 360s
+# timeout covers the worst-case HDR scene (decode + align + fuse +
+# Claude Vision + smart_editor). Idempotent — safe to re-run.
+echo ""
+echo "Ensuring engine memory/timeout sized for HDR merge..."
+aws lambda update-function-configuration \
+    --function-name photoqc-engine \
+    --memory-size 4096 \
+    --timeout 360 \
+    --region $AWS_REGION \
+    --no-cli-pager > /dev/null 2>&1 || echo "Note: engine config update skipped"
 
 # Deploy profile learner function. Needs the same OpenCV layer and
 # memory budget as the main engine — without them the Lambda dies with

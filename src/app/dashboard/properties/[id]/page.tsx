@@ -495,6 +495,7 @@ export default function PropertyDetailPage({
           <PhotoUploader
             propertyId={params.id}
             propertyAddress={property.address}
+            hdrEnabled={property.hdrMergeEnabled === true}
             onComplete={() => {
               setShowUploader(false);
               fetchProperty();

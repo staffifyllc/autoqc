@@ -49,7 +49,11 @@ export async function GET(
     // order.
     const agency = await prisma.agency.findUnique({
       where: { id: session.user.agencyId! },
-      select: { autoSortEnabled: true, photoSortOrder: true },
+      select: {
+        autoSortEnabled: true,
+        photoSortOrder: true,
+        hdrMergeEnabled: true,
+      },
     });
 
     const orderedPhotos =
@@ -100,6 +104,10 @@ export async function GET(
       property: {
         ...property,
         photos: photosWithUrls,
+        // Surfaced so the upload UI knows whether to show the HDR
+        // bracket-merge mode toggle. Driven by Agency.hdrMergeEnabled;
+        // currently flagged on for Flylisted only.
+        hdrMergeEnabled: agency?.hdrMergeEnabled ?? false,
       },
     });
   } catch (error) {

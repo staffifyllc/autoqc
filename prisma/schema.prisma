@@ -8,25 +8,25 @@ datasource db {
 }
 
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  name            String?   // Full name, computed from first + last
-  firstName       String?
-  lastName        String?
-  phone           String?
-  role            UserRole  @default(OWNER)
-  image           String?
-  emailVerified   DateTime?
+  id               String    @id @default(cuid())
+  email            String    @unique
+  name             String? // Full name, computed from first + last
+  firstName        String?
+  lastName         String?
+  phone            String?
+  role             UserRole  @default(OWNER)
+  image            String?
+  emailVerified    DateTime?
   // Password auth. Nullable so existing users still exist without a
   // password; they are blocked from logging in until an admin runs
   // scripts/set-user-password.ts or they go through a reset flow.
-  passwordHash    String?
-  passwordSetAt   DateTime?
+  passwordHash     String?
+  passwordSetAt    DateTime?
   stripeCustomerId String?
-  referralSource  String?   // How they heard about us
-  marketingOptIn  Boolean   @default(true)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  referralSource   String? // How they heard about us
+  marketingOptIn   Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   accounts Account[]
   sessions Session[]
@@ -78,8 +78,8 @@ model VerificationToken {
 }
 
 model Agency {
-  id        String   @id @default(cuid())
-  name      String
+  id   String @id @default(cuid())
+  name String
 
   // Business profile
   website         String?
@@ -87,31 +87,31 @@ model Agency {
   addressCity     String?
   addressState    String?
   addressZip      String?
-  teamSize        String?   // "1", "2-5", "6-10", "11-25", "26+"
-  propertiesMonth String?   // "<10", "10-25", "26-50", "51-100", "100+"
-  yearsInBusiness String?   // "<1", "1-3", "4-7", "8+"
-  serviceTypes    String[]  // ["residential", "commercial", "drone", "video", "3d"]
+  teamSize        String? // "1", "2-5", "6-10", "11-25", "26+"
+  propertiesMonth String? // "<10", "10-25", "26-50", "51-100", "100+"
+  yearsInBusiness String? // "<1", "1-3", "4-7", "8+"
+  serviceTypes    String[] // ["residential", "commercial", "drone", "video", "3d"]
 
   // Platforms they currently use (for migration guidance)
   currentPlatforms String[] // ["aryeo", "hdphotohub", "spiro", "tonomo", "dropbox", "none"]
 
   // Credits system - 1 credit = 1 property processed
-  creditBalance       Int      @default(0)
-  hasPaymentMethod    Boolean  @default(false)
-  billingMode         BillingMode @default(CREDITS)
-  totalCreditsPurchased Int    @default(0)
+  creditBalance         Int         @default(0)
+  hasPaymentMethod      Boolean     @default(false)
+  billingMode           BillingMode @default(CREDITS)
+  totalCreditsPurchased Int         @default(0)
 
   // Onboarding progress
   onboardingComplete Boolean @default(false)
 
   // Admin / test mode - bypasses credit checks
-  isAdmin            Boolean @default(false)
+  isAdmin Boolean @default(false)
 
   // Per-agency staging price override. Null = use STAGING_CREDIT_COST
   // default (3). Non-null = use this value instead. Used to give
   // partner / internal agencies discounted rates without affecting
   // anyone else.
-  stagingCreditCost  Int?
+  stagingCreditCost Int?
 
   // Per-agency credit price override, in CENTS per credit. Null = use
   // the default tiered pricing from CREDIT_PACKAGES. Non-null = every
@@ -134,13 +134,12 @@ model Agency {
   // when a client churns). When Paul manually flips the flag via
   // the admin picker we set staffifyClientLockedManually = true so
   // the cron leaves that row alone afterwards.
-  isStaffifyClient Boolean @default(false)
-  staffifyClientLockedManually Boolean @default(false)
-  staffifyLastSyncedAt DateTime?
-
+  isStaffifyClient             Boolean   @default(false)
+  staffifyClientLockedManually Boolean   @default(false)
+  staffifyLastSyncedAt         DateTime?
 
   // Default tier applied when creating new properties
-  defaultTier        PropertyTier @default(STANDARD)
+  defaultTier PropertyTier @default(STANDARD)
 
   // Default distraction removal categories applied on new Premium properties.
   // Empty array means the check is skipped. Safe defaults suggested in the UI
@@ -152,7 +151,7 @@ model Agency {
   // When autoSortEnabled is true the UI and export flows order photos
   // by the room-type sequence in photoSortOrder. Unknown / unclassified
   // photos fall to the end in upload order.
-  autoSortEnabled Boolean @default(false)
+  autoSortEnabled Boolean  @default(false)
   photoSortOrder  String[] @default(["exterior_front", "exterior_back", "exterior_pool", "living_room", "dining_room", "kitchen", "bedroom", "bathroom", "office", "hallway", "basement", "other"])
 
   // Last time the stuck-PENDING recovery cron emailed this agency. Used
@@ -160,23 +159,31 @@ model Agency {
   // Null = never emailed. Set by /api/cron/stuck-pending-recovery.
   lastStuckRecoveryEmailAt DateTime?
 
+  // HDR bracket-merge pipeline. When true, the agency's upload UI
+  // accepts ARW (and other RAW formats) and auto-groups uploads into
+  // bracket sets by EXIF timestamp + exposure variance. The Lambda
+  // detects Photos with non-empty bracketKeys and runs the rawpy +
+  // AlignMTB + Mertens fusion path before standard QC + smart_editor.
+  // Gated per-agency so other tenants don't see RAW upload as an option.
+  hdrMergeEnabled Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members       AgencyMember[]
-  styleProfiles StyleProfile[]
-  clients       ClientProfile[]
-  properties    Property[]
-  integrations  Integration[]
+  members            AgencyMember[]
+  styleProfiles      StyleProfile[]
+  clients            ClientProfile[]
+  properties         Property[]
+  integrations       Integration[]
   creditTransactions CreditTransaction[]
-  referralCode  ReferralCode?
+  referralCode       ReferralCode?
 }
 
 model ReferralCode {
-  id        String           @id @default(cuid())
-  agencyId  String           @unique
-  code      String           @unique
-  createdAt DateTime         @default(now())
+  id        String   @id @default(cuid())
+  agencyId  String   @unique
+  code      String   @unique
+  createdAt DateTime @default(now())
 
   agency  Agency           @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   invites ReferralInvite[]
@@ -215,15 +222,15 @@ enum ReferralStatus {
 // what users actually ask + how the AI is answering. Open conversations
 // stay around forever; could be archived after N days as needed.
 model SupportConversation {
-  id         String           @id @default(cuid())
-  userId     String?
-  agencyId   String?
-  visitorId  String?          // for anonymous chat visitors
-  status     String           @default("OPEN")
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
+  id        String   @id @default(cuid())
+  userId    String?
+  agencyId  String?
+  visitorId String? // for anonymous chat visitors
+  status    String   @default("OPEN")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  messages   SupportMessage[]
+  messages SupportMessage[]
 
   @@index([userId])
   @@index([agencyId])
@@ -231,20 +238,20 @@ model SupportConversation {
 }
 
 model SupportMessage {
-  id             String              @id @default(cuid())
+  id             String   @id @default(cuid())
   conversationId String
-  role           String              // "user" | "assistant"
-  content        String              @db.Text
-  createdAt      DateTime            @default(now())
+  role           String // "user" | "assistant"
+  content        String   @db.Text
+  createdAt      DateTime @default(now())
 
-  conversation   SupportConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation SupportConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
 }
 
 enum BillingMode {
-  CREDITS        // Pre-purchased credits ($10/property)
-  PAY_AS_YOU_GO  // Card charged per property ($12/property)
+  CREDITS // Pre-purchased credits ($10/property)
+  PAY_AS_YOU_GO // Card charged per property ($12/property)
 }
 
 model AgencyMember {
@@ -260,13 +267,13 @@ model AgencyMember {
 }
 
 model StyleProfile {
-  id                 String  @id @default(cuid())
-  agencyId           String
-  name               String
-  isDefault          Boolean @default(false)
+  id        String  @id @default(cuid())
+  agencyId  String
+  name      String
+  isDefault Boolean @default(false)
 
   // Learned parameters from reference photos
-  colorTempMin       Float?  // Kelvin
+  colorTempMin       Float? // Kelvin
   colorTempMax       Float?
   colorTempAvg       Float?
   saturationMin      Float?
@@ -278,11 +285,11 @@ model StyleProfile {
   exposureMin        Float?
   exposureMax        Float?
   exposureAvg        Float?
-  verticalTolerance  Float   @default(1.0) // degrees
-  sharpnessThreshold Float   @default(100.0) // Laplacian variance
+  verticalTolerance  Float  @default(1.0) // degrees
+  sharpnessThreshold Float  @default(100.0) // Laplacian variance
 
   // Reference photo S3 keys
-  referencePhotos    String[] // S3 keys of approved reference photos
+  referencePhotos String[] // S3 keys of approved reference photos
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -292,20 +299,20 @@ model StyleProfile {
 }
 
 model ClientProfile {
-  id              String  @id @default(cuid())
-  agencyId        String
-  styleProfileId  String? // inherits from this style profile
-  clientName      String
-  clientEmail     String?
-  clientPhone     String?
+  id             String  @id @default(cuid())
+  agencyId       String
+  styleProfileId String? // inherits from this style profile
+  clientName     String
+  clientEmail    String?
+  clientPhone    String?
 
   // Overrides (null means inherit from style profile)
-  colorTempOverride    Float?
-  saturationOverride   Float?
-  contrastOverride     Float?
-  exposureOverride     Float?
-  verticalTolOverride  Float?
-  customNotes          String? @db.Text
+  colorTempOverride   Float?
+  saturationOverride  Float?
+  contrastOverride    Float?
+  exposureOverride    Float?
+  verticalTolOverride Float?
+  customNotes         String? @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -316,7 +323,7 @@ model ClientProfile {
 }
 
 model Property {
-  id              String   @id @default(cuid())
+  id              String         @id @default(cuid())
   agencyId        String
   clientProfileId String?
   address         String
@@ -342,73 +349,73 @@ model Property {
   // finished files back to the source folder's "/Processed" subfolder.
   // dropboxPushedAt is set after a successful push-back so the cron
   // does not push the same property twice.
-  dropboxSourceFolder String?
+  dropboxSourceFolder  String?
   dropboxIntegrationId String?
-  dropboxPushedAt     DateTime?
+  dropboxPushedAt      DateTime?
 
-  photoCount      Int      @default(0)
-  qcPassCount     Int      @default(0)
-  qcFailCount     Int      @default(0)
-  totalQcScore    Float?
-  pushedAt        DateTime?
-  pushedTo        String?  // platform name
+  photoCount   Int       @default(0)
+  qcPassCount  Int       @default(0)
+  qcFailCount  Int       @default(0)
+  totalQcScore Float?
+  pushedAt     DateTime?
+  pushedTo     String? // platform name
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  agency  Agency         @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  client  ClientProfile? @relation(fields: [clientProfileId], references: [id])
-  photos  Photo[]
+  agency Agency         @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  client ClientProfile? @relation(fields: [clientProfileId], references: [id])
+  photos Photo[]
 }
 
 enum PropertyStatus {
-  PENDING      // uploaded, not yet processed
-  PROCESSING   // QC in progress
-  REVIEW       // needs human review
-  APPROVED     // all photos pass
-  PUSHED       // delivered to platform
+  PENDING // uploaded, not yet processed
+  PROCESSING // QC in progress
+  REVIEW // needs human review
+  APPROVED // all photos pass
+  PUSHED // delivered to platform
 }
 
 enum PropertyTier {
-  STANDARD     // 1 credit - full QC, no privacy blur
-  PREMIUM      // 2 credits - everything + privacy blur + AI deblur
+  STANDARD // 1 credit - full QC, no privacy blur
+  PREMIUM // 2 credits - everything + privacy blur + AI deblur
 }
 
 model Photo {
   id            String      @id @default(cuid())
   propertyId    String
   fileName      String
-  s3KeyOriginal String      // original upload
-  s3KeyFixed    String?     // auto-corrected version
+  s3KeyOriginal String // original upload
+  s3KeyFixed    String? // auto-corrected version
   status        PhotoStatus @default(PENDING)
-  qcScore       Float?      // 0-100
-  fileSize      Int?        // bytes
+  qcScore       Float? // 0-100
+  fileSize      Int? // bytes
 
   // QC results
-  verticalDev   Float?  // degrees off vertical
-  horizonDev    Float?  // degrees off horizontal
-  colorTemp     Float?  // detected color temperature
-  exposure      Float?  // exposure value
-  sharpness     Float?  // Laplacian variance
-  saturation    Float?  // average saturation
+  verticalDev Float? // degrees off vertical
+  horizonDev  Float? // degrees off horizontal
+  colorTemp   Float? // detected color temperature
+  exposure    Float? // exposure value
+  sharpness   Float? // Laplacian variance
+  saturation  Float? // average saturation
 
   // Issue flags
-  issues        Json?   // detailed issue breakdown
-  aiNotes       String? @db.Text // Claude Vision analysis
+  issues  Json? // detailed issue breakdown
+  aiNotes String? @db.Text // Claude Vision analysis
 
   // Fix tracking
-  fixesApplied  String[] // list of auto-fixes applied
-  fixedAt       DateTime?
+  fixesApplied String[] // list of auto-fixes applied
+  fixedAt      DateTime?
 
   // When true, exports, pushes, and the UI all serve the original bytes
   // instead of s3KeyFixed. User-driven override for cases where the
   // auto-fix made things worse. The fixed artifact is kept on S3 so the
   // user can flip back without re-queueing QC.
-  useOriginal   Boolean   @default(false)
+  useOriginal Boolean @default(false)
 
   // Add-on variants (Virtual Twilight so far). When TWILIGHT_FINAL
   // exists, downloads and pushes include it alongside the main output.
-  variants      PhotoVariant[]
+  variants PhotoVariant[]
 
   // Virtual Staging unlock: timestamp of the first 2-credit charge on
   // this photo. Once set, every preview + every keeper render on this
@@ -427,6 +434,14 @@ model Photo {
   stagingSpatialManifest String? @db.Text
   stagingAnchorPhotoId   String?
 
+  // HDR bracket merge inputs. When non-empty, this Photo row represents
+  // one merged scene built from multiple S3-stored RAW brackets.
+  // s3KeyOriginal stores the middle-EV bracket (for thumbnails and the
+  // before-merge preview). s3KeyFixed holds the merged + edited output.
+  // Lambda routes through hdr/merge.py when this array has 2+ entries.
+  // Empty array = standard single-photo flow, unchanged.
+  bracketKeys String[] @default([])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -439,20 +454,20 @@ model Photo {
 }
 
 enum PhotoStatus {
-  PENDING     // not yet checked
-  PROCESSING  // QC running
-  PASSED      // all checks pass
-  FIXED       // auto-corrected, now passes
-  FLAGGED     // needs human review
-  APPROVED    // human approved
-  REJECTED    // human rejected
+  PENDING // not yet checked
+  PROCESSING // QC running
+  PASSED // all checks pass
+  FIXED // auto-corrected, now passes
+  FLAGGED // needs human review
+  APPROVED // human approved
+  REJECTED // human rejected
 }
 
 model Integration {
-  id          String @id @default(cuid())
-  agencyId    String
-  platform    IntegrationPlatform
-  isActive    Boolean @default(true)
+  id       String              @id @default(cuid())
+  agencyId String
+  platform IntegrationPlatform
+  isActive Boolean             @default(true)
 
   // Encrypted credentials stored as JSON
   credentials Json
@@ -474,26 +489,26 @@ enum IntegrationPlatform {
 }
 
 model UsageRecord {
-  id          String   @id @default(cuid())
-  agencyId    String
-  propertyId  String
-  photoCount  Int
-  tierPrice   Int      // cents (the actual amount charged or credit value)
-  billingMode BillingMode
-  creditsUsed Int      @default(1)
-  stripeChargeId String?  // Stripe PaymentIntent ID if PAYG
+  id             String      @id @default(cuid())
+  agencyId       String
+  propertyId     String
+  photoCount     Int
+  tierPrice      Int // cents (the actual amount charged or credit value)
+  billingMode    BillingMode
+  creditsUsed    Int         @default(1)
+  stripeChargeId String? // Stripe PaymentIntent ID if PAYG
 
   createdAt DateTime @default(now())
 }
 
 model CreditTransaction {
-  id          String   @id @default(cuid())
-  agencyId    String
-  type        CreditTransactionType
-  amount      Int      // credits added (positive) or used (negative)
-  priceCents  Int?     // Cost in cents (only for purchases)
+  id             String                @id @default(cuid())
+  agencyId       String
+  type           CreditTransactionType
+  amount         Int // credits added (positive) or used (negative)
+  priceCents     Int? // Cost in cents (only for purchases)
   stripeChargeId String?
-  description String?
+  description    String?
 
   createdAt DateTime @default(now())
 
@@ -501,22 +516,22 @@ model CreditTransaction {
 }
 
 enum CreditTransactionType {
-  PURCHASE       // Bought credits via Stripe
-  USAGE          // Used credits to process a property
-  REFUND         // Refunded credits (property failed QC processing)
-  ADJUSTMENT     // Manual adjustment by admin
-  PROMO          // Promotional credits
+  PURCHASE // Bought credits via Stripe
+  USAGE // Used credits to process a property
+  REFUND // Refunded credits (property failed QC processing)
+  ADJUSTMENT // Manual adjustment by admin
+  PROMO // Promotional credits
 }
 
 model CreditPackage {
-  id          String @id @default(cuid())
-  name        String
-  credits     Int
-  priceCents  Int
-  savingsPct  Int    @default(0)
-  isActive    Boolean @default(true)
+  id            String  @id @default(cuid())
+  name          String
+  credits       Int
+  priceCents    Int
+  savingsPct    Int     @default(0)
+  isActive      Boolean @default(true)
   stripePriceId String?
-  displayOrder Int @default(0)
+  displayOrder  Int     @default(0)
 }
 
 // Funnel-instrumentation event log. One row per recorded event. Read
@@ -556,22 +571,22 @@ model Event {
 // credit). Leaves room for future AI add-ons (virtual staging, sky
 // replacement, etc.) without another table.
 model PhotoVariant {
-  id          String              @id @default(cuid())
-  photoId     String
-  type        PhotoVariantType
-  s3Key       String
-  provider    String?             // "gemini" | "leonardo" | ...
-  prompt      String?             @db.Text
+  id         String             @id @default(cuid())
+  photoId    String
+  type       PhotoVariantType
+  s3Key      String
+  provider   String? // "gemini" | "leonardo" | ...
+  prompt     String?            @db.Text
   // Style modifier for variants that have styled options (virtual
   // staging picks a furniture style). Null for Twilight and any other
   // single-style variant types.
-  style       String?
-  status      PhotoVariantStatus  @default(READY)
-  creditCost  Int                 @default(0)  // credits charged for this variant, 0 = preview
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  style      String?
+  status     PhotoVariantStatus @default(READY)
+  creditCost Int                @default(0) // credits charged for this variant, 0 = preview
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
 
-  photo       Photo               @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  photo Photo @relation(fields: [photoId], references: [id], onDelete: Cascade)
 
   @@index([photoId, type])
   @@index([photoId, type, style])
@@ -591,23 +606,23 @@ enum PhotoVariantStatus {
 }
 
 model BugReport {
-  id              String       @id @default(cuid())
-  reporterUserId  String
-  agencyId        String?
-  type            FeedbackType @default(BUG)
-  title           String
-  description     String       @db.Text
-  severity        BugSeverity  @default(NORMAL)
-  status          BugStatus    @default(NEW)
-  screenshotKey   String?      // S3 key for optional screenshot
-  pageUrl         String?      // where the user was when they reported
-  userAgent       String?      @db.Text
-  prUrl           String?      // link to the PR fixing this / shipping the feature
-  fixedCommitSha  String?
-  internalNotes   String?      @db.Text
-  resolvedAt      DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id             String       @id @default(cuid())
+  reporterUserId String
+  agencyId       String?
+  type           FeedbackType @default(BUG)
+  title          String
+  description    String       @db.Text
+  severity       BugSeverity  @default(NORMAL)
+  status         BugStatus    @default(NEW)
+  screenshotKey  String? // S3 key for optional screenshot
+  pageUrl        String? // where the user was when they reported
+  userAgent      String?      @db.Text
+  prUrl          String? // link to the PR fixing this / shipping the feature
+  fixedCommitSha String?
+  internalNotes  String?      @db.Text
+  resolvedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@index([status])
   @@index([reporterUserId])
@@ -642,7 +657,7 @@ enum BugStatus {
 model EmailSuppression {
   id        String   @id @default(cuid())
   email     String   @unique
-  reason    String?  // free-form: "replied STOP", "manual", "bounce", etc.
-  source    String?  // which campaign / context the unsub came from
+  reason    String? // free-form: "replied STOP", "manual", "bounce", etc.
+  source    String? // which campaign / context the unsub came from
   createdAt DateTime @default(now())
 }

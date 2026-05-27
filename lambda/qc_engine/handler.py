@@ -37,6 +37,8 @@ from fixes.blur_personal import apply_privacy_blur
 from fixes.apply_actions import apply_recommended_actions
 from fixes.remove_distractions import remove_distractions
 
+from hdr.merge import merge_brackets_from_s3
+
 s3 = boto3.client("s3")
 BUCKET = os.environ["AWS_S3_BUCKET"]
 DB_URL = os.environ["DATABASE_URL"]
@@ -194,9 +196,22 @@ def process_photo(
     all_photo_data: list = None,
     tier: str = "STANDARD",
     distraction_categories: list = None,
+    pre_processed_local_path: str | None = None,
 ) -> dict:
-    """Run all QC checks on a single photo."""
-    local_path = download_photo(s3_key)
+    """
+    Run all QC checks on a single photo.
+
+    pre_processed_local_path: when set, skip the S3 download and use
+    this local file as the starting point. Used by the HDR merge flow
+    (handler merges brackets to a local JPEG, then calls process_photo
+    with that path so the existing composition + smart_editor stack
+    runs unchanged on the merged frame). s3_key is still used for the
+    output upload destination.
+    """
+    if pre_processed_local_path:
+        local_path = pre_processed_local_path
+    else:
+        local_path = download_photo(s3_key)
     issues = {}
     metrics = {}
     fixes_applied = []
@@ -768,7 +783,7 @@ def handler(event, context):
 
                 cursor = db.cursor()
                 cursor.execute(
-                    'SELECT id, "s3KeyOriginal" FROM "Photo" WHERE id = %s',
+                    'SELECT id, "s3KeyOriginal", "bracketKeys" FROM "Photo" WHERE id = %s',
                     (photo_id,),
                 )
                 row = cursor.fetchone()
@@ -777,6 +792,27 @@ def handler(event, context):
                 if not row:
                     print(f"Photo {photo_id} not found, skipping")
                     continue
+
+                # HDR bracket merge runs BEFORE the standard pipeline.
+                # When bracketKeys is non-empty, pull all brackets from S3,
+                # fuse with Mertens, and hand the merged JPEG to
+                # process_photo via pre_processed_local_path. Everything
+                # downstream (composition vision, smart_editor, fixes)
+                # then runs unchanged on the merged frame.
+                hdr_local_path: str | None = None
+                hdr_meta: dict = {}
+                bracket_keys = row[2] or []
+                if bracket_keys and len(bracket_keys) >= 2:
+                    print(
+                        f"HDR merge: photo={photo_id} brackets={len(bracket_keys)}"
+                    )
+                    hdr_local_path, hdr_meta = merge_brackets_from_s3(
+                        s3, BUCKET, bracket_keys
+                    )
+                    if hdr_local_path is None:
+                        print(
+                            f"HDR merge failed for {photo_id}: {hdr_meta.get('error')}"
+                        )
 
                 # ----- HARD SAFETY NET -----
                 # process_photo's internal try/except only covers the
@@ -799,7 +835,24 @@ def handler(event, context):
                         thresholds,
                         tier=tier,
                         distraction_categories=distraction_categories,
+                        pre_processed_local_path=hdr_local_path,
                     )
+                    # If HDR merge ran, surface that in fixes_applied and
+                    # the issues breadcrumb so the dashboard shows it
+                    # alongside the standard auto-fixes.
+                    if hdr_local_path and hdr_meta:
+                        result.setdefault("fixes_applied", [])
+                        result["fixes_applied"] = (
+                            list(hdr_meta.get("operations", []))
+                            + result["fixes_applied"]
+                        )
+                        result.setdefault("issues", {})
+                        result["issues"]["_hdr_merge"] = {
+                            "frame_count": hdr_meta.get("frame_count"),
+                            "resolution": list(
+                                hdr_meta.get("merged_resolution", ())
+                            ),
+                        }
                 except Exception as photo_err:
                     print(f"Uncaught error in process_photo({photo_id}): {photo_err}")
                     traceback.print_exc()

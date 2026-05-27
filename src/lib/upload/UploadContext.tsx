@@ -23,12 +23,21 @@ export interface UploadJob {
   startedAt: Date;
 }
 
+// Bracket definition the upload API expects when HDR mode is on.
+// File names here must match entries in the flat `files` list.
+export interface BracketSpec {
+  sceneName: string;
+  files: string[];
+  thumbnailFile: string;
+}
+
 interface UploadContextType {
   jobs: UploadJob[];
   startUpload: (
     propertyId: string,
     propertyAddress: string,
-    files: File[]
+    files: File[],
+    brackets?: BracketSpec[]
   ) => string;
   dismissJob: (jobId: string) => void;
 }
@@ -41,6 +50,13 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   const compressImage = async (file: File): Promise<Blob> => {
     if (file.size < 2 * 1024 * 1024) return file;
     if (!file.type.startsWith("image/")) return file;
+    // Never re-encode RAW files. Browsers can't decode ARW/CR3/etc.
+    // anyway, but be explicit: HDR merge needs the untouched sensor
+    // data on the server side.
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    if (["arw", "cr2", "cr3", "nef", "dng", "raf", "orf", "rw2"].includes(ext)) {
+      return file;
+    }
     try {
       const img = await createImageBitmap(file);
       const MAX_DIM = 3840;
@@ -65,7 +81,12 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   };
 
   const startUpload = useCallback(
-    (propertyId: string, propertyAddress: string, files: File[]): string => {
+    (
+      propertyId: string,
+      propertyAddress: string,
+      files: File[],
+      brackets?: BracketSpec[]
+    ): string => {
       const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
       const newJob: UploadJob = {
@@ -85,7 +106,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
       setJobs((prev) => [...prev, newJob]);
 
       // Kick off upload async - doesn't block the UI
-      processJob(jobId, propertyId, files);
+      processJob(jobId, propertyId, files, brackets);
 
       return jobId;
     },
@@ -120,12 +141,15 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   const processJob = async (
     jobId: string,
     propertyId: string,
-    files: File[]
+    files: File[],
+    brackets?: BracketSpec[]
   ) => {
     updateJobStatus(jobId, "running");
 
     try {
-      // Get presigned URLs
+      // Get presigned URLs. When brackets are provided, the API
+      // creates one Photo per scene (with bracketKeys populated) and
+      // the Lambda fuses them before QC runs.
       const res = await fetch("/api/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -136,6 +160,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
             type: f.type,
             size: f.size,
           })),
+          ...(brackets && brackets.length > 0 ? { brackets } : {}),
         }),
       });
 
