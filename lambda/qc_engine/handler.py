@@ -58,9 +58,26 @@ def download_photo(s3_key: str) -> str:
 
 
 def upload_fixed(local_path: str, s3_key: str) -> str:
-    """Upload a fixed photo to S3."""
+    """
+    Upload a fixed photo to S3.
+
+    For HDR shoots the original key has a .arw / .dng / .cr3 extension
+    but the fixed bytes are always JPEG (Mertens or rawpy output). Swap
+    the extension so browsers and downstream MIME-checking code render
+    the fixed image. Also set ContentType so the S3 metadata matches.
+    """
     fixed_key = s3_key.replace("/original/", "/fixed/")
-    s3.upload_file(local_path, BUCKET, fixed_key)
+    ext = fixed_key.rsplit(".", 1)[-1].lower()
+    raw_exts = {"arw", "cr2", "cr3", "nef", "dng", "raf", "orf", "rw2"}
+    if ext in raw_exts:
+        fixed_key = fixed_key.rsplit(".", 1)[0] + ".jpg"
+    content_type = "image/jpeg"
+    s3.upload_file(
+        local_path,
+        BUCKET,
+        fixed_key,
+        ExtraArgs={"ContentType": content_type},
+    )
     return fixed_key
 
 
@@ -218,6 +235,11 @@ def process_photo(
     fixes_applied = []
     ai_notes = None
     fixed_s3_key = None
+    # HDR path: the merged / RAW-decoded JPEG IS itself a transform
+    # of the originals (browsers cant render the ARW / DNG sitting in
+    # s3KeyOriginal). Force-flag the upload so even when no fix module
+    # triggers later, the dashboard has a renderable image to show.
+    force_upload_fixed = pre_processed_local_path is not None
 
     try:
         # === GEOMETRIC CHECKS ===
@@ -527,8 +549,11 @@ def process_photo(
                     "region_count": 0,
                 }
 
-        # Upload fixed version
-        if needs_fix:
+        # Upload fixed version. force_upload_fixed is set for HDR
+        # shoots so the merged/decoded JPEG always lands in s3KeyFixed
+        # — without it, RAW shoots that no fix module touched would
+        # leave only the unrenderable ARW/DNG in s3KeyOriginal.
+        if needs_fix or force_upload_fixed:
             fixed_s3_key = upload_fixed(local_path, s3_key)
 
     except Exception as e:
