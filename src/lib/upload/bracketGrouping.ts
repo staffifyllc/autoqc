@@ -52,123 +52,185 @@ export function isRawFile(file: File): boolean {
   return RAW_EXTENSIONS.includes(ext);
 }
 
-// Last-resort timestamp parse from filename patterns commonly used by
-// drone + DSLR firmware. Many DJI bodies (and some Sony Action cams)
-// drop EXIF datetime into the filename: DJI_20260226144310_0016_D.dng
-// has "20260226144310" = 2026-02-26 14:43:10. When exifr cannot read
-// the embedded EXIF (some DJI DNG variants have non-standard tags)
-// this lets us still group brackets correctly. Returns null if no
-// recognizable pattern matches.
+// Extract the YYYYMMDDHHMMSS timestamp portion of a filename as a
+// raw string. Used as a primary "same scene" signal because for DJI
+// the timestamp in the name is exactly the AEB capture instant — all
+// 5 brackets share the same 14-digit prefix. Direct string-equality
+// is the cleanest "these are the same set" detector we can get.
+function timestampKeyFromFileName(name: string): string | null {
+  // Any 14 consecutive digits that parse as a valid date. Permissive
+  // about what surrounds the digits because DJI / Sony / Canon all
+  // pack the timestamp slightly differently.
+  const m = name.match(/(\d{14})/);
+  if (!m) return null;
+  const ts = m[1];
+  const y = parseInt(ts.slice(0, 4), 10);
+  const mo = parseInt(ts.slice(4, 6), 10);
+  const d = parseInt(ts.slice(6, 8), 10);
+  const h = parseInt(ts.slice(8, 10), 10);
+  const mi = parseInt(ts.slice(10, 12), 10);
+  const s = parseInt(ts.slice(12, 14), 10);
+  if (
+    y < 2000 || y > 2100 ||
+    mo < 1 || mo > 12 ||
+    d < 1 || d > 31 ||
+    h > 23 || mi > 59 || s > 59
+  ) {
+    return null;
+  }
+  return ts;
+}
+
 function timestampFromFileName(name: string): Date | null {
-  // DJI: 14-digit YYYYMMDDHHMMSS surrounded by underscores
-  const dji = name.match(/_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})_/);
-  if (dji) {
-    const [, y, mo, d, h, mi, s] = dji;
-    const dt = new Date(
-      `${y}-${mo}-${d}T${h}:${mi}:${s}Z`
-    );
-    if (!isNaN(dt.getTime())) return dt;
-  }
-  // Sony / generic: YYYYMMDD_HHMMSS or YYYYMMDDHHMMSS at any position
-  const generic = name.match(/(\d{4})(\d{2})(\d{2})[_-]?(\d{2})(\d{2})(\d{2})/);
-  if (generic) {
-    const [, y, mo, d, h, mi, s] = generic;
-    const dt = new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}Z`);
-    if (!isNaN(dt.getTime())) return dt;
-  }
-  return null;
+  const ts = timestampKeyFromFileName(name);
+  if (!ts) return null;
+  const iso = `${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}T${ts.slice(8, 10)}:${ts.slice(10, 12)}:${ts.slice(12, 14)}Z`;
+  const dt = new Date(iso);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+// Augmented metadata that carries the raw filename timestamp string
+// alongside the parsed Date. The grouping algorithm prefers string-
+// equality on the raw key over Date math because identical strings
+// are an unambiguous "same scene" signal that no time-gap heuristic
+// can match.
+interface BracketFileExt extends BracketFile {
+  filenameKey: string | null;
 }
 
 export async function readBracketMetadata(
   files: File[]
 ): Promise<BracketFile[]> {
-  return Promise.all(
-    files.map(async (file) => {
-      let captured: Date | null = null;
+  const result = await Promise.all(
+    files.map(async (file): Promise<BracketFileExt> => {
+      // PRIMARY: filename timestamp. For DJI this is rock-solid and
+      // exifr fails on a meaningful fraction of DJI DNG variants.
+      const filenameKey = timestampKeyFromFileName(file.name);
+      let captured: Date | null = filenameKey
+        ? timestampFromFileName(file.name)
+        : null;
       let bias: number | null = null;
+
+      // SECONDARY: exifr for ExposureBiasValue (and DateTimeOriginal
+      // if filename had no timestamp).
       try {
-        // exifr extracts the small set of EXIF tags we actually need
-        // without parsing the full preview JPEG; keeps the browser
-        // responsive even for 100+ RAW files.
         const tags = await exifr.parse(file, [
           "DateTimeOriginal",
           "CreateDate",
           "ExposureBiasValue",
           "ExposureCompensation",
         ]);
-        captured =
-          (tags?.DateTimeOriginal as Date | undefined) ??
-          (tags?.CreateDate as Date | undefined) ??
-          null;
+        if (!captured) {
+          captured =
+            (tags?.DateTimeOriginal as Date | undefined) ??
+            (tags?.CreateDate as Date | undefined) ??
+            null;
+        }
         const b =
           (tags?.ExposureBiasValue as number | undefined) ??
           (tags?.ExposureCompensation as number | undefined) ??
           null;
         bias = typeof b === "number" ? b : null;
       } catch {
-        /* fall through to filename-based fallback */
+        /* exifr failed — filename path already gave us what we need */
       }
-      // Fallback: DJI / Sony / generic timestamp in the file name.
-      // Without this, exifr-incompatible RAWs end up as singletons
-      // even when they are obviously consecutive bracket frames.
-      if (!captured) {
-        captured = timestampFromFileName(file.name);
-      }
+
       return {
         file,
         capturedAt: captured,
         exposureBias: bias,
+        filenameKey,
       };
     })
   );
+  // Stash the filenameKey on the file objects via WeakMap so
+  // groupIntoBrackets can use it without changing the public type.
+  for (const r of result) {
+    filenameKeys.set(r.file, r.filenameKey);
+  }
+  return result;
 }
 
-export function groupIntoBrackets(meta: BracketFile[]): BracketGroup[] {
-  // Files without timestamps cannot participate in grouping; each one
-  // becomes its own single-file "group" so the caller can still upload
-  // them, just outside the HDR path.
-  const dated = meta.filter((m): m is BracketFile & { capturedAt: Date } =>
-    Boolean(m.capturedAt)
-  );
-  const orphans = meta.filter((m) => !m.capturedAt);
+// Side-channel mapping from File to the filename timestamp key so
+// groupIntoBrackets can read it without expanding the public
+// BracketFile type.
+const filenameKeys = new WeakMap<File, string | null>();
 
+export function groupIntoBrackets(meta: BracketFile[]): BracketGroup[] {
+  // Strategy:
+  //   PASS 1: Group by the filename's 14-digit YYYYMMDDHHMMSS key.
+  //     All files that share that key are unambiguously the same
+  //     AEB scene (DJI, Sony, Canon naming pattern). Bulletproof.
+  //   PASS 2: For files that had no filename key, fall back to the
+  //     time-gap + EV-reset heuristic on parsed timestamps.
+  //   PASS 3: Anything still ungrouped becomes a singleton.
+
+  const grouped: BracketGroup[] = [];
+  const byFilenameKey = new Map<string, BracketFile[]>();
+  const noKey: BracketFile[] = [];
+
+  for (const m of meta) {
+    const key = filenameKeys.get(m.file) ?? null;
+    if (key) {
+      const arr = byFilenameKey.get(key) ?? [];
+      arr.push(m);
+      byFilenameKey.set(key, arr);
+    } else {
+      noKey.push(m);
+    }
+  }
+
+  const sceneNameFor = (idx: number) =>
+    `Scene_${String(idx + 1).padStart(3, "0")}`;
+
+  const pickThumbnail = (bracket: BracketFile[]): File => {
+    const sorted = [...bracket].sort((a, b) => {
+      const ab = a.exposureBias ?? 0;
+      const bb = b.exposureBias ?? 0;
+      return ab - bb;
+    });
+    return sorted[Math.floor(sorted.length / 2)].file;
+  };
+
+  // PASS 1: filename-key groups. Sort the keys so scenes appear in
+  // chronological order in the UI.
+  const sortedKeys = Array.from(byFilenameKey.keys()).sort();
+  for (const key of sortedKeys) {
+    const bracket = byFilenameKey.get(key)!;
+    const sortedByBias = [...bracket].sort((a, b) => {
+      const ab = a.exposureBias ?? 0;
+      const bb = b.exposureBias ?? 0;
+      return ab - bb;
+    });
+    grouped.push({
+      sceneName: sceneNameFor(grouped.length),
+      files: sortedByBias.map((m) => m.file),
+      thumbnail: pickThumbnail(bracket),
+    });
+  }
+
+  // PASS 2: time-based fallback for the files without filename keys.
+  const dated = noKey.filter(
+    (m): m is BracketFile & { capturedAt: Date } => Boolean(m.capturedAt)
+  );
+  const orphans = noKey.filter((m) => !m.capturedAt);
   const sorted = [...dated].sort(
     (a, b) => a.capturedAt.getTime() - b.capturedAt.getTime()
   );
 
-  const groups: BracketGroup[] = [];
   let current: (BracketFile & { capturedAt: Date })[] = [];
-
   const flush = () => {
     if (current.length === 0) return;
-    // Sort by exposureBias ascending (darkest first); fall back to
-    // timestamp order if bias is missing.
-    const sortedByBias = [...current].sort((a, b) => {
-      const aBias = a.exposureBias ?? 0;
-      const bBias = b.exposureBias ?? 0;
-      if (aBias === bBias) {
-        return a.capturedAt.getTime() - b.capturedAt.getTime();
-      }
-      return aBias - bBias;
-    });
-    const median = sortedByBias[Math.floor(sortedByBias.length / 2)];
-    groups.push({
-      sceneName: `Scene_${String(groups.length + 1).padStart(3, "0")}`,
-      files: sortedByBias.map((m) => m.file),
-      thumbnail: median.file,
+    grouped.push({
+      sceneName: sceneNameFor(grouped.length),
+      files: [...current]
+        .sort((a, b) => (a.exposureBias ?? 0) - (b.exposureBias ?? 0))
+        .map((m) => m.file),
+      thumbnail: pickThumbnail(current),
     });
     current = [];
   };
 
-  // Group break logic: any of
-  //   - time gap > GAP_THRESHOLD_SECONDS
-  //   - EV ladder reset: a sharp drop in ExposureBiasValue from the
-  //     previous shot (>= 1.5 stops down). AEB sequences fire
-  //     monotonically increasing EV; when the bias jumps back DOWN
-  //     by more than a stop, that's a new sequence starting, even
-  //     if it happened within the time window. This is the actual
-  //     signal that catches DJI and Sony bracketing — time alone
-  //     misses fast-paced shoots where scenes are <10s apart.
   for (const m of sorted) {
     if (current.length === 0) {
       current.push(m);
@@ -176,35 +238,28 @@ export function groupIntoBrackets(meta: BracketFile[]): BracketGroup[] {
     }
     const prev = current[current.length - 1];
     const gap = (m.capturedAt.getTime() - prev.capturedAt.getTime()) / 1000;
-
     let shouldBreak = gap > GAP_THRESHOLD_SECONDS;
-
     if (
       !shouldBreak &&
       typeof prev.exposureBias === "number" &&
       typeof m.exposureBias === "number"
     ) {
-      // EV reset detection. Allow small wobble; only treat a drop of
-      // 1.5 stops or more as a new bracket set starting. Within a
-      // ladder EV always goes UP, never down.
       const evDelta = m.exposureBias - prev.exposureBias;
-      if (evDelta <= -1.5) {
-        shouldBreak = true;
-      }
+      if (evDelta <= -1.5) shouldBreak = true;
     }
-
     if (shouldBreak) flush();
     current.push(m);
   }
   flush();
 
+  // PASS 3: untimed orphans become singletons.
   for (const o of orphans) {
-    groups.push({
+    grouped.push({
       sceneName: o.file.name.replace(/\.[^.]+$/, ""),
       files: [o.file],
       thumbnail: o.file,
     });
   }
 
-  return groups;
+  return grouped;
 }
