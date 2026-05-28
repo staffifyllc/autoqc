@@ -769,7 +769,10 @@ export default function LandingPage() {
                   <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">
                     Launch price
                   </p>
-                  <div className="flex items-baseline justify-center gap-1">
+                  <div className="flex items-baseline justify-center gap-2">
+                    <span className="text-2xl font-semibold stat-num text-muted-foreground/60 line-through decoration-2">
+                      $0.50
+                    </span>
                     <span className="text-5xl font-bold stat-num gradient-text">
                       $0.20
                     </span>
