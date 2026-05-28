@@ -923,21 +923,35 @@ export default function PropertyDetailPage({
               onClick={() => setSelectedPhoto(photo)}
               className="group relative rounded-md overflow-hidden border border-border hover:border-primary/40 focus:border-primary/60 transition-colors duration-150 aspect-[4/3] bg-[hsl(var(--surface-2))]"
             >
-              {/* Actual image thumbnail */}
-              {(photo as any).thumbnailUrl ? (
-                <img
-                  src={(photo as any).thumbnailUrl}
-                  alt={photo.fileName}
-                  loading="lazy"
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-xs text-muted-foreground px-2 text-center">
-                    {photo.fileName}
-                  </span>
-                </div>
-              )}
+              {/* Actual image thumbnail. RAW URLs are excluded
+                  because browsers cannot render them; show a
+                  filename placeholder until the Lambda generates a
+                  JPEG preview. */}
+              {(() => {
+                const RAW_RE = /\.(arw|cr2|cr3|nef|dng|raf|orf|rw2)(\?|$)/i;
+                const thumb = (photo as any).thumbnailUrl as string | undefined;
+                const usableThumb =
+                  thumb && !RAW_RE.test(thumb) ? thumb : undefined;
+                if (usableThumb) {
+                  return (
+                    <img
+                      src={usableThumb}
+                      alt={photo.fileName}
+                      loading="lazy"
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  );
+                }
+                return (
+                  <div className="absolute inset-0 flex items-center justify-center px-2">
+                    <span className="text-xs text-muted-foreground text-center break-words">
+                      {photo.status === "PROCESSING" || photo.status === "PENDING"
+                        ? "Processing..."
+                        : photo.fileName}
+                    </span>
+                  </div>
+                );
+              })()}
 
               {/* Subtle gradient overlay for badge readability */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
@@ -1110,11 +1124,48 @@ export default function PropertyDetailPage({
               {/* Image area */}
               <div className="flex-1 flex flex-col items-center justify-center p-8 gap-3">
                 {(() => {
-                  const origSrc =
-                    selectedPhoto.originalUrl ||
-                    (selectedPhoto as any).thumbnailUrl;
+                  // RAW source detection. Browsers cannot render ARW
+                  // / DNG / CR3 / etc., so any URL whose path ends in
+                  // one of those extensions has to be excluded from
+                  // the slider — otherwise we get a 1px broken-image
+                  // icon (the "useless compressed preview" Paul saw
+                  // on Flylisted shoots). When the original is RAW we
+                  // fall back to the fixed JPEG on both sides; if no
+                  // fix exists yet, we show a processing placeholder.
+                  const RAW_RE = /\.(arw|cr2|cr3|nef|dng|raf|orf|rw2)(\?|$)/i;
+                  const rawOriginal =
+                    selectedPhoto.originalUrl &&
+                    RAW_RE.test(selectedPhoto.originalUrl);
                   const fixedSrc = selectedPhoto.fixedUrl;
                   const hasFix = Boolean(fixedSrc);
+
+                  const isStillProcessing =
+                    selectedPhoto.status === "PENDING" ||
+                    selectedPhoto.status === "PROCESSING";
+
+                  if (rawOriginal && !hasFix) {
+                    return (
+                      <div className="w-full aspect-[4/3] rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 flex flex-col items-center justify-center gap-2 border border-white/10">
+                        <span className="text-sm text-muted-foreground font-mono">
+                          {isStillProcessing
+                            ? "Merging RAW brackets..."
+                            : "Generating preview..."}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground/70">
+                          {selectedPhoto.fileName}
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  // origSrc prefers thumbnailUrl (which is fixedUrl
+                  // when available) over the RAW original. For
+                  // properly processed photos the slider compares
+                  // pre-style vs styled.
+                  const origSrc = rawOriginal
+                    ? (fixedSrc as string)
+                    : selectedPhoto.originalUrl ||
+                      (selectedPhoto as any).thumbnailUrl;
 
                   if (!origSrc) {
                     return (
