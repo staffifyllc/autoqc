@@ -104,9 +104,13 @@ aws lambda wait function-updated --function-name photoqc-engine --region $AWS_RE
 # Claude Vision + smart_editor). Idempotent — safe to re-run.
 echo ""
 echo "Ensuring engine memory/timeout sized for HDR merge..."
+# 8192 MB: 5-7 Sony brackets at the 3072px decode cap plus the float32
+# Laplacian pyramids MergeMertens builds peaked at the 4GB ceiling and
+# OOM-crashed interior merges (Max Memory Used 4096/4096, Status error).
+# 8GB gives real headroom; the decode cap in merge.py keeps it there.
 aws lambda update-function-configuration \
     --function-name photoqc-engine \
-    --memory-size 4096 \
+    --memory-size 8192 \
     --timeout 360 \
     --region $AWS_REGION \
     --no-cli-pager > /dev/null 2>&1 || echo "Note: engine config update skipped"

@@ -61,9 +61,21 @@ def _rawpy_params(no_auto_bright: bool) -> dict:
     )
 
 
+# Long-edge resolution cap applied at decode. A 33MP A7IV bracket
+# decoded full-res, times 5-7 frames, times the float32 Laplacian
+# pyramids cv2.MergeMertens builds, blew past the 4GB Lambda ceiling
+# and OOM-crashed every interior merge (exteriors from smaller DJI
+# files squeaked under — hence "exteriors done, interiors stuck").
+# Capping the long edge to 3072px (~6MP) cuts peak merge memory ~5x
+# and is still well above MLS / web delivery needs (typically
+# 2048-3072px). Raise this only alongside a Lambda memory bump.
+MAX_MERGE_EDGE = 3072
+
+
 def _decode_raw(raw_path: str, no_auto_bright: bool = True) -> Optional[np.ndarray]:
     """
-    Decode a single RAW (ARW/CR3/NEF/etc.) to an 8-bit BGR numpy array.
+    Decode a single RAW (ARW/CR3/NEF/etc.) to an 8-bit BGR numpy array,
+    capped to MAX_MERGE_EDGE on the long side to bound merge memory.
 
     no_auto_bright defaults to True (the bracket-merge case) so the
     exposure ladder is preserved. Pass False for single-frame decode
@@ -76,7 +88,16 @@ def _decode_raw(raw_path: str, no_auto_bright: bool = True) -> Optional[np.ndarr
         with rawpy.imread(raw_path) as raw:
             rgb = raw.postprocess(**_rawpy_params(no_auto_bright))
         # rawpy returns RGB; OpenCV operates in BGR
-        return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        h, w = bgr.shape[:2]
+        if max(h, w) > MAX_MERGE_EDGE:
+            scale = MAX_MERGE_EDGE / max(h, w)
+            bgr = cv2.resize(
+                bgr,
+                (int(round(w * scale)), int(round(h * scale))),
+                interpolation=cv2.INTER_AREA,
+            )
+        return bgr
     except Exception as e:
         print(f"RAW decode failed for {raw_path}: {e}")
         return None
