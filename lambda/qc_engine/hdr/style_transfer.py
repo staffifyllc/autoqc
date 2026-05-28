@@ -245,35 +245,74 @@ def _load_learned():
     return _learned_cache
 
 
-def adaptive_shadow_lift(
-    img_bgr: np.ndarray,
-    target_p10: float = 62.0,
-    sigma: float = 60.0,
-    max_lift: float = 55.0,
+# Tonal signatures measured from Paul's 55 finished 699 Spear photos
+# (LAB L percentiles, 0-255), split INTERIOR vs EXTERIOR by the validated
+# hdr/scene classifier (100% on this set). They are genuinely different
+# looks and must not share one curve:
+#
+#   INTERIOR (n=31): deep anchored black (p1=21) + lifted shadows
+#     (p10=70) + bright contrasty mids (p50=158). Magazine-room look:
+#     crushed-but-not-clipped blacks, high local contrast. Restrained
+#     saturation (finished mean S=73).
+#
+#   EXTERIOR (n=24): HIGHER black point (p1=32 — landscapes keep shadows
+#     open, never crushed), protected highlights (p90=202 vs interior
+#     210 — hold sky/cloud detail), softer contrast, and MUCH punchier
+#     color (finished mean S=109, ~1.5x interior). This is the "perfect
+#     landscape" finish Paul asked for; applying the interior black-anchor
+#     curve here is exactly the "atomic / horrible" exterior look.
+#
+# Lifting one percentile (the old adaptive_shadow_lift) floated the black
+# point and washed the image; matching the whole curve holds blacks in
+# place while raising shadows, preserving contrast.
+_FINISHED_L_PCTS = [1, 5, 10, 25, 50, 75, 90, 95, 99]
+_INTERIOR_L_TARGET = [21.3, 51.1, 70.1, 112.2, 158.5, 191.9, 210.5, 218.5, 230.5]
+_EXTERIOR_L_TARGET = [32.3, 57.5, 77.2, 118.0, 155.0, 183.2, 201.8, 209.1, 223.7]
+
+# Saturation multipliers per scene. 1.15 is Paul's approved interior
+# level. Exteriors finish ~1.5x more saturated than interiors, but the
+# merged frame already carries inherent sky/foliage chroma, so the
+# applied multiplier is less than that ratio. 1.30 is the starting
+# exterior level (dialed against rendered samples).
+_INTERIOR_SAT = 1.15
+_EXTERIOR_SAT = 1.30
+
+
+def _l_target_for_scene(scene: str) -> list:
+    return _EXTERIOR_L_TARGET if scene == "exterior" else _INTERIOR_L_TARGET
+
+
+def tone_match_to_finished(
+    img_bgr: np.ndarray, strength: float = 1.0, scene: str = "interior"
 ) -> np.ndarray:
     """
-    Lift shadows TO a consistent level, adaptively per image.
+    Map the image's L (luminance) curve toward the finished tonal
+    signature for its SCENE (interior = anchored blacks + contrast;
+    exterior = open shadows + protected highlights). Consistent across
+    the set (every image of a scene targets the same curve) and
+    contrast-preserving (the black point is pinned, not floated).
 
-    The learned style curve is fixed, so output shadow depth varies
-    with how dark each merge started (2-bracket merges land crushed,
-    5-bracket land lifted — "some have it, some don't"). This measures
-    the image's own shadow level (10th percentile of L) and lifts it
-    toward target_p10, so every photo ends with shadows at the same
-    place. Dark photos get a big lift; already-bright ones get ~none.
-
-    The lift is shadow-weighted (Gaussian on L, centered at 0) so it
-    raises the dark tones and tapers to no change by the midtones —
-    highlights and windows are untouched.
+    Built as a monotonic LUT through the finished percentile points,
+    keyed by the image's own L percentiles — so a dark merge gets
+    pulled up into the curve and a bright one gets pulled down, both
+    landing on the same shape. strength blends toward the target.
     """
     lab = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)
     L = lab[:, :, 0]
-    cur = float(np.percentile(L, 10))
-    if cur >= target_p10:
-        return img_bgr  # already at/above target — leave it
-    gap = min(target_p10 - cur, max_lift)
+    src = np.percentile(L, _FINISHED_L_PCTS)  # this image's curve
+    tgt = np.array(_l_target_for_scene(scene), dtype=np.float32)
+    # anchor 0->~0 and 255->255 so the curve spans the full range
+    src_knots = np.concatenate(([0.0], src, [255.0]))
+    tgt_knots = np.concatenate(([0.0], tgt, [255.0]))
+    # enforce monotonic src knots (percentiles can tie on flat images)
+    for i in range(1, len(src_knots)):
+        if src_knots[i] <= src_knots[i - 1]:
+            src_knots[i] = src_knots[i - 1] + 0.5
     idx = np.arange(256, dtype=np.float32)
-    weight = np.exp(-((idx / sigma) ** 2))  # 1 at black, ~0 by midtones
-    lut = np.clip(idx + gap * weight, 0, 255).astype(np.uint8)
+    mapped = np.interp(idx, src_knots, tgt_knots)
+    if strength < 0.999:
+        mapped = idx * (1 - strength) + mapped * strength
+    lut = np.clip(mapped, 0, 255).astype(np.uint8)
     lab[:, :, 0] = cv2.LUT(L, lut)
     return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
@@ -328,26 +367,36 @@ def sharpen_no_noise(
 def apply_learned_style(
     img_bgr: np.ndarray,
     strength: float = 1.0,
-    saturation: float = 1.15,
+    saturation: Optional[float] = None,
     sharpen: float = 0.5,
-    shadow_target: float = 62.0,
+    tone_match: bool = True,
+    tone_strength: float = 1.0,
+    scene: str = "interior",
 ) -> Optional[np.ndarray]:
     """
-    Apply the learned LAB transform (the editor's recipe) to a BGR
-    image, then finish with adaptive shadow lift + saturation +
-    edge-masked sharpening. Returns None if no learned model is
-    available so the caller can fall back to the histogram path.
+    Apply the learned LAB transform (the editor's brighten + chroma-
+    expand recipe) to a BGR image, then finish per SCENE: tone-match L
+    to the interior or exterior signature, boost saturation to the
+    scene level, and edge-mask sharpen. Returns None if no learned
+    model is available so the caller can fall back to the histogram.
 
-    strength:      blends learned-vs-original (1.0 = full recipe).
-    shadow_target: lift shadows to this consistent L p10 (62 = a touch
-                   below Paul's finished ~67 to avoid over-lift on the
-                   crushed 2-bracket merges). 0 = off.
-    saturation:    HSV saturation multiplier (1.15 = Paul's pick).
+    scene:         "interior" (anchored blacks, contrast, sat 1.15) or
+                   "exterior" (open shadows, protected highlights,
+                   landscape saturation). Routes BOTH the tone curve and
+                   the default saturation.
+    strength:      blends learned color/tone (1.0 = full recipe).
+    tone_match:    match L curve to the scene signature. tone_strength
+                   blends toward it.
+    saturation:    HSV saturation multiplier. None => scene default
+                   (interior 1.15 / exterior 1.30). Pass a number to
+                   override (sample sweeps).
     sharpen:       unsharp amount, L-channel + edge-masked (0 = off).
     """
     luts = _load_learned()
     if luts is False:
         return None
+    if saturation is None:
+        saturation = _EXTERIOR_SAT if scene == "exterior" else _INTERIOR_SAT
     lab = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)
     out = lab.copy()
     for c in range(3):
@@ -361,10 +410,11 @@ def apply_learned_style(
                 0, 255,
             ).astype(np.uint8)
     styled = cv2.cvtColor(out, cv2.COLOR_LAB2BGR)
-    # Adaptive shadow lift BEFORE saturation/sharpen so the consistent
-    # shadow brightness is what gets saturated/sharpened.
-    if shadow_target > 0:
-        styled = adaptive_shadow_lift(styled, target_p10=shadow_target)
+    # Tone match to the scene's finished L-curve (interior anchored
+    # blacks / exterior open shadows). Replaces the old single-percentile
+    # shadow lift that floated the black point and faded the image.
+    if tone_match:
+        styled = tone_match_to_finished(styled, strength=tone_strength, scene=scene)
     if saturation != 1.0:
         styled = boost_saturation(styled, saturation)
     if sharpen > 0:
@@ -372,12 +422,21 @@ def apply_learned_style(
     return styled
 
 
-def apply_learned_path(image_path: str, out_path: str, strength: float = 1.0) -> Optional[str]:
-    """File wrapper for apply_learned_style. None if no model / read fail."""
+def apply_learned_path(
+    image_path: str,
+    out_path: str,
+    strength: float = 1.0,
+    scene: str = "interior",
+    saturation: Optional[float] = None,
+) -> Optional[str]:
+    """File wrapper for apply_learned_style. None if no model / read fail.
+    scene routes interior vs exterior (landscape) treatment."""
     img = cv2.imread(image_path)
     if img is None:
         return None
-    styled = apply_learned_style(img, strength=strength)
+    styled = apply_learned_style(
+        img, strength=strength, scene=scene, saturation=saturation
+    )
     if styled is None:
         return None
     if not cv2.imwrite(out_path, styled, [cv2.IMWRITE_JPEG_QUALITY, 95]):

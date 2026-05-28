@@ -46,6 +46,7 @@ from hdr.style_transfer import (
     apply_learned_path,
 )
 from hdr.lens_correct import lens_applies, correct_distortion
+from hdr.scene import classify_scene
 from checks.window_protect import protect_windows
 
 s3 = boto3.client("s3")
@@ -989,24 +990,50 @@ def handler(event, context):
                         if row_sp and row_sp[0]:
                             profile = deserialize_profile(row_sp[0])
                             if profile:
-                                # Stage 5 — style transfer. Owns INTERIOR
-                                # tonal look only. Writes to a SEPARATE
-                                # styled path so the merged (window-intact)
-                                # frame survives for stage 4.
+                                # Stage 5 — style transfer. Owns the tonal
+                                # look. Writes to a SEPARATE styled path so
+                                # the merged (window-intact) frame survives
+                                # for stage 4.
                                 merged_path = hdr_local_path
                                 styled_path = hdr_local_path + ".styled.jpg"
+                                # SCENE ROUTING: interiors and exteriors are
+                                # finished differently (interior = anchored
+                                # blacks + contrast + restrained sat; exterior
+                                # = open shadows + protected highlights +
+                                # landscape saturation). Classify the merged
+                                # frame (cheap HSV foliage/sky heuristic,
+                                # validated 55/55 on 699 Spear) and route the
+                                # style. Using a local classifier here avoids
+                                # a second Claude Vision call per frame — the
+                                # composition check downstream still does the
+                                # nuanced QC. Applying the interior black-anchor
+                                # curve to an exterior is the "atomic" look
+                                # Paul flagged; this is the fix.
+                                scene = "interior"
+                                try:
+                                    _m = cv2.imread(merged_path)
+                                    if _m is not None:
+                                        scene, _sd = classify_scene(_m)
+                                        print(
+                                            f"Scene for {photo_id}: {scene} "
+                                            f"(foliage={_sd['foliage_frac']:.3f} "
+                                            f"blue_sky={_sd['blue_sky_frac']:.3f})"
+                                        )
+                                except Exception as sc_err:
+                                    print(f"Scene classify fell back to interior for {photo_id}: {sc_err}")
                                 # Prefer the LEARNED model (the editor's
                                 # actual recipe from raw->finished pairs:
-                                # brighten + warm). It beat the histogram
-                                # 16.8 vs 21.6 and applies color safely
-                                # because it's a fixed learned transform,
-                                # not a per-image distribution match.
-                                # Fall back to the histogram if no learned
-                                # model is bundled.
+                                # brighten + chroma-expand). It beat the
+                                # histogram 16.8 vs 21.6 and applies color
+                                # safely because it's a fixed learned
+                                # transform, not a per-image distribution
+                                # match. Fall back to the histogram if no
+                                # learned model is bundled.
                                 styled = apply_learned_path(
-                                    merged_path, styled_path, strength=1.0
+                                    merged_path, styled_path,
+                                    strength=1.0, scene=scene,
                                 )
-                                style_kind = "learned model"
+                                style_kind = f"learned model ({scene})"
                                 if not styled:
                                     styled = match_image_path(
                                         merged_path, profile, styled_path,
