@@ -40,7 +40,22 @@ def compute_lab_percentiles(img: np.ndarray) -> dict:
     """
     Compute per-channel LAB percentile arrays for one image.
     Returns {"L": [..], "a": [..], "b": [..]} with float values.
+
+    Performance: a 24-megapixel reference photo demands one numpy sort
+    per LAB channel for np.percentile — ~2-4 seconds per photo. With
+    1000+ references that blows past Lambda timeouts. Downsampling to
+    ~720x480 (345k pixels) gives the same statistical distribution
+    within rounding error and runs ~50x faster. We never need pixel-
+    perfect histograms for style transfer; we need a stable target.
     """
+    h, w = img.shape[:2]
+    max_side = 720
+    if max(h, w) > max_side:
+        scale = max_side / max(h, w)
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     out = {}
     for i, name in enumerate(("L", "a", "b")):
@@ -108,24 +123,44 @@ def _build_match_lut(
 def match_to_profile(
     img: np.ndarray,
     profile: dict,
-    strength: float = 1.0,
+    strength: float = 0.6,
+    match_color: bool = False,
 ) -> np.ndarray:
     """
     Apply LAB histogram matching to push img toward the agency's
     target distribution.
 
-    strength: 0..1 blend factor. 1.0 = full match, 0.0 = no change.
-    Useful for dialing back if a full match looks too aggressive.
-    Defaults to 1.0 — the smart_editor stays as a separate softer
-    pass for fine adjustments.
+    By default ONLY the L (luminance) channel is matched. Histogram
+    matching the a/b chroma channels destroys spatial color structure:
+    a bright neutral pixel in the source (a white tile or sky) gets
+    remapped to whatever the target distribution has at that
+    luminance, which for warm-interior reference photos is +magenta /
+    +yellow. Result: pink walls and yellow skies — the failure mode
+    Paul hit on the Flylisted test. The Mertens fusion or RAW decode
+    already produced a color-correct image; we only need to nudge the
+    tonal curve toward the reference shape.
+
+    strength: 0..1 blend factor for the L-channel match.
+              0.6 is the new default — strong enough to clearly shift
+              the tonal feel, soft enough to look natural.
+    match_color: when True, ALSO histogram-match the a/b channels.
+                 Off by default. Only flip on if Paul confirms the
+                 references are tightly grouped by room type and the
+                 source content also matches that room type — otherwise
+                 expect the color blowouts described above.
     """
-    if not profile or not all(k in profile for k in ("L", "a", "b")):
+    if not profile or "L" not in profile:
         return img
 
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     out = lab.copy()
 
-    for i, name in enumerate(("L", "a", "b")):
+    channels_to_match = ["L"]
+    if match_color:
+        channels_to_match.extend(["a", "b"])
+
+    for name in channels_to_match:
+        i = {"L": 0, "a": 1, "b": 2}[name]
         channel = lab[:, :, i]
         target = profile.get(name)
         if not target:
@@ -148,7 +183,8 @@ def match_image_path(
     image_path: str,
     profile: dict,
     out_path: str,
-    strength: float = 1.0,
+    strength: float = 0.6,
+    match_color: bool = False,
 ) -> Optional[str]:
     """
     File-path wrapper: read, match, write. Returns the output path
@@ -157,7 +193,9 @@ def match_image_path(
     img = cv2.imread(image_path)
     if img is None:
         return None
-    matched = match_to_profile(img, profile, strength=strength)
+    matched = match_to_profile(
+        img, profile, strength=strength, match_color=match_color
+    )
     if not cv2.imwrite(out_path, matched, [cv2.IMWRITE_JPEG_QUALITY, 95]):
         return None
     return out_path

@@ -890,11 +890,16 @@ def handler(event, context):
                         if row_sp and row_sp[0]:
                             profile = deserialize_profile(row_sp[0])
                             if profile:
+                                # L-channel only, moderate strength.
+                                # See style_transfer.match_to_profile
+                                # docstring for why a/b matching is off
+                                # by default (causes magenta-wall /
+                                # yellow-sky color blowouts).
                                 styled = match_image_path(
                                     hdr_local_path,
                                     profile,
                                     hdr_local_path,
-                                    strength=0.85,
+                                    strength=0.6,
                                 )
                                 if styled:
                                     hdr_meta.setdefault("operations", []).append(
