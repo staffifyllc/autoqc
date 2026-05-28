@@ -52,11 +52,40 @@ export function isRawFile(file: File): boolean {
   return RAW_EXTENSIONS.includes(ext);
 }
 
+// Last-resort timestamp parse from filename patterns commonly used by
+// drone + DSLR firmware. Many DJI bodies (and some Sony Action cams)
+// drop EXIF datetime into the filename: DJI_20260226144310_0016_D.dng
+// has "20260226144310" = 2026-02-26 14:43:10. When exifr cannot read
+// the embedded EXIF (some DJI DNG variants have non-standard tags)
+// this lets us still group brackets correctly. Returns null if no
+// recognizable pattern matches.
+function timestampFromFileName(name: string): Date | null {
+  // DJI: 14-digit YYYYMMDDHHMMSS surrounded by underscores
+  const dji = name.match(/_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})_/);
+  if (dji) {
+    const [, y, mo, d, h, mi, s] = dji;
+    const dt = new Date(
+      `${y}-${mo}-${d}T${h}:${mi}:${s}Z`
+    );
+    if (!isNaN(dt.getTime())) return dt;
+  }
+  // Sony / generic: YYYYMMDD_HHMMSS or YYYYMMDDHHMMSS at any position
+  const generic = name.match(/(\d{4})(\d{2})(\d{2})[_-]?(\d{2})(\d{2})(\d{2})/);
+  if (generic) {
+    const [, y, mo, d, h, mi, s] = generic;
+    const dt = new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}Z`);
+    if (!isNaN(dt.getTime())) return dt;
+  }
+  return null;
+}
+
 export async function readBracketMetadata(
   files: File[]
 ): Promise<BracketFile[]> {
   return Promise.all(
     files.map(async (file) => {
+      let captured: Date | null = null;
+      let bias: number | null = null;
       try {
         // exifr extracts the small set of EXIF tags we actually need
         // without parsing the full preview JPEG; keeps the browser
@@ -67,24 +96,29 @@ export async function readBracketMetadata(
           "ExposureBiasValue",
           "ExposureCompensation",
         ]);
-        const captured =
+        captured =
           (tags?.DateTimeOriginal as Date | undefined) ??
           (tags?.CreateDate as Date | undefined) ??
           null;
-        const bias =
+        const b =
           (tags?.ExposureBiasValue as number | undefined) ??
           (tags?.ExposureCompensation as number | undefined) ??
           null;
-        return {
-          file,
-          capturedAt: captured ?? null,
-          exposureBias: typeof bias === "number" ? bias : null,
-        };
+        bias = typeof b === "number" ? b : null;
       } catch {
-        // Corrupt or non-RAW file — return raw metadata so the caller
-        // can still upload it as a single (non-bracketed) Photo.
-        return { file, capturedAt: null, exposureBias: null };
+        /* fall through to filename-based fallback */
       }
+      // Fallback: DJI / Sony / generic timestamp in the file name.
+      // Without this, exifr-incompatible RAWs end up as singletons
+      // even when they are obviously consecutive bracket frames.
+      if (!captured) {
+        captured = timestampFromFileName(file.name);
+      }
+      return {
+        file,
+        capturedAt: captured,
+        exposureBias: bias,
+      };
     })
   );
 }
