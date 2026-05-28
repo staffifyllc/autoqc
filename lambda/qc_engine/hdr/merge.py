@@ -30,6 +30,39 @@ import cv2
 import numpy as np
 import rawpy
 
+try:
+    import exifread
+except Exception:  # pragma: no cover
+    exifread = None
+
+
+def read_lens_meta(raw_path: str) -> dict:
+    """
+    Read lens model + focal length from a RAW file so the handler can
+    decide whether (and how strongly) to apply lens-distortion
+    correction. Returns {"lens_model": str|None, "focal_mm": float|None}.
+    Best-effort: any failure returns Nones so the pipeline proceeds
+    without correction rather than crashing.
+    """
+    if exifread is None:
+        return {"lens_model": None, "focal_mm": None}
+    try:
+        with open(raw_path, "rb") as fh:
+            tags = exifread.process_file(fh, details=False)
+        lens = tags.get("EXIF LensModel")
+        lens_model = str(lens) if lens is not None else None
+        focal = tags.get("EXIF FocalLength")
+        focal_mm = None
+        if focal is not None:
+            try:
+                r = focal.values[0]
+                focal_mm = float(r.num) / float(r.den) if r.den else float(r.num)
+            except Exception:
+                focal_mm = None
+        return {"lens_model": lens_model, "focal_mm": focal_mm}
+    except Exception:
+        return {"lens_model": None, "focal_mm": None}
+
 
 # rawpy postprocess parameters tuned for real-estate interiors shot on
 # Sony bodies. use_camera_wb honors the in-camera WB (close enough
@@ -223,7 +256,12 @@ def merge_brackets_from_s3(
             local_paths.append(tmp.name)
             tmp.close()
 
-        return merge_brackets(local_paths)
+        path, meta = merge_brackets(local_paths)
+        # Attach lens metadata (from the first bracket) so the handler
+        # can apply lens-distortion correction for known lenses.
+        if local_paths:
+            meta.update(read_lens_meta(local_paths[0]))
+        return path, meta
     finally:
         for p in local_paths:
             try:
@@ -259,10 +297,12 @@ def decode_single_raw_from_s3(
         out = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
         cv2.imwrite(out.name, arr, [cv2.IMWRITE_JPEG_QUALITY, 95])
         out.close()
-        return out.name, {
+        meta = {
             "frame_count": 1,
             "operations": ["RAW decoded (single frame, no merge)"],
         }
+        meta.update(read_lens_meta(raw_tmp.name))
+        return out.name, meta
     finally:
         try:
             os.unlink(raw_tmp.name)

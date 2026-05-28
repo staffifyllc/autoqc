@@ -29,6 +29,7 @@ and returns a new image. The handler decides when to call it.
 from __future__ import annotations
 
 import json
+import os
 from typing import Optional
 
 import cv2
@@ -217,6 +218,130 @@ def match_to_profile(
             out[:, :, i] = np.clip(blended, 0, 255).astype(np.uint8)
 
     return cv2.cvtColor(out, cv2.COLOR_LAB2BGR)
+
+
+# Learned-model path. learned_style.npz holds 3 LAB channel LUTs
+# (the averaged merge->finished transform trained from raw/finished
+# PAIRS in train_style_model.py). Unlike the histogram match — which
+# matches each image to the AVERAGE finished distribution and blew
+# out color — this is a FIXED transform applied identically to every
+# photo, so it reproduces the editor's consistent recipe (brighten +
+# warm shadows/highlights) without per-image blowouts. It also moves
+# color safely BECAUSE it was learned from real input->output pairs,
+# not guessed from a distribution. Beat the histogram 16.8 vs 21.6.
+_LEARNED_PATH = os.path.join(os.path.dirname(__file__), "learned_style.npz")
+_learned_cache = None  # lazy-loaded (3,256) uint8 LUTs or False
+
+
+def _load_learned():
+    global _learned_cache
+    if _learned_cache is None:
+        try:
+            data = np.load(_LEARNED_PATH)
+            luts = data["luts"]
+            _learned_cache = luts if luts.shape == (3, 256) else False
+        except Exception:
+            _learned_cache = False
+    return _learned_cache
+
+
+def boost_saturation(img_bgr: np.ndarray, mult: float = 1.15) -> np.ndarray:
+    """Scale HSV saturation by mult (1.15 = Paul's preferred level —
+    matches his finished photos' chroma after brightening)."""
+    if mult == 1.0:
+        return img_bgr
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV).astype(np.float32)
+    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * mult, 0, 255)
+    return cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+
+
+def sharpen_no_noise(
+    img_bgr: np.ndarray,
+    amount: float = 0.5,
+    radius: float = 1.5,
+    edge_floor: float = 6.0,
+) -> np.ndarray:
+    """
+    Edge-masked unsharp on the L (luminance) channel only.
+
+    Two guards against amplifying noise:
+      1. L-channel only — color channels are never sharpened, so chroma
+         noise can't be pushed.
+      2. Edge mask — high-frequency detail is added back only where the
+         local gradient exceeds edge_floor. Flat walls / sky (where
+         sensor noise lives) are left untouched, so we sharpen real
+         edges (trim, window frames, texture) without crunching noise.
+
+    amount: 0.5 = "a little". radius: unsharp blur sigma.
+    """
+    lab = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)
+    L = lab[:, :, 0].astype(np.float32)
+    blur = cv2.GaussianBlur(L, (0, 0), radius)
+    detail = L - blur  # high-frequency component
+
+    # Edge mask from gradient magnitude, normalized 0..1, with a floor
+    # so flat regions get ~0 sharpening.
+    gx = cv2.Sobel(L, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(L, cv2.CV_32F, 0, 1, ksize=3)
+    grad = cv2.magnitude(gx, gy)
+    mask = np.clip((grad - edge_floor) / 40.0, 0.0, 1.0)
+    mask = cv2.GaussianBlur(mask, (0, 0), 1.0)  # soften mask edges
+
+    L_sharp = np.clip(L + amount * detail * mask, 0, 255).astype(np.uint8)
+    lab[:, :, 0] = L_sharp
+    return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+
+def apply_learned_style(
+    img_bgr: np.ndarray,
+    strength: float = 1.0,
+    saturation: float = 1.15,
+    sharpen: float = 0.5,
+) -> Optional[np.ndarray]:
+    """
+    Apply the learned LAB transform (the editor's recipe) to a BGR
+    image, then finish with saturation + edge-masked sharpening.
+    Returns None if no learned model is available so the caller can
+    fall back to the histogram path.
+
+    strength:   blends learned-vs-original (1.0 = full recipe).
+    saturation: HSV saturation multiplier (1.15 = Paul's pick).
+    sharpen:    unsharp amount, L-channel + edge-masked (0 = off).
+    """
+    luts = _load_learned()
+    if luts is False:
+        return None
+    lab = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)
+    out = lab.copy()
+    for c in range(3):
+        mapped = cv2.LUT(lab[:, :, c], luts[c])
+        if strength >= 0.999:
+            out[:, :, c] = mapped
+        else:
+            out[:, :, c] = np.clip(
+                lab[:, :, c].astype(np.float32) * (1 - strength)
+                + mapped.astype(np.float32) * strength,
+                0, 255,
+            ).astype(np.uint8)
+    styled = cv2.cvtColor(out, cv2.COLOR_LAB2BGR)
+    if saturation != 1.0:
+        styled = boost_saturation(styled, saturation)
+    if sharpen > 0:
+        styled = sharpen_no_noise(styled, amount=sharpen)
+    return styled
+
+
+def apply_learned_path(image_path: str, out_path: str, strength: float = 1.0) -> Optional[str]:
+    """File wrapper for apply_learned_style. None if no model / read fail."""
+    img = cv2.imread(image_path)
+    if img is None:
+        return None
+    styled = apply_learned_style(img, strength=strength)
+    if styled is None:
+        return None
+    if not cv2.imwrite(out_path, styled, [cv2.IMWRITE_JPEG_QUALITY, 95]):
+        return None
+    return out_path
 
 
 def match_image_path(

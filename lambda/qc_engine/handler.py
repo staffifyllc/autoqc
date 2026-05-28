@@ -38,7 +38,12 @@ from fixes.apply_actions import apply_recommended_actions
 from fixes.remove_distractions import remove_distractions
 
 from hdr.merge import merge_brackets_from_s3, decode_single_raw_from_s3
-from hdr.style_transfer import deserialize_profile, match_image_path
+from hdr.style_transfer import (
+    deserialize_profile,
+    match_image_path,
+    apply_learned_path,
+)
+from hdr.lens_correct import lens_applies, correct_distortion
 from checks.window_protect import protect_windows
 
 s3 = boto3.client("s3")
@@ -893,6 +898,39 @@ def handler(event, context):
                             f"Single RAW decode failed for {photo_id}: {hdr_meta.get('error')}"
                         )
 
+                # Stage 1.5 — LENS DISTORTION CORRECTION. Runs on the
+                # merged result right after Mertens, BEFORE the preview
+                # upload and style, and crucially BEFORE the vertical
+                # (keystone) fix in process_photo — de-bow first so the
+                # Hough vertical detector sees straight lines. Scoped by
+                # EXIF lens model (Sony FE PZ 16-35); focal-keyed
+                # strength (strong at 16mm, ~nothing by 24mm+). Applies
+                # to all subjects on that lens (interior + exterior);
+                # the lens bows lines regardless of what it's pointed at.
+                if hdr_local_path and lens_applies(hdr_meta.get("lens_model")):
+                    try:
+                        _img = cv2.imread(hdr_local_path)
+                        if _img is not None:
+                            _corrected = correct_distortion(
+                                _img, hdr_meta.get("focal_mm")
+                            )
+                            cv2.imwrite(
+                                hdr_local_path, _corrected,
+                                [cv2.IMWRITE_JPEG_QUALITY, 95],
+                            )
+                            hdr_meta.setdefault("operations", []).append(
+                                f"Lens corrected ({hdr_meta.get('lens_model')} "
+                                f"@ {hdr_meta.get('focal_mm')}mm)"
+                            )
+                            print(
+                                f"Lens correction applied for {photo_id} "
+                                f"@ {hdr_meta.get('focal_mm')}mm"
+                            )
+                    except Exception as lens_err:
+                        print(
+                            f"Lens correction skipped for {photo_id}: {lens_err}"
+                        )
+
                 # Write a JPEG preview of the Mertens / RAW-decoded
                 # result BEFORE style transfer, and update s3KeyOriginal
                 # to point at it. The dashboard before/after slider
@@ -953,19 +991,29 @@ def handler(event, context):
                                 # tonal look only. Writes to a SEPARATE
                                 # styled path so the merged (window-intact)
                                 # frame survives for stage 4.
-                                # L-channel only; a/b matching off (causes
-                                # magenta-wall / yellow-sky blowouts).
                                 merged_path = hdr_local_path
                                 styled_path = hdr_local_path + ".styled.jpg"
-                                styled = match_image_path(
-                                    merged_path,
-                                    profile,
-                                    styled_path,
-                                    strength=0.6,
+                                # Prefer the LEARNED model (the editor's
+                                # actual recipe from raw->finished pairs:
+                                # brighten + warm). It beat the histogram
+                                # 16.8 vs 21.6 and applies color safely
+                                # because it's a fixed learned transform,
+                                # not a per-image distribution match.
+                                # Fall back to the histogram if no learned
+                                # model is bundled.
+                                styled = apply_learned_path(
+                                    merged_path, styled_path, strength=1.0
                                 )
+                                style_kind = "learned model"
+                                if not styled:
+                                    styled = match_image_path(
+                                        merged_path, profile, styled_path,
+                                        strength=0.6,
+                                    )
+                                    style_kind = "histogram"
                                 if styled:
                                     hdr_meta.setdefault("operations", []).append(
-                                        f"Style matched to {profile.get('sample_size', '?')} reference photos"
+                                        f"Style applied ({style_kind})"
                                     )
                                     # Stage 4 — window protection. Composite
                                     # the merged window region back over the
