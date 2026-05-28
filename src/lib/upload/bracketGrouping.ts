@@ -231,6 +231,14 @@ export function groupIntoBrackets(meta: BracketFile[]): BracketGroup[] {
     current = [];
   };
 
+  // Scene break is TIME-GAP ONLY. We deliberately do NOT break on an
+  // exposure-bias drop: Sony AEB brackets center-out (0, -2, +2, -4,
+  // +4) so the bias falls mid-scene at 0->-2 and +2->-4. An EV-reset
+  // rule shatters every Sony scene into a singleton + pairs. Real
+  // bracket frames share a capture instant (intra-scene gaps 0-1s)
+  // while scenes are tens of seconds apart, so the gap alone is a
+  // clean, camera-agnostic separator. (DJI is already handled by the
+  // filename-key pass above and never reaches this loop.)
   for (const m of sorted) {
     if (current.length === 0) {
       current.push(m);
@@ -238,16 +246,7 @@ export function groupIntoBrackets(meta: BracketFile[]): BracketGroup[] {
     }
     const prev = current[current.length - 1];
     const gap = (m.capturedAt.getTime() - prev.capturedAt.getTime()) / 1000;
-    let shouldBreak = gap > GAP_THRESHOLD_SECONDS;
-    if (
-      !shouldBreak &&
-      typeof prev.exposureBias === "number" &&
-      typeof m.exposureBias === "number"
-    ) {
-      const evDelta = m.exposureBias - prev.exposureBias;
-      if (evDelta <= -1.5) shouldBreak = true;
-    }
-    if (shouldBreak) flush();
+    if (gap > GAP_THRESHOLD_SECONDS) flush();
     current.push(m);
   }
   flush();

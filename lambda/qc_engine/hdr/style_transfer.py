@@ -23,6 +23,11 @@ This module is intentionally narrow: it does ONE thing (LAB hist match)
 and returns a new image. The handler decides when to call it.
 """
 
+# Defer annotation evaluation so the `str | dict | None` style unions
+# parse on Python 3.9 (local dev) as well as 3.12 (Lambda). No-op at
+# runtime; purely a compatibility pragma, no logic change.
+from __future__ import annotations
+
 import json
 from typing import Optional
 

@@ -39,6 +39,7 @@ from fixes.remove_distractions import remove_distractions
 
 from hdr.merge import merge_brackets_from_s3, decode_single_raw_from_s3
 from hdr.style_transfer import deserialize_profile, match_image_path
+from checks.window_protect import protect_windows
 
 s3 = boto3.client("s3")
 BUCKET = os.environ["AWS_S3_BUCKET"]
@@ -948,21 +949,69 @@ def handler(event, context):
                         if row_sp and row_sp[0]:
                             profile = deserialize_profile(row_sp[0])
                             if profile:
-                                # L-channel only, moderate strength.
-                                # See style_transfer.match_to_profile
-                                # docstring for why a/b matching is off
-                                # by default (causes magenta-wall /
-                                # yellow-sky color blowouts).
+                                # Stage 5 — style transfer. Owns INTERIOR
+                                # tonal look only. Writes to a SEPARATE
+                                # styled path so the merged (window-intact)
+                                # frame survives for stage 4.
+                                # L-channel only; a/b matching off (causes
+                                # magenta-wall / yellow-sky blowouts).
+                                merged_path = hdr_local_path
+                                styled_path = hdr_local_path + ".styled.jpg"
                                 styled = match_image_path(
-                                    hdr_local_path,
+                                    merged_path,
                                     profile,
-                                    hdr_local_path,
+                                    styled_path,
                                     strength=0.6,
                                 )
                                 if styled:
                                     hdr_meta.setdefault("operations", []).append(
                                         f"Style matched to {profile.get('sample_size', '?')} reference photos"
                                     )
+                                    # Stage 4 — window protection. Composite
+                                    # the merged window region back over the
+                                    # styled interior so the global LAB remap
+                                    # cannot blow the exterior. Per contract:
+                                    # window = local region = stage-4 mask,
+                                    # never a global stage-5 weight.
+                                    # window_protect works in RGB; cv2 is BGR.
+                                    merged_bgr = cv2.imread(merged_path)
+                                    styled_bgr = cv2.imread(styled_path)
+                                    if merged_bgr is not None and styled_bgr is not None:
+                                        merged_rgb = cv2.cvtColor(
+                                            merged_bgr, cv2.COLOR_BGR2RGB
+                                        )
+                                        styled_rgb = cv2.cvtColor(
+                                            styled_bgr, cv2.COLOR_BGR2RGB
+                                        )
+                                        final_rgb = protect_windows(
+                                            merged_rgb,
+                                            styled_rgb,
+                                            debug_dir="/tmp/debug",
+                                        )
+                                        final_bgr = cv2.cvtColor(
+                                            final_rgb, cv2.COLOR_RGB2BGR
+                                        )
+                                        cv2.imwrite(
+                                            hdr_local_path,
+                                            final_bgr,
+                                            [cv2.IMWRITE_JPEG_QUALITY, 95],
+                                        )
+                                        hdr_meta.setdefault(
+                                            "operations", []
+                                        ).append("Window protection (stage 4)")
+                                        print(
+                                            f"Window protection applied for {photo_id}"
+                                        )
+                                    else:
+                                        # Could not reload for compositing;
+                                        # fall back to the styled frame so we
+                                        # still produce output.
+                                        cv2.imwrite(
+                                            hdr_local_path,
+                                            styled_bgr
+                                            if styled_bgr is not None
+                                            else merged_bgr,
+                                        )
                                     print(
                                         f"Style transfer applied for {photo_id}"
                                     )

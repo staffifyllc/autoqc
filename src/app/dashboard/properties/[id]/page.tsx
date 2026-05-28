@@ -981,8 +981,10 @@ export default function PropertyDetailPage({
                 );
               })()}
 
-              {/* Before/After badge - shows when this photo has an auto-fix */}
-              {(photo as any).fixedUrl && (
+              {/* Before/After badge - standard AutoQC only. Auto-edit
+                  (HDR) properties deliver a finished image, not a
+                  before/after comparison, so the badge is suppressed. */}
+              {(photo as any).fixedUrl && property?.hdrMode !== true && (
                 <div className="absolute top-2 left-2 px-2 py-1 rounded-lg bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold backdrop-blur-sm flex items-center gap-1">
                   <Zap className="w-3 h-3" />
                   Before/After
@@ -1177,10 +1179,31 @@ export default function PropertyDetailPage({
                     );
                   }
 
-                  // Always render a slider. When there is no fix, feed the
-                  // original as itemTwo so the slider still draws but both
-                  // halves show the same image. A "No changes applied" pill
-                  // makes the reason explicit.
+                  // Auto-edit (HDR) properties show ONLY the finished
+                  // image — no before/after slider. The "before" for an
+                  // HDR merge is a raw bracket nobody needs to compare
+                  // against; the deliverable is the final edit. The
+                  // slider stays for the standard AutoQC flow where the
+                  // before/after of a fix is the whole point.
+                  const isAutoEdit = property?.hdrMode === true;
+                  const finalSrc = hasFix ? (fixedSrc as string) : origSrc;
+
+                  if (isAutoEdit) {
+                    return (
+                      <div className="relative w-full max-h-[75vh] rounded-xl overflow-hidden border border-white/10 shadow-2xl shadow-black/50">
+                        <img
+                          src={finalSrc}
+                          alt={selectedPhoto.fileName}
+                          className="w-full h-full object-contain rounded-xl"
+                        />
+                      </div>
+                    );
+                  }
+
+                  // Standard AutoQC: render a slider. When there is no fix,
+                  // feed the original as itemTwo so the slider still draws
+                  // but both halves show the same image. A "No changes
+                  // applied" pill makes the reason explicit.
                   const itemTwoSrc = hasFix ? (fixedSrc as string) : origSrc;
 
                   return (

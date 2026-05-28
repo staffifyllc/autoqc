@@ -302,3 +302,56 @@ vercel env add KEY production     # add a prod env var
 - If a decision affects billing, credits, or schema: propose the plan to the user first, don't rewrite.
 
 Keep commits descriptive. Ship small, ship often.
+
+
+# Photo-Edit Pipeline — Architecture & Debug Contract
+
+Ground truth for the editing pipeline. Read before changing any stage.
+Do not patch a symptom in one stage when the failure belongs to another. Localize first.
+
+## Stage order and ownership
+
+1. **RAW decode** — rawpy / LibRaw. Owns demosaic and color space. Makes NO tonal decisions.
+2. **Align** — cv2.AlignMTB. Owns sub-pixel bracket registration. Failure = ghosting / soft edges.
+3. **Merge** — cv2.MergeMertens (exposure fusion). Owns dynamic range and WINDOW PULLS.
+   Invariant: window / exterior detail is intact in the merge output.
+4. **Window protection** — window_protect.py. Owns keeping the merged window through styling.
+5. **Style transfer** — LAB histogram match + midtone Gaussian. Owns INTERIOR tonal look ONLY.
+   Does NOT own window highlights. Is NOT patched to fix window blowout.
+6. **Mechanical fixes** — verticals (Hough + warp), color cast (B/R ratio), sharpness (Laplacian var).
+7. **Optional ML (premium)** — NAFNet deblur, grounded-SAM + LaMa inpaint.
+
+## Failure-to-stage map (stop guessing)
+
+| Symptom | Stage that owns it |
+|---|---|
+| Windows blown in FINAL but fine in merge output | 5 destroyed them → fix 4, never 3 |
+| Windows blown in MERGE output | darkest bracket too bright, or align failed |
+| Wrong overall tonal target (too dark/bright/flat) | 5 target → use per-room histograms |
+| Ghosting / double edges | 2 align |
+| Soft frames | capture, or premium NAFNet |
+| Color cast (green/pink) | 6 cast, or WB before 5 |
+
+## Hard rule: no fix without a localized intermediate
+
+Before writing ANY tonal or merge fix:
+1. Dump every stage's output to `./debug/` (merged, styled, mask, final).
+2. Identify the FIRST stage where the defect appears.
+3. Fix only that stage. Name the stage and the reason in the commit message.
+
+A global weight added to "patch around" a local defect (e.g. a window) is **rejected by default.**
+Window = local region = stage 4 masking. Never a global stage-5 weight. The midtone Gaussian
+was already this mistake — it protects mids globally and does nothing for a local window.
+
+## Invariants (write these as tests, fail loudly on regression)
+
+- Max luminance inside the window mask in FINAL ≤ max luminance of the same region in MERGE + ε.
+- Clipped-channel pixel count in FINAL ≤ clipped count in MERGE. Style transfer must not introduce clipping.
+- FINAL interior (mask == 0) histogram within tolerance of the per-room target for the classified room type.
+
+## Working agreement for this session
+
+- One stage per task. Show the pass/fail check before moving to the next stage.
+- Reproduce against a fixed fixture: input brackets + the human Lightroom finish for the same scene.
+  Match to the reference image, not to a verbal description of the problem.
+- Every change keeps the debug dumps working. If a stage stops emitting intermediates, that's a bug.

@@ -33,28 +33,48 @@ import rawpy
 
 # rawpy postprocess parameters tuned for real-estate interiors shot on
 # Sony bodies. use_camera_wb honors the in-camera WB (close enough
-# for our needs; the smart_editor refines further). output_bps=8 keeps
-# the output uint8 to feed straight into Mertens. no_auto_bright=False
-# lets LibRaw do its default brightness so very dark brackets don't
-# come back near-black. The defaults already select AHD demosaic which
-# is the standard quality / speed tradeoff.
-_RAWPY_PARAMS = dict(
-    use_camera_wb=True,
-    output_bps=8,
-    no_auto_bright=False,
-    output_color=rawpy.ColorSpace.sRGB,
-)
+# Stage 1 (decode) per the architecture contract: owns demosaic + color
+# space, makes NO tonal decisions. use_camera_wb honors in-camera WB
+# (close enough; smart_editor refines). output_bps=8 feeds straight into
+# Mertens. AHD demosaic is the default quality/speed tradeoff.
+#
+# no_auto_bright is the load-bearing setting:
+#   True  (bracket merge) — LibRaw applies NO per-frame auto-brightness,
+#         so the AEB exposure ladder is preserved. The darkest bracket
+#         stays dark and HOLDS the window / exterior detail that Mertens
+#         pulls from. This is required for stage 3's invariant ("window
+#         detail intact in merge output").
+#   False (single frame)  — no merge to balance brightness, so let LibRaw
+#         auto-brighten or a lone dark frame comes back near-black.
+#
+# Why this matters: with auto-bright ON for brackets, LibRaw lifted the
+# darkest frame ~4x (mean luma 24 -> 106 on a real Sony bracket),
+# flattening the ladder and clipping the window BEFORE merge ran. That
+# is a stage-1 tonal decision the contract forbids, and it was the root
+# cause of blown windows in the merge output.
+def _rawpy_params(no_auto_bright: bool) -> dict:
+    return dict(
+        use_camera_wb=True,
+        output_bps=8,
+        no_auto_bright=no_auto_bright,
+        output_color=rawpy.ColorSpace.sRGB,
+    )
 
 
-def _decode_raw(raw_path: str) -> Optional[np.ndarray]:
+def _decode_raw(raw_path: str, no_auto_bright: bool = True) -> Optional[np.ndarray]:
     """
     Decode a single RAW (ARW/CR3/NEF/etc.) to an 8-bit BGR numpy array.
+
+    no_auto_bright defaults to True (the bracket-merge case) so the
+    exposure ladder is preserved. Pass False for single-frame decode
+    where there is no merge to balance brightness.
+
     Returns None on decode failure so the caller can skip the bracket
     instead of failing the whole merge.
     """
     try:
         with rawpy.imread(raw_path) as raw:
-            rgb = raw.postprocess(**_RAWPY_PARAMS)
+            rgb = raw.postprocess(**_rawpy_params(no_auto_bright))
         # rawpy returns RGB; OpenCV operates in BGR
         return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     except Exception as e:
@@ -209,7 +229,10 @@ def decode_single_raw_from_s3(
     try:
         s3_client.download_file(bucket, raw_key, raw_tmp.name)
         raw_tmp.close()
-        arr = _decode_raw(raw_tmp.name)
+        # Single frame: no merge to balance brightness, so allow LibRaw
+        # auto-brightness (no_auto_bright=False) or a lone dark frame
+        # comes back near-black.
+        arr = _decode_raw(raw_tmp.name, no_auto_bright=False)
         if arr is None:
             return None, {"error": f"rawpy could not decode {raw_key}"}
         out = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
