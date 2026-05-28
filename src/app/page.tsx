@@ -705,6 +705,100 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Coming soon: Full HDR editing */}
+      <section id="hdr" className="py-20 px-6 border-t border-border">
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.3 }}
+            transition={{ duration: 0.6 }}
+            className="panel p-8 md:p-12 relative overflow-hidden"
+          >
+            {/* Ambient glow */}
+            <div className="absolute inset-0 mesh-gradient opacity-40 pointer-events-none" />
+            <div
+              className="absolute -top-24 -right-24 w-72 h-72 rounded-full pointer-events-none"
+              style={{
+                background:
+                  "radial-gradient(circle, hsl(var(--primary)/0.18), transparent 70%)",
+              }}
+            />
+
+            <div className="relative">
+              <div className="flex items-center gap-2 mb-5">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[hsl(var(--primary))]/15 border border-[hsl(var(--primary))]/40 text-[hsl(var(--primary))] text-[10px] font-mono uppercase tracking-[2px]">
+                  <Sparkles className="w-3 h-3" />
+                  Coming soon
+                </span>
+              </div>
+
+              <div className="grid md:grid-cols-[1fr_auto] gap-8 items-start">
+                <div>
+                  <h2 className="text-3xl md:text-4xl font-semibold tracking-tight flex items-center gap-3">
+                    <Aperture className="w-8 h-8 text-[hsl(var(--primary))]" strokeWidth={1.75} />
+                    Full HDR editing
+                  </h2>
+                  <p className="text-muted-foreground mt-4 leading-relaxed max-w-xl">
+                    Upload your exposure brackets. AutoQC aligns them, merges the
+                    dynamic range, pulls the windows back, and finishes to your
+                    style profile. The full darkroom, automated, on top of the QC
+                    you already trust.
+                  </p>
+
+                  <ul className="mt-6 grid sm:grid-cols-2 gap-x-6 gap-y-2.5">
+                    {[
+                      "Bracket alignment + exposure fusion",
+                      "Window pull, no blowout",
+                      "Per-room tonal targets",
+                      "Style-profile matched finish",
+                    ].map((item) => (
+                      <li
+                        key={item}
+                        className="flex items-center gap-2 text-[13px] text-muted-foreground"
+                      >
+                        <CheckCircle2 className="w-4 h-4 text-[hsl(var(--primary))] shrink-0" />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Price card */}
+                <div className="panel p-6 text-center min-w-[180px] border-[hsl(var(--primary))]/30">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">
+                    Launch price
+                  </p>
+                  <div className="flex items-baseline justify-center gap-1">
+                    <span className="text-5xl font-bold stat-num gradient-text">
+                      $0.20
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">per photo</p>
+                  <div className="h-px bg-border my-4" />
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    A fraction of what manual HDR editing costs per image.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-8 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <Link
+                  href="/signup"
+                  className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-md accent-bg text-black font-medium hover:opacity-90 transition"
+                >
+                  Join the waitlist
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                </Link>
+                <p className="text-[12px] text-muted-foreground">
+                  Already have an account? We&rsquo;ll email you the moment it goes live.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
       {/* Final CTA */}
       <section className="py-20 px-6 border-t border-border">
         <div className="max-w-3xl mx-auto text-center">
