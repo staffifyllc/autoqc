@@ -245,6 +245,39 @@ def _load_learned():
     return _learned_cache
 
 
+def adaptive_shadow_lift(
+    img_bgr: np.ndarray,
+    target_p10: float = 62.0,
+    sigma: float = 60.0,
+    max_lift: float = 55.0,
+) -> np.ndarray:
+    """
+    Lift shadows TO a consistent level, adaptively per image.
+
+    The learned style curve is fixed, so output shadow depth varies
+    with how dark each merge started (2-bracket merges land crushed,
+    5-bracket land lifted — "some have it, some don't"). This measures
+    the image's own shadow level (10th percentile of L) and lifts it
+    toward target_p10, so every photo ends with shadows at the same
+    place. Dark photos get a big lift; already-bright ones get ~none.
+
+    The lift is shadow-weighted (Gaussian on L, centered at 0) so it
+    raises the dark tones and tapers to no change by the midtones —
+    highlights and windows are untouched.
+    """
+    lab = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)
+    L = lab[:, :, 0]
+    cur = float(np.percentile(L, 10))
+    if cur >= target_p10:
+        return img_bgr  # already at/above target — leave it
+    gap = min(target_p10 - cur, max_lift)
+    idx = np.arange(256, dtype=np.float32)
+    weight = np.exp(-((idx / sigma) ** 2))  # 1 at black, ~0 by midtones
+    lut = np.clip(idx + gap * weight, 0, 255).astype(np.uint8)
+    lab[:, :, 0] = cv2.LUT(L, lut)
+    return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+
 def boost_saturation(img_bgr: np.ndarray, mult: float = 1.15) -> np.ndarray:
     """Scale HSV saturation by mult (1.15 = Paul's preferred level —
     matches his finished photos' chroma after brightening)."""
@@ -297,16 +330,20 @@ def apply_learned_style(
     strength: float = 1.0,
     saturation: float = 1.15,
     sharpen: float = 0.5,
+    shadow_target: float = 62.0,
 ) -> Optional[np.ndarray]:
     """
     Apply the learned LAB transform (the editor's recipe) to a BGR
-    image, then finish with saturation + edge-masked sharpening.
-    Returns None if no learned model is available so the caller can
-    fall back to the histogram path.
+    image, then finish with adaptive shadow lift + saturation +
+    edge-masked sharpening. Returns None if no learned model is
+    available so the caller can fall back to the histogram path.
 
-    strength:   blends learned-vs-original (1.0 = full recipe).
-    saturation: HSV saturation multiplier (1.15 = Paul's pick).
-    sharpen:    unsharp amount, L-channel + edge-masked (0 = off).
+    strength:      blends learned-vs-original (1.0 = full recipe).
+    shadow_target: lift shadows to this consistent L p10 (62 = a touch
+                   below Paul's finished ~67 to avoid over-lift on the
+                   crushed 2-bracket merges). 0 = off.
+    saturation:    HSV saturation multiplier (1.15 = Paul's pick).
+    sharpen:       unsharp amount, L-channel + edge-masked (0 = off).
     """
     luts = _load_learned()
     if luts is False:
@@ -324,6 +361,10 @@ def apply_learned_style(
                 0, 255,
             ).astype(np.uint8)
     styled = cv2.cvtColor(out, cv2.COLOR_LAB2BGR)
+    # Adaptive shadow lift BEFORE saturation/sharpen so the consistent
+    # shadow brightness is what gets saturated/sharpened.
+    if shadow_target > 0:
+        styled = adaptive_shadow_lift(styled, target_p10=shadow_target)
     if saturation != 1.0:
         styled = boost_saturation(styled, saturation)
     if sharpen > 0:
