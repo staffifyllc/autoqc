@@ -13,6 +13,8 @@ from typing import Any
 
 import boto3
 import psycopg2
+import cv2
+import numpy as np
 
 from checks.verticals import check_verticals
 from checks.horizon import check_horizon
