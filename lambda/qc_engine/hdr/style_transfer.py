@@ -120,34 +120,53 @@ def _build_match_lut(
     return lut
 
 
+def _midtone_weight_lut(sigma: float = 50.0) -> np.ndarray:
+    """
+    Build a 256-entry weight LUT shaped like a Gaussian centered at
+    L=128. Values near the midtone (~128) get weight close to 1.0;
+    values at extremes (0 or 255) get weight close to 0.
+
+    Used to scale style-transfer strength per-pixel: extreme shadows
+    and highlights are preserved (protecting dynamic range) while
+    the midtone "feel" still shifts toward the reference distribution.
+
+    sigma controls the falloff. 50 gives weight ~0.6 at L=80/L=176,
+    ~0.14 at L=0/L=255 — a noticeable protect-the-extremes shape.
+    """
+    idx = np.arange(256, dtype=np.float32)
+    return np.exp(-((idx - 128.0) ** 2) / (2.0 * sigma * sigma))
+
+
 def match_to_profile(
     img: np.ndarray,
     profile: dict,
     strength: float = 0.6,
     match_color: bool = False,
+    protect_extremes: bool = True,
 ) -> np.ndarray:
     """
     Apply LAB histogram matching to push img toward the agency's
     target distribution.
 
-    By default ONLY the L (luminance) channel is matched. Histogram
-    matching the a/b chroma channels destroys spatial color structure:
-    a bright neutral pixel in the source (a white tile or sky) gets
-    remapped to whatever the target distribution has at that
-    luminance, which for warm-interior reference photos is +magenta /
-    +yellow. Result: pink walls and yellow skies — the failure mode
-    Paul hit on the Flylisted test. The Mertens fusion or RAW decode
-    already produced a color-correct image; we only need to nudge the
-    tonal curve toward the reference shape.
+    By default:
+      - ONLY the L (luminance) channel is matched. a/b chroma transfer
+        destroys spatial color structure (pink walls / yellow skies).
+        Off by default; opt in via match_color when references are
+        room-type-matched to the source.
+      - Shadow and highlight extremes are PROTECTED from the match.
+        A Gaussian weight centered at L=128 means the full match
+        strength applies to midtones while shadows (L<40) and
+        highlights (L>220) move much less. Without this protection
+        the algorithm aggressively lifts interior shadows to the
+        target shape (target was learned from Lightroom-finished
+        interiors where shadows already sit at L=24) and produces
+        the "nuclear" washed-out look Paul reported.
 
-    strength: 0..1 blend factor for the L-channel match.
-              0.6 is the new default — strong enough to clearly shift
-              the tonal feel, soft enough to look natural.
-    match_color: when True, ALSO histogram-match the a/b channels.
-                 Off by default. Only flip on if Paul confirms the
-                 references are tightly grouped by room type and the
-                 source content also matches that room type — otherwise
-                 expect the color blowouts described above.
+    strength: 0..1 base blend factor. Effective per-pixel strength is
+              strength * gaussian_weight(L) when protect_extremes is
+              True, which is the safer default.
+    match_color: histogram-match a/b channels too. Default off.
+    protect_extremes: midtone-weighted blending. Default on.
     """
     if not profile or "L" not in profile:
         return img
@@ -159,6 +178,8 @@ def match_to_profile(
     if match_color:
         channels_to_match.extend(["a", "b"])
 
+    weight_lut = _midtone_weight_lut() if protect_extremes else None
+
     for name in channels_to_match:
         i = {"L": 0, "a": 1, "b": 2}[name]
         channel = lab[:, :, i]
@@ -167,7 +188,21 @@ def match_to_profile(
             continue
         lut = _build_match_lut(channel, target)
         matched = cv2.LUT(channel, lut)
-        if strength >= 0.999:
+
+        if weight_lut is not None:
+            # Per-pixel strength = base * gaussian_weight(luminance).
+            # We always weight by the L channel's luminance so that
+            # color channels (when match_color is True) protect
+            # extremes based on local brightness, not on a/b values
+            # which can be anywhere.
+            l_channel = lab[:, :, 0]
+            local_w = (weight_lut[l_channel] * strength).astype(np.float32)
+            blended = (
+                channel.astype(np.float32) * (1.0 - local_w)
+                + matched.astype(np.float32) * local_w
+            )
+            out[:, :, i] = np.clip(blended, 0, 255).astype(np.uint8)
+        elif strength >= 0.999:
             out[:, :, i] = matched
         else:
             blended = (
@@ -185,6 +220,7 @@ def match_image_path(
     out_path: str,
     strength: float = 0.6,
     match_color: bool = False,
+    protect_extremes: bool = True,
 ) -> Optional[str]:
     """
     File-path wrapper: read, match, write. Returns the output path
@@ -194,7 +230,11 @@ def match_image_path(
     if img is None:
         return None
     matched = match_to_profile(
-        img, profile, strength=strength, match_color=match_color
+        img,
+        profile,
+        strength=strength,
+        match_color=match_color,
+        protect_extremes=protect_extremes,
     )
     if not cv2.imwrite(out_path, matched, [cv2.IMWRITE_JPEG_QUALITY, 95]):
         return None
