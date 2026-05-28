@@ -81,6 +81,33 @@ def upload_fixed(local_path: str, s3_key: str) -> str:
     return fixed_key
 
 
+def upload_preview_jpeg(local_path: str, s3_key: str) -> str:
+    """
+    For HDR shoots: upload the post-Mertens, pre-style JPEG into the
+    "original" prefix so the dashboard before/after slider has a
+    browser-renderable "before" image. Browsers cant decode ARW/DNG;
+    without this the Original side of the compare slider rendered
+    blank ("1px-by-1px" effect Paul saw). We keep the RAW brackets
+    referenced via Photo.bracketKeys for downstream archival; the
+    s3KeyOriginal column gets rewritten to this preview path.
+    """
+    ext = s3_key.rsplit(".", 1)[-1].lower()
+    raw_exts = {"arw", "cr2", "cr3", "nef", "dng", "raf", "orf", "rw2"}
+    if ext in raw_exts:
+        preview_key = s3_key.rsplit(".", 1)[0] + ".jpg"
+    else:
+        # For non-RAW originals just write to the existing key so the
+        # caller never has to care which path it came from.
+        preview_key = s3_key
+    s3.upload_file(
+        local_path,
+        BUCKET,
+        preview_key,
+        ExtraArgs={"ContentType": "image/jpeg"},
+    )
+    return preview_key
+
+
 def get_profile_thresholds(db, agency_id: str, client_profile_id: str = None):
     """Get QC thresholds from the agency's style profile and optional client overrides."""
     cursor = db.cursor()
@@ -863,6 +890,37 @@ def handler(event, context):
                     if hdr_local_path is None:
                         print(
                             f"Single RAW decode failed for {photo_id}: {hdr_meta.get('error')}"
+                        )
+
+                # Write a JPEG preview of the Mertens / RAW-decoded
+                # result BEFORE style transfer, and update s3KeyOriginal
+                # to point at it. The dashboard before/after slider
+                # uses s3KeyOriginal as the "Before" side; without this,
+                # the slider tries to render the source RAW (ARW/DNG)
+                # and browsers cant — leading to the "1px" / compressed
+                # preview Paul reported. The original RAW brackets stay
+                # referenced via Photo.bracketKeys for archival.
+                if hdr_local_path:
+                    try:
+                        new_orig_key = upload_preview_jpeg(local_path=hdr_local_path, s3_key=row[1])
+                        if new_orig_key and new_orig_key != row[1]:
+                            cursor = db.cursor()
+                            cursor.execute(
+                                'UPDATE "Photo" SET "s3KeyOriginal" = %s WHERE id = %s',
+                                (new_orig_key, photo_id),
+                            )
+                            db.commit()
+                            cursor.close()
+                            # From here on use the JPEG key as the s3
+                            # base so process_photo's upload_fixed
+                            # builds the /fixed/ counterpart correctly.
+                            row = (row[0], new_orig_key, row[2])
+                            print(
+                                f"Preview JPEG uploaded for {photo_id}: {new_orig_key}"
+                            )
+                    except Exception as prev_err:
+                        print(
+                            f"Preview JPEG upload skipped for {photo_id}: {prev_err}"
                         )
 
                 # Style transfer: when the HDR pipeline ran (merge or
