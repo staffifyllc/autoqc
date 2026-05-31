@@ -1,7 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/cron/dropbox-autohdr",
+      "_disabled": "Paused 2026-05-31 — bleeding $60+/day in S3 egress because failed pushes re-download every photo from scratch on the next cycle. Re-enable only after pushCompletedProperties is idempotent + retry-safe (mark dropboxPushedAt at first successful upload, not at end of property loop).",
+      "path": "/api/cron/dropbox-autohdr-DISABLED",
       "schedule": "*/30 * * * *"
     },
     {
